@@ -1,112 +1,395 @@
+import { useLang } from '@/hooks/useLang';
+import { usePremium } from '@/hooks/usePremium';
+import { Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaskedView from '@react-native-masked-view/masked-view';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs, router } from 'expo-router';
-import React, { useState } from 'react';
-import { Modal, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Linking, Modal, Platform, SafeAreaView, ScrollView,
+  StatusBar, StyleSheet, Text, TextInput, TouchableOpacity,
+  View,
+} from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 
+const KEY_MY_TOKEN      = 'lumibaby_my_token';
+const KEY_ANNE_TOKEN    = 'lumibaby_anne_token';
+const KEY_PARTNER_TOKEN = 'lumibaby_partner_token';
+const { width: SCREEN_W } = Dimensions.get('window');
+const QR_SIZE = SCREEN_W * 0.55;
+
+export async function sendAlertToAll(
+  type: 'crying' | 'colic' | 'lullaby' | 'silence'
+): Promise<void> {
+  const anneToken    = await AsyncStorage.getItem(KEY_ANNE_TOKEN);
+  const partnerToken = await AsyncStorage.getItem(KEY_PARTNER_TOKEN);
+  const messages = {
+    crying:  { title: '👶 Bebek Ağlıyor',   body: 'LumiBaby ağlama sesi algıladı.' },
+    colic:   { title: '😣 Kolik Belirtisi',  body: 'Kolik sesi algılandı, müzik çalınıyor.' },
+    lullaby: { title: '🎵 Ninni Çalıyor',    body: 'Bebek sakinleştirilmeye çalışılıyor.' },
+    silence: { title: '😴 Bebek Sakinleşti', body: 'Artık ses algılanmıyor.' },
+  };
+  const { title, body } = messages[type];
+  const targets: { to: string; fromSelf: boolean }[] = [];
+  if (anneToken)    targets.push({ to: anneToken,    fromSelf: true });
+  if (partnerToken) targets.push({ to: partnerToken, fromSelf: false });
+  if (targets.length === 0) return;
+  await Promise.all(targets.map(({ to, fromSelf }) =>
+    fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, title, body, data: { type, timestamp: Date.now(), fromSelf }, sound: 'default', priority: 'high', channelId: 'lumibaby-alerts' }),
+    }).catch(() => {})
+  ));
+}
+
+// ─── QR TARAMA ───────────────────────────────────────────────────────────────
+function QRTaraEkrani({ onScanned, onClose }: { onScanned: (token: string) => void; onClose: () => void; }) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [tarandi, setTarandi] = useState(false);
+  useEffect(() => { if (!permission?.granted) requestPermission(); }, []);
+  const handleBarcode = ({ data }: { data: string }) => {
+    if (tarandi) return;
+    if (data.startsWith('ExponentPushToken[') || data.startsWith('LUMIBABY:')) {
+      setTarandi(true);
+      const token = data.startsWith('LUMIBABY:') ? data.replace('LUMIBABY:', '') : data;
+      onScanned(token);
+    }
+  };
+  if (!permission?.granted) {
+    return (
+      <View style={qs.izinKutu}>
+        <Text style={qs.izinYazi}>📷 Kamera izni gerekli</Text>
+        <TouchableOpacity style={qs.izinBtn} onPress={requestPermission}><Text style={qs.izinBtnYazi}>İzin Ver</Text></TouchableOpacity>
+        <TouchableOpacity style={qs.kapatBtn} onPress={onClose}><Text style={qs.kapatBtnYazi}>Geri Dön</Text></TouchableOpacity>
+      </View>
+    );
+  }
+  return (
+    <View style={qs.container}>
+      <CameraView style={qs.kamera} facing="back" onBarcodeScanned={tarandi ? undefined : handleBarcode} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} />
+      <View style={qs.overlay}>
+        <View style={qs.cerceve}>
+          <View style={[qs.kose, qs.solUst]} /><View style={[qs.kose, qs.sagUst]} />
+          <View style={[qs.kose, qs.solAlt]} /><View style={[qs.kose, qs.sagAlt]} />
+        </View>
+        <Text style={qs.taramaYazi}>Diğer cihazdaki LumiBaby QR kodunu çerçeveye getirin</Text>
+      </View>
+      <TouchableOpacity style={qs.geriBtn} onPress={onClose}><Text style={qs.geriBtnYazi}>← Geri</Text></TouchableOpacity>
+    </View>
+  );
+}
+const qs = StyleSheet.create({
+  container:    { flex: 1, backgroundColor: '#000' },
+  kamera:       { flex: 1 },
+  overlay:      { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 24 },
+  cerceve:      { width: QR_SIZE + 40, height: QR_SIZE + 40, position: 'relative' },
+  kose:         { position: 'absolute', width: 28, height: 28, borderColor: '#9d8cef', borderWidth: 3 },
+  solUst:       { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 4 },
+  sagUst:       { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 4 },
+  solAlt:       { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 4 },
+  sagAlt:       { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 4 },
+  taramaYazi:   { color: 'white', fontSize: 13, textAlign: 'center', paddingHorizontal: 32, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 12, lineHeight: 20 },
+  geriBtn:      { position: 'absolute', top: 56, left: 20, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 },
+  geriBtnYazi:  { color: 'white', fontSize: 15, fontWeight: '600' },
+  izinKutu:     { flex: 1, backgroundColor: '#07101e', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 },
+  izinYazi:     { color: 'white', fontSize: 16, textAlign: 'center' },
+  izinBtn:      { backgroundColor: '#9d8cef', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32 },
+  izinBtnYazi:  { color: 'white', fontWeight: '700', fontSize: 15 },
+  kapatBtn:     { paddingVertical: 12 },
+  kapatBtnYazi: { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
+});
+
+// ─── PARTNER MODAL ────────────────────────────────────────────────────────────
+type PartnerEkran = 'menu' | 'qr_goster' | 'qr_tara';
+function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { lang, t } = useLang();
+  const [ekran, setEkran]                 = useState<PartnerEkran>('menu');
+  const [myToken, setMyToken]             = useState<string | null>(null);
+  const [bagliCihazlar, setBagliCihazlar] = useState<string[]>([]);
+  const [loading, setLoading]             = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [token, c1, c2] = await Promise.all([AsyncStorage.getItem(KEY_MY_TOKEN), AsyncStorage.getItem(KEY_ANNE_TOKEN), AsyncStorage.getItem(KEY_PARTNER_TOKEN)]);
+    setMyToken(token);
+    setBagliCihazlar([c1, c2].filter(Boolean) as string[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { if (visible) { setEkran('menu'); load(); } }, [visible]);
+
+  const handleScanned = async (token: string) => {
+    if (bagliCihazlar.includes(token)) { setEkran('menu'); Alert.alert(lang === 'en' ? 'Already Paired' : 'Zaten Bağlı', lang === 'en' ? 'This device is already paired.' : 'Bu cihaz zaten eşleştirilmiş.'); return; }
+    if (!await AsyncStorage.getItem(KEY_ANNE_TOKEN)) await AsyncStorage.setItem(KEY_ANNE_TOKEN, token);
+    else await AsyncStorage.setItem(KEY_PARTNER_TOKEN, token);
+    setBagliCihazlar(prev => [...prev, token]);
+    setEkran('menu');
+    Alert.alert('✅ ' + (lang === 'en' ? 'Paired!' : 'Eşleştirildi!'), lang === 'en' ? 'Device connected. You will be notified when baby cries.' : 'Cihaz bağlandı. Bebek ağladığında bildirim gidecek.');
+  };
+
+  const handleRemove = (token: string) => {
+    Alert.alert(lang === 'en' ? 'Remove Device' : 'Cihazı Kaldır', lang === 'en' ? 'Are you sure?' : 'Emin misiniz?', [
+      { text: lang === 'en' ? 'Cancel' : 'İptal', style: 'cancel' },
+      { text: lang === 'en' ? 'Remove' : 'Kaldır', style: 'destructive', onPress: async () => {
+        const c1 = await AsyncStorage.getItem(KEY_ANNE_TOKEN);
+        if (c1 === token) await AsyncStorage.removeItem(KEY_ANNE_TOKEN); else await AsyncStorage.removeItem(KEY_PARTNER_TOKEN);
+        setBagliCihazlar(prev => prev.filter(c => c !== token));
+      }},
+    ]);
+  };
+
+  if (ekran === 'qr_tara') {
+    return (
+      <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={() => setEkran('menu')}>
+        <QRTaraEkrani onScanned={handleScanned} onClose={() => setEkran('menu')} />
+      </Modal>
+    );
+  }
+  if (ekran === 'qr_goster') {
+    const qrData = myToken ? `LUMIBABY:${myToken}` : null;
+    return (
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setEkran('menu')}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setEkran('menu')} />
+          <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, alignItems: 'center' }}>
+            <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, marginBottom: 16 }} />
+            <Text style={pm.baslik}>{lang === 'en' ? '📱 This Device QR Code' : '📱 Bu Cihazın QR Kodu'}</Text>
+            <Text style={pm.alt}>{lang === 'en' ? 'Scan with LumiBaby on the other device' : 'Diğer cihazdaki LumiBaby ile tara'}</Text>
+            <View style={{ alignItems: 'center', paddingVertical: 24, gap: 16, width: '100%' }}>
+              {qrData ? (
+                <><QRCode value={qrData} size={QR_SIZE} color="#ffffff" backgroundColor="#0f1e33" /><Text style={pm.qrAcik}>{lang === 'en' ? "Scan this QR with the other phone's Scan QR button" : 'Bu QR kodu diger telefondaki QR Tara ile okutun'}</Text></>
+              ) : (
+                <View style={pm.productionBox}>
+                  <Text style={{ fontSize: 40 }}>🏗️</Text>
+                  <Text style={pm.productionYazi}>{lang === 'en' ? 'QR code is generated in production build' : "QR kod production build'de oluşur"}</Text>
+                  <Text style={pm.productionAlt}>{lang === 'en' ? 'Will appear here when published to the store.' : "Store'a yüklendiğinde burada görünecek."}</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity style={pm.kapatBtn} onPress={() => setEkran('menu')}><Text style={pm.kapatBtnYazi}>{lang === 'en' ? '← Go Back' : '← Geri Dön'}</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, height: '85%' }}>
+          <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
+          <Text style={pm.baslik}>{lang === 'en' ? '📳 Parent Notifications' : '📳 Ebeveyn Bildirimleri'}</Text>
+          <Text style={pm.alt}>{lang === 'en' ? 'When baby cries, all paired devices and Watches get notified' : "Bebek ağlayınca tüm bağlı cihazlara ve Watch'lara bildirim gider"}</Text>
+          {loading ? <ActivityIndicator color="#9d8cef" style={{ flex: 1 }} /> : (
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
+              <View style={pm.aciklamaBox}>
+                <Text style={pm.aciklamaBaslik}>{lang === 'en' ? '💡 How to pair?' : '💡 Nasıl eşleştirilir?'}</Text>
+                <View style={pm.kuralKutu}>
+                  <Text style={pm.kuralIkon}>👶</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={pm.kuralBaslik}>{lang === 'en' ? 'Device showing the QR code' : 'QR kodunu gösteren cihaz'}</Text>
+                    <Text style={pm.kuralAcik}>{lang === 'en' ? 'Should be next to baby — detector runs on this phone' : 'Bebeğin yanında olmalı — dedektör bu telefonda çalışır'}</Text>
+                    <Text style={[pm.kuralAcik, { color: 'rgba(157,140,239,0.7)', marginTop: 4 }]}>{lang === 'en' ? '📵 Silent notification on phone · ⌚ Shows on Watch' : "📵 Telefona sessiz bildirim gelir · ⌚ Watch'ta görünür"}</Text>
+                  </View>
+                </View>
+                <View style={{ alignItems: 'center', paddingVertical: 4 }}><Text style={{ color: 'rgba(157,140,239,0.6)', fontSize: 20 }}>↕</Text></View>
+                <View style={pm.kuralKutu}>
+                  <Text style={pm.kuralIkon}>🧑‍🍼</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={pm.kuralBaslik}>{lang === 'en' ? 'Device scanning the QR code' : 'QR kodunu tarayan cihaz'}</Text>
+                    <Text style={pm.kuralAcik}>{lang === 'en' ? 'Should be with parent — notifications come to this phone and Watch' : "Ebeveynin yanında olmalı — bildirim bu telefona ve Watch'a gelir"}</Text>
+                    <Text style={[pm.kuralAcik, { color: 'rgba(157,140,239,0.7)', marginTop: 4 }]}>{lang === 'en' ? '🔔 Sound notification on phone · ⌚ Shows on Watch' : "🔔 Telefona sesli bildirim gelir · ⌚ Watch'ta görünür"}</Text>
+                  </View>
+                </View>
+                <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 10 }} />
+                <Text style={pm.aciklamaYazi}>{lang === 'en' ? 'Roles can switch — pair in both directions so both parents get notified simultaneously ⌚' : 'Roller değişebilir — eşleştirmeyi her iki yönde yapın, iki ebeveyn de aynı anda uyarılır ⌚'}</Text>
+              </View>
+              <Text style={pm.bolum}>{lang === 'en' ? '🔗 PAIRING' : '🔗 EŞLEŞTİRME'}</Text>
+              <View style={pm.grup}>
+                <TouchableOpacity style={pm.satir} onPress={() => setEkran('qr_goster')}>
+                  <View style={pm.satirSol}><Text style={pm.satirIkon}>📲</Text><View><Text style={pm.satirYazi}>{lang === 'en' ? 'Show My QR Code' : 'QR Kodumu Göster'}</Text><Text style={pm.satirAlt}>{lang === 'en' ? 'Other device scans this QR' : "Diğer cihaz bu QR'ı tarar"}</Text></View></View>
+                  <Text style={pm.ok}>›</Text>
+                </TouchableOpacity>
+                <View style={pm.ayrac} />
+                <TouchableOpacity style={[pm.satir, bagliCihazlar.length >= 2 && { opacity: 0.4 }]} onPress={() => bagliCihazlar.length < 2 && setEkran('qr_tara')} disabled={bagliCihazlar.length >= 2}>
+                  <View style={pm.satirSol}><Text style={pm.satirIkon}>📷</Text><View><Text style={pm.satirYazi}>{lang === 'en' ? 'Scan QR' : 'QR Tara'}</Text><Text style={pm.satirAlt}>{bagliCihazlar.length >= 2 ? (lang === 'en' ? 'Maximum 2 devices connected' : 'Maksimum 2 cihaz bağlandı') : (lang === 'en' ? 'Scan the other device QR code' : 'Diğer cihazın QR kodunu okut')}</Text></View></View>
+                  <Text style={pm.ok}>›</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={pm.bolum}>{lang === 'en' ? `📱 PAIRED DEVICES (${bagliCihazlar.length}/2)` : `📱 BAĞLI CİHAZLAR (${bagliCihazlar.length}/2)`}</Text>
+              {bagliCihazlar.length === 0 ? (
+                <View style={pm.bosKutu}><Text style={pm.bosYazi}>{lang === 'en' ? 'No paired devices yet' : 'Henüz bağlı cihaz yok'}</Text></View>
+              ) : (
+                <View style={pm.grup}>
+                  {bagliCihazlar.map((token, i) => (
+                    <View key={token}>
+                      {i > 0 && <View style={pm.ayrac} />}
+                      <View style={pm.cihazSatir}>
+                        <View style={pm.satirSol}>
+                          <Text style={pm.satirIkon}>📱</Text>
+                          <View style={{ flex: 1 }}><Text style={pm.satirYazi}>{lang === 'en' ? `Device ${i + 1} ⌚` : `Cihaz ${i + 1} ⌚`}</Text><Text style={pm.bagliYazi} numberOfLines={1} ellipsizeMode="middle">✅ {token}</Text></View>
+                        </View>
+                        <TouchableOpacity onPress={() => handleRemove(token)} style={pm.kaldirBtn}><Text style={pm.kaldirBtnYazi}>{lang === 'en' ? 'Remove' : 'Kaldır'}</Text></TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <View style={[pm.durumBox, bagliCihazlar.length === 2 ? pm.durumAktif : bagliCihazlar.length === 1 ? pm.durumSari : pm.durumPasif]}>
+                <Text style={pm.durumYazi}>
+                  {bagliCihazlar.length === 2
+                    ? (lang === 'en' ? '🟢 Two devices paired — Both Watches get notified' : "🟢 İki cihaz bağlı — Her iki Watch'a da bildirim gider")
+                    : bagliCihazlar.length === 1
+                      ? (lang === 'en' ? '🟡 One device paired — Add the second device too' : '🟡 Bir cihaz bağlı — İkinci cihazı da ekleyin')
+                      : (lang === 'en' ? '⚪ No pairing yet' : '⚪ Henüz eşleşme yok')}
+                </Text>
+              </View>
+              <View style={pm.notBox}><Text style={pm.notYazi}>{lang === 'en' ? '⚠️ Notifications are active in production build. QR pairing works now.' : "⚠️ Bildirimler production build'de aktif olur. QR eşleştirmesi şimdi çalışır."}</Text></View>
+            </ScrollView>
+          )}
+          <TouchableOpacity style={pm.kapatBtn} onPress={onClose}><Text style={pm.kapatBtnYazi}>{lang === 'en' ? 'Close' : 'Kapat'}</Text></TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+const pm = StyleSheet.create({
+  baslik:         { color: 'white', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 },
+  alt:            { color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', marginBottom: 16, lineHeight: 18 },
+  aciklamaBox:    { backgroundColor: 'rgba(157,140,239,0.08)', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(157,140,239,0.15)', gap: 8 },
+  aciklamaBaslik: { color: '#b8a8f8', fontSize: 13, fontWeight: '700', marginBottom: 2 },
+  aciklamaYazi:   { color: 'rgba(255,255,255,0.45)', fontSize: 12, lineHeight: 18 },
+  kuralKutu:      { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 12 },
+  kuralIkon:      { fontSize: 22 },
+  kuralBaslik:    { color: 'white', fontSize: 13, fontWeight: '700', marginBottom: 3 },
+  kuralAcik:      { color: 'rgba(255,255,255,0.45)', fontSize: 12, lineHeight: 17 },
+  bolum:          { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 'bold', letterSpacing: 0.8, marginBottom: 8, marginTop: 16, paddingHorizontal: 2 },
+  grup:           { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  satir:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
+  cihazSatir:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
+  satirSol:       { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  satirIkon:      { fontSize: 22 },
+  satirYazi:      { color: 'white', fontSize: 15 },
+  satirAlt:       { color: 'rgba(255,255,255,0.35)', fontSize: 11, marginTop: 2 },
+  ok:             { color: 'rgba(255,255,255,0.3)', fontSize: 20 },
+  ayrac:          { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 16 },
+  bagliYazi:      { color: '#7ed96a', fontSize: 11, marginTop: 2, flex: 1 },
+  kaldirBtn:      { backgroundColor: 'rgba(229,115,115,0.15)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(229,115,115,0.25)' },
+  kaldirBtnYazi:  { color: '#E57373', fontSize: 13, fontWeight: '600' },
+  bosKutu:        { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  bosYazi:        { color: 'rgba(255,255,255,0.3)', fontSize: 14 },
+  durumBox:       { borderRadius: 12, padding: 12, marginTop: 12 },
+  durumAktif:     { backgroundColor: 'rgba(74,222,128,0.08)', borderWidth: 1, borderColor: 'rgba(74,222,128,0.2)' },
+  durumSari:      { backgroundColor: 'rgba(250,204,21,0.08)', borderWidth: 1, borderColor: 'rgba(250,204,21,0.2)' },
+  durumPasif:     { backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  durumYazi:      { color: 'rgba(255,255,255,0.6)', fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  notBox:         { backgroundColor: 'rgba(251,146,60,0.08)', borderRadius: 12, padding: 12, marginTop: 10, borderWidth: 1, borderColor: 'rgba(251,146,60,0.2)' },
+  notYazi:        { color: 'rgba(251,146,60,0.8)', fontSize: 11, lineHeight: 17 },
+  kapatBtn:       { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12 },
+  kapatBtnYazi:   { color: 'rgba(255,255,255,0.6)', fontSize: 15 },
+  qrAcik:         { color: 'rgba(255,255,255,0.45)', fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  productionBox:  { alignItems: 'center', gap: 12, padding: 24, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', width: '100%' },
+  productionYazi: { color: 'white', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+  productionAlt:  { color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', lineHeight: 20 },
+});
+
+// ─── ANA LAYOUT ──────────────────────────────────────────────────────────────
 export default function TabLayout() {
-  const [lang, setLang] = useState('tr');
+  const { isTrial, isPremium, trialKalanGun, premiumAktifEt } = usePremium();
+  const { lang, setLang, t } = useLang();
+  const free = !isPremium && !isTrial;
+  const [fontsLoaded] = useFonts({ Nunito_800ExtraBold });
+
   const [premiumModal, setPremiumModal] = useState(false);
-  const [bebekModal, setBebekModal] = useState(false);
-  const [fiyatModu, setFiyatModu] = useState('aylik');
-  const [bebekAdi, setBebekAdi] = useState('');
-  const [dogumTarihi, setDogumTarihi] = useState('');
+  const [ayarlarModal, setAyarlarModal] = useState(false);
+  const [bebekModal, setBebekModal]     = useState(false);
+  const [partnerModal, setPartnerModal] = useState(false);
+  const [fiyatModu, setFiyatModu]       = useState<'aylik' | 'yillik'>('aylik');
+  const [bebekAdi, setBebekAdi]         = useState('');
+  const [dogumTarihi, setDogumTarihi]   = useState('');
+
+  useEffect(() => {
+    AsyncStorage.getItem('bebek_adi').then(v => { if (v) setBebekAdi(v); });
+  }, []);
+
+  const handleBebekKaydet = async () => {
+    await AsyncStorage.setItem('bebek_adi', bebekAdi);
+    setBebekModal(false);
+  };
+
+  const logoFont = fontsLoaded ? 'Nunito_800ExtraBold' : 'bold';
 
   return (
-    <View style={styles.container}>
-
-      {/* SABİT HEADER */}
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <View style={styles.logoRow}>
-            <Text style={styles.moon}>🌙</Text>
-            <MaskedView maskElement={<Text style={styles.logoText}>Minik Uyku – LumiBaby</Text>}>
+    <View style={s.container}>
+      <SafeAreaView style={s.safeArea}>
+        <View style={s.header}>
+          <View style={s.logoRow}>
+            <Text style={s.moon}>🌙</Text>
+            <MaskedView maskElement={<Text style={[s.logoText, { fontFamily: logoFont }]}>Minik Uyku – LumiBaby</Text>}>
               <LinearGradient colors={['#ff85c0', '#c084fc', '#818cf8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                <Text style={[styles.logoText, { opacity: 0 }]}>Minik Uyku – LumiBaby</Text>
+                <Text style={[s.logoText, { fontFamily: logoFont, opacity: 0 }]}>Minik Uyku – LumiBaby</Text>
               </LinearGradient>
             </MaskedView>
           </View>
-
-          <View style={styles.headerButtons}>
-            <TouchableOpacity style={styles.headerBtn} onPress={() => setBebekModal(true)}>
-              <Text style={styles.headerBtnText}>👶 {bebekAdi || 'Bebek'}</Text>
+          <View style={s.headerButtons}>
+            <TouchableOpacity style={s.headerBtn} onPress={() => setBebekModal(true)}>
+              <Text style={s.headerBtnText}>👶 {bebekAdi || t.headerBebek}</Text>
             </TouchableOpacity>
-            <View style={styles.langPill}>
-              <TouchableOpacity style={[styles.langChip, lang === 'tr' && styles.langChipActive]} onPress={() => setLang('tr')}>
-                <Text style={[styles.langText, lang === 'tr' && styles.langTextActive]}>TR</Text>
-              </TouchableOpacity>
-              <View style={styles.langDivider} />
-              <TouchableOpacity style={[styles.langChip, lang === 'en' && styles.langChipActive]} onPress={() => setLang('en')}>
-                <Text style={[styles.langText, lang === 'en' && styles.langTextActive]}>EN</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity style={styles.premiumBtn} onPress={() => setPremiumModal(true)}>
-              <Text style={styles.headerBtnText}>👑 Premium</Text>
+            <TouchableOpacity style={s.premiumBtn} onPress={() => setPremiumModal(true)}>
+              <Text style={s.headerBtnText}>{t.headerPremium}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.headerBtn} onPress={() => setAyarlarModal(true)}>
+              <Text style={s.headerBtnText}>{t.headerAyarlar}</Text>
             </TouchableOpacity>
           </View>
         </View>
+
+        {isTrial && !isPremium && (
+          <TouchableOpacity style={s.headerTrialBanner} onPress={() => setPremiumModal(true)}>
+            <Text style={s.headerTrialBannerYazi}>{t.trialBanner(trialKalanGun)}</Text>
+          </TouchableOpacity>
+        )}
       </SafeAreaView>
 
-      {/* SEKMELER */}
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarStyle: {
-            backgroundColor: '#07101e',
-            borderTopColor: 'rgba(255,255,255,0.1)',
-            height: 85,
-            paddingBottom: 30,
-          },
-          tabBarActiveTintColor: '#9d8cef',
-          tabBarInactiveTintColor: 'rgba(255,255,255,0.4)',
-        }}>
-        <Tabs.Screen name="index" options={{ title: 'Ninniler', tabBarIcon: () => <Text style={{ fontSize: 20 }}>🎵</Text> }} />
-        <Tabs.Screen name="hikayeler" options={{ title: 'Hikayeler', tabBarIcon: () => <Text style={{ fontSize: 20 }}>📖</Text> }} />
-        <Tabs.Screen name="kolik" options={{ title: 'Kolik', tabBarIcon: () => <Text style={{ fontSize: 20 }}>🌿</Text> }} />
-        <Tabs.Screen name="analiz" options={{ title: 'Analiz/Takip', tabBarIcon: () => <Text style={{ fontSize: 20 }}>📊</Text> }} />
-        <Tabs.Screen name="sesim" options={{ title: 'Sesim', tabBarIcon: () => <Text style={{ fontSize: 20 }}>🎙️</Text> }} />
-        
+      <Tabs screenOptions={{
+        headerShown: false,
+        tabBarStyle: { backgroundColor: '#07101e', borderTopColor: 'rgba(255,255,255,0.1)', height: 85, paddingBottom: 30 },
+        tabBarActiveTintColor: '#9d8cef',
+        tabBarInactiveTintColor: 'rgba(255,255,255,0.4)',
+      }}>
+        <Tabs.Screen name="analiz"    options={{ title: t.tabAsistan,   tabBarIcon: () => <Text style={{ fontSize: 20 }}>🤖</Text> }} />
+        <Tabs.Screen name="index"     options={{ title: t.tabNinniler,  tabBarIcon: () => <Text style={{ fontSize: 20 }}>🎵</Text> }} />
+        <Tabs.Screen name="kolik"     options={{ title: t.tabKolik,     tabBarIcon: () => <Text style={{ fontSize: 20 }}>🌿</Text> }} />
+        <Tabs.Screen name="hikayeler" options={{ title: t.tabHikayeler, tabBarIcon: () => <Text style={{ fontSize: 20 }}>📖</Text> }} />
+        <Tabs.Screen name="sesim"     options={{ title: t.tabSesim,     tabBarIcon: () => <Text style={{ fontSize: 20 }}>🎙️</Text> }} />
       </Tabs>
 
       {/* BEBEK MODAL */}
       <Modal visible={bebekModal} transparent animationType="slide" onRequestClose={() => setBebekModal(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setBebekModal(false)}>
-          <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Bebek Ayarları</Text>
-            <Text style={styles.modalSubtitle}>Kişiselleştirilmiş deneyim için</Text>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Bebeğinizin Adı</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ayşe / Emma"
-                placeholderTextColor="rgba(255,255,255,0.3)"
-                value={bebekAdi}
-                onChangeText={setBebekAdi}
-                maxLength={15}
-              />
+        <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={() => setBebekModal(false)}>
+          <TouchableOpacity activeOpacity={1} style={s.modalSheet}>
+            <View style={s.modalHandle} />
+            <Text style={s.modalTitle}>{t.bebekBaslik}</Text>
+            <Text style={s.modalSubtitle}>{t.bebekAlt}</Text>
+            <View style={s.inputGroup}>
+              <Text style={s.inputLabel}>{t.bebekAdiLabel}</Text>
+              <TextInput style={s.input} placeholder={t.bebekAdiPlaceholder} placeholderTextColor="rgba(255,255,255,0.3)" value={bebekAdi} onChangeText={setBebekAdi} maxLength={15} />
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Doğum Tarihi</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="GG/AA/YYYY"
-                placeholderTextColor="rgba(255,255,255,0.3)"
-                value={dogumTarihi}
-                onChangeText={setDogumTarihi}
-                keyboardType="numeric"
-              />
+            <View style={s.inputGroup}>
+              <Text style={s.inputLabel}>{t.dogumTarihiLabel}</Text>
+              <TextInput style={s.input} placeholder={t.dogumTarihiPh} placeholderTextColor="rgba(255,255,255,0.3)" value={dogumTarihi} onChangeText={setDogumTarihi} keyboardType="numeric" />
             </View>
-            <TouchableOpacity style={styles.saveBtn} onPress={() => setBebekModal(false)}>
-              <Text style={styles.saveBtnText}>💾 Kaydet</Text>
+            <TouchableOpacity style={s.saveBtn} onPress={handleBebekKaydet}>
+              <Text style={s.saveBtnText}>{t.kaydet}</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.onboardingBtn}
-              onPress={() => {
-                setBebekModal(false);
-                router.push('/onboarding');
-              }}>
-              <Text style={styles.onboardingBtnText}>🔄 Karşılama ekranını göster</Text>
+            <TouchableOpacity style={s.onboardingBtn} onPress={() => { setBebekModal(false); router.push('/onboarding'); }}>
+              <Text style={s.onboardingBtnText}>{t.karsilamaGoster}</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -114,48 +397,153 @@ export default function TabLayout() {
 
       {/* PREMİUM MODAL */}
       <Modal visible={premiumModal} transparent animationType="slide" onRequestClose={() => setPremiumModal(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setPremiumModal(false)}>
-          <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.premiumIcon}>👑</Text>
-            <Text style={styles.premiumTitle}>Minik Uyku – LumiBaby Premium</Text>
-            <Text style={styles.premiumSubtitle}>Bebeğiniz için en iyi uyku deneyimi</Text>
-            <View style={styles.priceToggle}>
-              <TouchableOpacity style={[styles.priceTab, fiyatModu === 'aylik' && styles.priceTabActive]} onPress={() => setFiyatModu('aylik')}>
-                <Text style={[styles.priceTabText, fiyatModu === 'aylik' && styles.priceTabTextActive]}>Aylık</Text>
+        <View style={s.modalBackdrop}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setPremiumModal(false)} />
+          <View style={s.premiumSheet}>
+            <View style={s.modalHandle} />
+            <Text style={s.premiumIcon}>👑</Text>
+            <Text style={s.premiumTitle}>{t.premiumBaslik}</Text>
+            <Text style={s.premiumSubtitle}>{t.premiumAlt}</Text>
+
+            <View style={s.priceToggle}>
+              <TouchableOpacity style={[s.priceTab, fiyatModu === 'aylik' && s.priceTabActive]} onPress={() => setFiyatModu('aylik')}>
+                <Text style={[s.priceTabText, fiyatModu === 'aylik' && s.priceTabTextActive]}>{t.premiumAylik}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.priceTab, fiyatModu === 'yillik' && styles.priceTabActive]} onPress={() => setFiyatModu('yillik')}>
-                <Text style={[styles.priceTabText, fiyatModu === 'yillik' && styles.priceTabTextActive]}>Yıllık</Text>
+              <TouchableOpacity style={[s.priceTab, fiyatModu === 'yillik' && s.priceTabActive]} onPress={() => setFiyatModu('yillik')}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[s.priceTabText, fiyatModu === 'yillik' && s.priceTabTextActive]}>{t.premiumYillik}</Text>
+                  <View style={s.indirimRozet}><Text style={s.indirimRozetYazi}>{t.premiumIndirim}</Text></View>
+                </View>
               </TouchableOpacity>
             </View>
-            <Text style={styles.priceText}>
-              {fiyatModu === 'aylik' ? '49₺ ' : '399₺ '}
-              <Text style={styles.priceSub}>{fiyatModu === 'aylik' ? '/aylık' : '/yıllık (aylık 33₺\'ye denk gelir!)'}</Text>
-            </Text>
-            <ScrollView style={styles.featureList}>
-              {[
-                { title: 'Sınırsız Ninni Dinleme', desc: '1 dakika sınırı kalkıyor' },
-                { title: 'Tüm Masallar', desc: '1 dakika sınırı kalkıyor' },
-                { title: 'Gelişmiş Dedektörler', desc: 'Sınırsız ağlama ve kolik tespiti' },
-                { title: 'Detaylı Uyku Analizi', desc: 'AI destekli uyku tahminleri' },
-                { title: 'Ses Klonlama', desc: 'Annenin sesiyle ninni' },
-              ].map((f) => (
-                <View key={f.title} style={styles.featureItem}>
-                  <View style={styles.featureCheck}>
-                    <Text style={styles.featureCheckText}>✓</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.featureTitle}>{f.title}</Text>
-                    <Text style={styles.featureDesc}>{f.desc}</Text>
-                  </View>
+
+            <View style={s.fiyatKartTek}>
+              <View style={s.fiyatKartIc}>
+                <Text style={s.fiyatTutar}>{fiyatModu === 'aylik' ? t.premiumFiyatAylik : t.premiumFiyatYillik}</Text>
+                <Text style={s.fiyatPeriyot}>{fiyatModu === 'aylik' ? t.premiumPerAylik : t.premiumPerYillik}</Text>
+              </View>
+              {fiyatModu === 'yillik' && <Text style={s.fiyatGunluk}>{t.premiumGunluk}</Text>}
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }} bounces={false} nestedScrollEnabled>
+              <View style={s.tabloKutu}>
+                <View style={s.tabloBaslikRow}>
+                  <Text style={[s.tabloBaslik, { flex: 2 }]}>{t.tabloOzellik}</Text>
+                  <Text style={[s.tabloBaslik, { flex: 1, textAlign: 'center' }]}>{t.tabloUcretsiz}</Text>
+                  <Text style={[s.tabloBaslik, { flex: 1, textAlign: 'center', color: '#b8a8f8' }]}>{t.tabloPremium}</Text>
                 </View>
-              ))}
+                <View style={s.tabloAyrac} />
+                {t.tablo.map((row, i) => (
+                  <View key={i}>
+                    {i > 0 && <View style={s.tabloAyrac} />}
+                    <View style={s.tabloRow}>
+                      <Text style={[s.tabloHucre, { flex: 2 }]}>{row.ozellik}</Text>
+                      <Text style={[s.tabloHucre, { flex: 1, textAlign: 'center', color: 'rgba(255,255,255,0.35)' }]}>{row.ucretsiz}</Text>
+                      <Text style={[s.tabloHucre, { flex: 1, textAlign: 'center', color: '#4ade80' }]}>{row.premium}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+              <Text style={s.reklamNot}>{t.premiumReklamNot}</Text>
             </ScrollView>
-            <TouchableOpacity style={styles.upgradeBtn}>
-              <Text style={styles.upgradeBtnText}>👑 Premium'a Yükselt</Text>
+
+            <TouchableOpacity style={s.upgradeBtn} onPress={() => { premiumAktifEt(); setPremiumModal(false); }}>
+              <Text style={s.upgradeBtnText}>{isTrial ? t.premiumTrialBtn : t.premiumUpgradeBtn}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelBtn} onPress={() => setPremiumModal(false)}>
-              <Text style={styles.cancelBtnText}>Şimdilik İptal</Text>
+            <TouchableOpacity style={s.cancelBtn} onPress={() => setPremiumModal(false)}>
+              <Text style={s.cancelBtnText}>{t.simdilikIptal}</Text>
+            </TouchableOpacity>
+            <View style={s.gizlilikRow}>
+              <TouchableOpacity onPress={() => Linking.openURL('https://ufotamircisi.github.io/LumiBaby/privacy.html?lang=' + lang)}>
+                <Text style={s.gizlilikLink}>{t.ayarlarGizlilik}</Text>
+              </TouchableOpacity>
+              <Text style={s.gizlilikAyrac}>·</Text>
+              <TouchableOpacity onPress={() => Linking.openURL('https://ufotamircisi.github.io/LumiBaby/terms.html?lang=' + lang)}>
+                <Text style={s.gizlilikLink}>{t.ayarlarKullanim}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <PartnerModal visible={partnerModal} onClose={() => setPartnerModal(false)} />
+
+      {/* AYARLAR MODAL */}
+      <Modal visible={ayarlarModal} transparent animationType="slide" onRequestClose={() => setAyarlarModal(false)}>
+        <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={() => setAyarlarModal(false)}>
+          <TouchableOpacity activeOpacity={1} style={s.ayarlarSheet}>
+            <View style={s.modalHandle} />
+            <Text style={s.ayarlarBaslik}>{t.ayarlarBaslik}</Text>
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+
+              <Text style={s.bolumBaslik}>{t.ayarlarPremiumBolum}</Text>
+              <View style={s.grup}>
+                <TouchableOpacity style={s.satir} onPress={() => { setAyarlarModal(false); setPremiumModal(true); }}>
+                  <Text style={s.satirYazi}>{t.ayarlarAbonelik}</Text><Text style={s.ok}>›</Text>
+                </TouchableOpacity>
+                <View style={s.ayrac} />
+                <TouchableOpacity style={s.satir} onPress={() => Alert.alert(t.ayarlarSatinaTitle, t.ayarlarSatinaGeri)}>
+                  <Text style={s.satirYazi}>{t.ayarlarGeriYukle}</Text><Text style={s.ok}>›</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={s.bolumBaslik}>{t.ayarlarBildirimBolum}</Text>
+              <View style={s.grup}>
+                <TouchableOpacity style={s.satir} onPress={() => { setAyarlarModal(false); if (free) setPremiumModal(true); else setPartnerModal(true); }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.satirYazi}>{t.ayarlarEbeveyn}</Text>
+                    <Text style={s.satirAlt}>{t.ayarlarEbeveynAlt}</Text>
+                  </View>
+                  <Text style={s.ok}>{free ? '🔒' : '›'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={s.bolumBaslik}>{t.ayarlarDilBolum}</Text>
+              <View style={s.grup}>
+                <TouchableOpacity style={s.satir} onPress={() => setLang('tr')}>
+                  <Text style={s.satirYazi}>🇹🇷 Türkçe</Text>
+                  {lang === 'tr' && <Text style={s.tik}>✓</Text>}
+                </TouchableOpacity>
+                <View style={s.ayrac} />
+                <TouchableOpacity style={s.satir} onPress={() => setLang('en')}>
+                  <Text style={s.satirYazi}>🇬🇧 English</Text>
+                  {lang === 'en' && <Text style={s.tik}>✓</Text>}
+                </TouchableOpacity>
+              </View>
+
+              <Text style={s.bolumBaslik}>{t.ayarlarGizlilikBolum}</Text>
+              <View style={s.grup}>
+                <TouchableOpacity style={s.satir} onPress={() => Linking.openURL('https://ufotamircisi.github.io/LumiBaby/privacy.html?lang=' + lang)}>
+                  <Text style={s.satirYazi}>{t.ayarlarGizlilik}</Text><Text style={s.ok}>›</Text>
+                </TouchableOpacity>
+                <View style={s.ayrac} />
+                <TouchableOpacity style={s.satir} onPress={() => Linking.openURL('https://ufotamircisi.github.io/LumiBaby/terms.html?lang=' + lang)}>
+                  <Text style={s.satirYazi}>{t.ayarlarKullanim}</Text><Text style={s.ok}>›</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={s.bolumBaslik}>{t.ayarlarGeriBildirim}</Text>
+              <View style={s.grup}>
+                <TouchableOpacity style={s.satir} onPress={() => Linking.openURL(Platform.OS === 'ios' ? 'https://apps.apple.com/app/id000000000' : 'https://play.google.com/store/apps/details?id=com.lumibaby')}>
+                  <Text style={s.satirYazi}>{t.ayarlarDegerlendir}</Text><Text style={s.ok}>›</Text>
+                </TouchableOpacity>
+                <View style={s.ayrac} />
+                <TouchableOpacity style={s.satir} onPress={() => Linking.openURL('mailto:destek@lumibaby.app')}>
+                  <Text style={s.satirYazi}>{t.ayarlarIletisim}</Text><Text style={s.ok}>›</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={s.bolumBaslik}>{t.ayarlarHakkinda}</Text>
+              <View style={s.grup}>
+                <View style={s.satir}><Text style={s.satirYazi}>{t.ayarlarVersiyon}</Text><Text style={s.deger}>1.0.0</Text></View>
+                <View style={s.ayrac} />
+                <View style={s.satir}><Text style={s.satirYazi}>{t.ayarlarGelistirici}</Text><Text style={s.deger}>Lumisoft Studio</Text></View>
+              </View>
+
+              <Text style={s.alt}>Minik Uyku – LumiBaby © 2026</Text>
+            </ScrollView>
+            <TouchableOpacity style={s.kapatBtn} onPress={() => setAyarlarModal(false)}>
+              <Text style={s.kapatBtnYazi}>{t.kapat}</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -165,53 +553,73 @@ export default function TabLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#07101e' },
-  safeArea: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, backgroundColor: '#07101e' },
-  header: { paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  moon: { fontSize: 24 },
-  logoText: { fontSize: 20, fontWeight: 'bold', letterSpacing: 0.5 },
-  headerButtons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerBtn: { backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
-  premiumBtn: { backgroundColor: 'rgba(157,140,239,0.2)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(157,140,239,0.3)' },
-  headerBtnText: { color: 'white', fontSize: 12 },
-  langPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', overflow: 'hidden' },
-  langChip: { paddingHorizontal: 12, paddingVertical: 6 },
-  langChipActive: { backgroundColor: 'rgba(157,140,239,0.25)', borderRadius: 20 },
-  langText: { color: 'rgba(255,255,255,0.45)', fontSize: 12, fontWeight: 'bold' },
-  langTextActive: { color: '#b8a8f8' },
-  langDivider: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.15)' },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, alignItems: 'center' },
-  modalHandle: { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, marginBottom: 20 },
-  modalTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 6 },
-  modalSubtitle: { color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 20 },
-  inputGroup: { width: '100%', marginBottom: 14 },
-  inputLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginBottom: 6 },
-  input: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, color: 'white', fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', width: '100%' },
-  saveBtn: { backgroundColor: '#9d8cef', borderRadius: 14, padding: 16, width: '100%', alignItems: 'center', marginBottom: 10 },
-  saveBtnText: { color: 'white', fontSize: 15, fontWeight: 'bold' },
-  onboardingBtn: { padding: 12, width: '100%', alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  onboardingBtnText: { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
-  premiumIcon: { fontSize: 40, marginBottom: 8 },
-  premiumTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
-  premiumSubtitle: { color: 'rgba(255,255,255,0.5)', fontSize: 13, marginTop: 6, marginBottom: 16 },
-  priceToggle: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 4, marginBottom: 16 },
-  priceTab: { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 10 },
-  priceTabActive: { backgroundColor: '#9d8cef' },
-  priceTabText: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: 'bold' },
-  priceTabTextActive: { color: 'white' },
-  priceText: { color: 'white', fontSize: 28, fontWeight: 'bold', marginBottom: 16 },
-  priceSub: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: 'normal' },
-  featureList: { width: '100%', marginBottom: 16 },
-  featureItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
-  featureCheck: { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(157,140,239,0.3)', alignItems: 'center', justifyContent: 'center' },
-  featureCheckText: { color: '#b8a8f8', fontSize: 13, fontWeight: 'bold' },
-  featureTitle: { color: 'white', fontSize: 14, fontWeight: 'bold' },
-  featureDesc: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 2 },
-  upgradeBtn: { backgroundColor: '#9d8cef', borderRadius: 14, padding: 16, width: '100%', alignItems: 'center', marginBottom: 10 },
-  upgradeBtnText: { color: 'white', fontSize: 15, fontWeight: 'bold' },
-  cancelBtn: { padding: 12, width: '100%', alignItems: 'center' },
-  cancelBtnText: { color: 'rgba(255,255,255,0.4)', fontSize: 14 },
+const s = StyleSheet.create({
+  container:           { flex: 1, backgroundColor: '#07101e' },
+  safeArea:            { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, backgroundColor: '#07101e' },
+  header:              { paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  logoRow:             { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  moon:                { fontSize: 24 },
+  logoText:            { fontSize: 20, letterSpacing: 0.3 },
+  headerButtons:       { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerBtn:           { backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  premiumBtn:          { backgroundColor: 'rgba(157,140,239,0.2)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(157,140,239,0.3)' },
+  headerBtnText:       { color: 'white', fontSize: 12 },
+  headerTrialBanner:   { backgroundColor: 'rgba(212,175,55,0.12)', paddingVertical: 6, paddingHorizontal: 16, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(212,175,55,0.25)' },
+  headerTrialBannerYazi: { color: '#D4AF37', fontSize: 11, fontWeight: '600' },
+  modalBackdrop:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', flexDirection: 'column' },
+  modalSheet:          { backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, alignItems: 'center' },
+  modalHandle:         { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, marginBottom: 20 },
+  modalTitle:          { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 6 },
+  modalSubtitle:       { color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 20 },
+  inputGroup:          { width: '100%', marginBottom: 14 },
+  inputLabel:          { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginBottom: 6 },
+  input:               { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, color: 'white', fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', width: '100%' },
+  saveBtn:             { backgroundColor: '#9d8cef', borderRadius: 14, padding: 16, width: '100%', alignItems: 'center', marginBottom: 10 },
+  saveBtnText:         { color: 'white', fontSize: 15, fontWeight: 'bold' },
+  onboardingBtn:       { padding: 12, width: '100%', alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  onboardingBtnText:   { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
+  premiumSheet:        { backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 24, height: '90%', alignItems: 'center', width: '100%' },
+  premiumIcon:         { fontSize: 40, marginBottom: 8 },
+  premiumTitle:        { color: 'white', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
+  premiumSubtitle:     { color: 'rgba(255,255,255,0.5)', fontSize: 13, marginTop: 6, marginBottom: 16 },
+  priceToggle:         { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 4, marginBottom: 16, width: '100%' },
+  priceTab:            { flex: 1, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  priceTabActive:      { backgroundColor: '#9d8cef' },
+  priceTabText:        { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: 'bold' },
+  priceTabTextActive:  { color: 'white' },
+  indirimRozet:        { backgroundColor: 'rgba(74,222,128,0.2)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 },
+  indirimRozetYazi:    { color: '#4ade80', fontSize: 9, fontWeight: 'bold' },
+  fiyatKartTek:        { width: '100%', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 24, borderWidth: 1, borderColor: 'rgba(157,140,239,0.3)', marginBottom: 16, alignItems: 'center', gap: 4 },
+  fiyatKartIc:         { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  fiyatTutar:          { color: 'white', fontSize: 30, fontWeight: 'bold' },
+  fiyatPeriyot:        { color: 'rgba(255,255,255,0.5)', fontSize: 16 },
+  fiyatGunluk:         { color: '#4ade80', fontSize: 11, marginTop: 4, fontWeight: '600' },
+  tabloKutu:           { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', width: '100%', marginBottom: 12 },
+  tabloBaslikRow:      { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: 'rgba(157,140,239,0.1)' },
+  tabloBaslik:         { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 'bold', flex: 1 },
+  tabloAyrac:          { height: 1, backgroundColor: 'rgba(255,255,255,0.05)' },
+  tabloRow:            { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 9, alignItems: 'center' },
+  tabloHucre:          { color: 'rgba(255,255,255,0.7)', fontSize: 12, flex: 1 },
+  reklamNot:           { color: 'rgba(255,255,255,0.35)', fontSize: 11, textAlign: 'center', lineHeight: 16, marginBottom: 16, paddingHorizontal: 8 },
+  upgradeBtn:          { backgroundColor: '#9d8cef', borderRadius: 14, padding: 16, width: '100%', alignItems: 'center', marginBottom: 8 },
+  upgradeBtnText:      { color: 'white', fontSize: 15, fontWeight: 'bold' },
+  cancelBtn:           { padding: 10, width: '100%', alignItems: 'center' },
+  cancelBtnText:       { color: 'rgba(255,255,255,0.4)', fontSize: 14 },
+  gizlilikRow:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 4, paddingBottom: 4 },
+  gizlilikLink:        { color: 'rgba(255,255,255,0.3)', fontSize: 11 },
+  gizlilikAyrac:       { color: 'rgba(255,255,255,0.2)', fontSize: 11 },
+  ayarlarSheet:        { backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 16, maxHeight: '85%' },
+  ayarlarBaslik:       { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  bolumBaslik:         { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 'bold', letterSpacing: 0.8, marginBottom: 8, marginTop: 20, paddingHorizontal: 4 },
+  grup:                { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  satir:               { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
+  satirYazi:           { color: 'white', fontSize: 15 },
+  satirAlt:            { color: 'rgba(255,255,255,0.35)', fontSize: 11, marginTop: 2 },
+  ok:                  { color: 'rgba(255,255,255,0.3)', fontSize: 20 },
+  tik:                 { color: '#9d8cef', fontSize: 18, fontWeight: 'bold' },
+  deger:               { color: 'rgba(255,255,255,0.4)', fontSize: 14 },
+  ayrac:               { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 16 },
+  alt:                 { color: 'rgba(255,255,255,0.2)', fontSize: 11, textAlign: 'center', marginTop: 24, marginBottom: 8 },
+  kapatBtn:            { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12 },
+  kapatBtnYazi:        { color: 'rgba(255,255,255,0.6)', fontSize: 15 },
 });

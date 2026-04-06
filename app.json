@@ -11,12 +11,20 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Bebeğinizin ağlamasını analiz etmek için mikrofon gereklidir."
+        "NSMicrophoneUsageDescription": "Bebeğinizin ağlamasını analiz etmek için mikrofon gereklidir.",
+        "UIBackgroundModes": [
+          "audio",
+          "remote-notification"
+        ]
       }
     },
     "android": {
       "permissions": [
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -43,7 +51,24 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Bebeğinizin ağlamasını analiz etmek için mikrofon gereklidir."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#9d8cef",
+          "sounds": [],
+          "androidMode": "default",
+          "androidCollapsedTitle": "LumiBaby"
+        }
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
