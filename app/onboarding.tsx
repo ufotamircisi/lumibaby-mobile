@@ -268,11 +268,11 @@ export default function Onboarding(): JSX.Element {
 
         {(current as any).isLast && (
           <View style={styles.linksContainer}>
-            <TouchableOpacity onPress={() => Linking.openURL('https://ufotamircisi.github.io/LumiBaby/privacy.html?lang=' + selectedLang)}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://ufotamircisi.github.io/lumibaby-mobile/privacy.html?lang=' + selectedLang)}>
               <Text style={styles.linkText}>{privacyLabel}</Text>
             </TouchableOpacity>
             <Text style={styles.dot}>·</Text>
-            <TouchableOpacity onPress={() => Linking.openURL('https://ufotamircisi.github.io/LumiBaby/terms.html?lang=' + selectedLang)}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://ufotamircisi.github.io/lumibaby-mobile/terms.html?lang=' + selectedLang)}>
               <Text style={styles.linkText}>{termsLabel}</Text>
             </TouchableOpacity>
           </View>

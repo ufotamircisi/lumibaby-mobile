@@ -454,11 +454,11 @@ export default function TabLayout() {
               <Text style={s.cancelBtnText}>{t.simdilikIptal}</Text>
             </TouchableOpacity>
             <View style={s.gizlilikRow}>
-              <TouchableOpacity onPress={() => Linking.openURL('https://ufotamircisi.github.io/LumiBaby/privacy.html?lang=' + lang)}>
+              <TouchableOpacity onPress={() => Linking.openURL('https://ufotamircisi.github.io/lumibaby-mobile/privacy.html?lang=' + lang)}>
                 <Text style={s.gizlilikLink}>{t.ayarlarGizlilik}</Text>
               </TouchableOpacity>
               <Text style={s.gizlilikAyrac}>·</Text>
-              <TouchableOpacity onPress={() => Linking.openURL('https://ufotamircisi.github.io/LumiBaby/terms.html?lang=' + lang)}>
+              <TouchableOpacity onPress={() => Linking.openURL('https://ufotamircisi.github.io/lumibaby-mobile/terms.html?lang=' + lang)}>
                 <Text style={s.gizlilikLink}>{t.ayarlarKullanim}</Text>
               </TouchableOpacity>
             </View>
@@ -513,11 +513,11 @@ export default function TabLayout() {
 
               <Text style={s.bolumBaslik}>{t.ayarlarGizlilikBolum}</Text>
               <View style={s.grup}>
-                <TouchableOpacity style={s.satir} onPress={() => Linking.openURL('https://ufotamircisi.github.io/LumiBaby/privacy.html?lang=' + lang)}>
+                <TouchableOpacity style={s.satir} onPress={() => Linking.openURL('https://ufotamircisi.github.io/lumibaby-mobile/privacy.html?lang=' + lang)}>
                   <Text style={s.satirYazi}>{t.ayarlarGizlilik}</Text><Text style={s.ok}>›</Text>
                 </TouchableOpacity>
                 <View style={s.ayrac} />
-                <TouchableOpacity style={s.satir} onPress={() => Linking.openURL('https://ufotamircisi.github.io/LumiBaby/terms.html?lang=' + lang)}>
+                <TouchableOpacity style={s.satir} onPress={() => Linking.openURL('https://ufotamircisi.github.io/lumibaby-mobile/terms.html?lang=' + lang)}>
                   <Text style={s.satirYazi}>{t.ayarlarKullanim}</Text><Text style={s.ok}>›</Text>
                 </TouchableOpacity>
               </View>
