@@ -1,5 +1,6 @@
 // app/onboarding.tsx
 import { useLang } from '@/hooks/useLang';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,7 +28,7 @@ const slidesTR = [
     id: 2, emoji: '🌙',
     title: 'O uyurken, LumiBaby dinlemeye devam eder',
     desc: 'Bebeğim uyudu dedikten sonra ağlama veya kolik dedektörünü açın. Bebeğiniz huzursuzlandığında seçtiğiniz ses otomatik başlasın.',
-    items: ['Ağlama dedektörü', 'Kolik dedektörü', 'Gece boyu destek'],
+    items: ['Ağlama dedektörü', 'Kolik dedektörü', 'Uyku Boyunca Destek'],
   },
   {
     id: 3, emoji: '🎙️',
@@ -37,21 +38,21 @@ const slidesTR = [
   },
   {
     id: 4, emoji: '✨',
-    title: 'Sizin sesiniz, gece yanında olabilir',
+    title: 'Sizin sesiniz uyku boyunca yanında olabilir',
     desc: 'Kaydettiğiniz sesler, ağlama veya kolik algılandığında otomatik oynatılabilir. Daha kişisel ve daha tanıdık bir rahatlatma deneyimi sunar.',
     items: ['Otomatik oynatma', 'Dedektörlerle uyumlu', 'Daha kişisel destek'],
   },
   {
     id: 5, emoji: '🔔',
     title: 'Başka odadayken de haberdar olun',
-    desc: 'Bebeğiniz ağladığında anne ve babaya anlık bildirim gönderilebilir. Telefonunuzdan ve akıllı saatinizden geceyi daha rahat takip edin.',
+    desc: 'Bebeğiniz ağladığında anne ve babaya anlık bildirim gönderilebilir. Telefonunuzdan ve akıllı saatinizden bebeğinizi daha rahat takip edin.',
     items: ['Anlık bildirim', 'Telefon ve saat desteği', 'Uzaktan takip'],
   },
   {
     id: 6, emoji: '📈',
-    title: 'Geceyi kaydedin, düzeni görün',
-    desc: 'Dedektör kullanımından sonra gece kayıtlarını takip edin. Toplam uyku, ağlama sayısı, en uzun uyku ve uyku skorunu görün.',
-    items: ['Gece raporları', 'Uyku takibi', 'Gün gün kayıtlar'],
+    title: 'Uykusunu kaydedin, düzeni görün',
+    desc: 'Dedektör kullanımından sonra uyku kayıtlarını takip edin. Toplam uyku, ağlama sayısı, en uzun uyku ve uyku skorunu görün.',
+    items: ['Uyku Raporları', 'Uyku takibi', 'Gün gün kayıtlar', 'Uyku Rehberi ile bir sonraki uyku zamanını tahmin et'],
   },
   {
     id: 7, emoji: '🍼',
@@ -81,7 +82,7 @@ const slidesEN = [
     id: 2, emoji: '🌙',
     title: 'While baby sleeps, LumiBaby keeps listening',
     desc: "After tapping 'Baby Fell Asleep', turn on the cry or colic detector. When your baby gets fussy, the selected sound starts automatically.",
-    items: ['Cry detector', 'Colic detector', 'All-night support'],
+    items: ['Cry detector', 'Colic detector', 'Sleep-long support'],
   },
   {
     id: 3, emoji: '🎙️',
@@ -91,21 +92,21 @@ const slidesEN = [
   },
   {
     id: 4, emoji: '✨',
-    title: 'Your voice can be there through the night',
+    title: 'Your voice can be there throughout their sleep',
     desc: 'Your recordings can play automatically when crying or colic is detected. A more personal and familiar soothing experience.',
     items: ['Auto playback', 'Works with detectors', 'More personal support'],
   },
   {
     id: 5, emoji: '🔔',
     title: 'Stay informed even from another room',
-    desc: 'When baby cries, instant notifications can be sent to mom and dad. Follow the night comfortably from your phone and smartwatch.',
+    desc: 'When baby cries, instant notifications can be sent to mom and dad. Keep an eye on your baby comfortably from your phone and smartwatch.',
     items: ['Instant notifications', 'Phone & Watch support', 'Remote monitoring'],
   },
   {
     id: 6, emoji: '📈',
-    title: 'Record the night, see the pattern',
-    desc: 'Track night records after using the detector. See total sleep, cry count, longest sleep, and sleep score.',
-    items: ['Night reports', 'Sleep tracking', 'Day by day records'],
+    title: 'Record their sleep, see the pattern',
+    desc: 'Track sleep records after using the detector. See total sleep, cry count, longest sleep, and sleep score.',
+    items: ['Sleep Reports', 'Sleep tracking', 'Day by day records', 'Predict the next sleep time with the Sleep Guide'],
   },
   {
     id: 7, emoji: '🍼',
@@ -139,6 +140,7 @@ export default function Onboarding(): JSX.Element {
       setStep(step + 1);
     } else {
       await setLang(selectedLang);
+      await AsyncStorage.setItem('lumibaby_onboarding_done', '1');
       router.replace('/(tabs)');
     }
   };

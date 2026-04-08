@@ -75,11 +75,12 @@ const tr = {
   premiumUpgradeBtn:   "👑 Premium'a Geç",
   premiumTrialBtn:     '🎁 Ücretsiz Denemeyi Başlat',
   tablo: [
-    { ozellik: '🌙 Gece Dedektörü',    ucretsiz: 'Günde 60 dk',  premium: 'Sınırsız' },
+    { ozellik: '🌙 Uyku Dedektörü',    ucretsiz: 'Günde 60 dk',  premium: 'Sınırsız' },
     { ozellik: '🎤 Ağlama Analizi',     ucretsiz: 'Günde 1 hak',  premium: 'Sınırsız' },
     { ozellik: '💜 Anne Sesi',          ucretsiz: '—',            premium: '✓'         },
     { ozellik: '📳 Ebeveyn Bildirimi',  ucretsiz: '—',            premium: 'QR + Watch'},
-    { ozellik: '📊 Geçmiş Geceler',     ucretsiz: '—',            premium: 'Tam Arşiv' },
+    { ozellik: '📊 Geçmiş Uykular',     ucretsiz: '—',            premium: 'Tam Arşiv' },
+    { ozellik: '🧭 Uyku Rehberi',       ucretsiz: '—',            premium: '✓'         },
     { ozellik: '📈 Uyku Grafiği',       ucretsiz: '—',            premium: '✓'         },
     { ozellik: '🎵 Ninniler',           ucretsiz: 'Sınırsız',     premium: 'Sınırsız'  },
     { ozellik: '📖 Hikayeler',          ucretsiz: 'İlk 1 dk',     premium: 'Sınırsız'  },
@@ -88,7 +89,7 @@ const tr = {
   ],
 
   // ── ANALİZ ─────────────────────────────────────────────────────────────────
-  geceModu:               '🌙 Gece Modu',
+  geceModu:               '🌙 Uyku Modu',
   gecePremiumSinirsiz:    '👑 Premium ile sınırsız',
   bebekUyanik:            (isim: string | null) => isim ? `👀 ${isim} uyanık` : '👀 Bebeğim uyanık',
   bebekUyuyor:            (isim: string | null) => isim ? `😴 ${isim} uyuyor` : '😴 Bebeğim uyuyor',
@@ -102,14 +103,14 @@ const tr = {
   aktif:                  '● AKTİF',
   agladiSayisi:           (n: number) => `😢 ${n} kez ağladı`,
   kalanSure:              (s: string) => `⏱ ${s} kaldı`,
-  geceModuSec:            '🌙 Gece modunu seçin:',
+  geceModuSec:            '🌙 Uyku modunu seçin:',
   bugunDetektor:          (n: number) => `🎯 Bugün ${n} dedektör hakkınız var`,
-  denemeDetektorSinirsiz: '🌙 Deneme: dedektör sınırsız aktif',
+  denemeDetektorSinirsiz: '',
   aglamaDedektorBaslik:   'Ağlama\nDedektörü',
   aglamaDedektorAcik:     'Ağlayınca ninni başlar',
   kolikDedektorBaslik:    'Kolik\nDedektörü',
   kolikDedektorAcik:      'Ağlayınca beyaz gürültü başlar',
-  gecmisGeceler:          'Geçmiş Geceler',
+  gecmisGeceler:          'Geçmiş Uykular',
   premiumKilit:           '👑 Premium',
   arsivKilit:             '🔒 Arşiv ve detaylı raporlar Premium\'da',
   arsivKilitAlt:          "👑 Premiuma Geç →",
@@ -129,7 +130,7 @@ const tr = {
   kolikSesSec:            '🌿 Kolik Sesi Seç',
   ninniSecAlt:            'Bebek ağladığında ninni başlar',
   kolikSecAlt:            'Bebek ağladığında ses başlar',
-  geceRaporuBaslik:       '🌅 Gece Raporu',
+  geceRaporuBaslik:       '🌅 Uyku Raporu',
   toplamUyku:             '😴 Toplam Uyku',
   aglama:                 '😢 Ağlama',
   uykuBaslangici:         '🕐 Uyku Başlangıcı',
@@ -137,12 +138,12 @@ const tr = {
   uykuyaDalma:            '⏱ Uykuya Dalma',
   enUzunUyku:             '💤 En Uzun Uyku',
   uykuKalitesi:           '⭐ Uyku Kalitesi',
-  gecekez:                (n: number) => `Gece ${n} kez`,
+  gecekez:                (n: number) => `${n} kez`,
   detayKilit:             '🔒 Detaylı analiz ve uyku skoru Premium\'da',
   puanDetayBaslik:        '📊 Puan Detayı',
   analizYorumBaslik:      '💬 Analiz',
   analizYorum:            (n: number) =>
-    n === 0 ? '• Harika! Bebeğiniz gece boyunca hiç ağlamadı 🎉'
+    n === 0 ? '• Harika! Bebeğiniz hiç ağlamadı 🎉'
     : n <= 2 ? `• İyi bir gece geçirdiniz. Sadece ${n} kez uyandı.`
     : `• Bebek bu gece ${n} kez uyandı. Uyku rutinini gözden geçirin.`,
   dunleKarsilastirma:     '📈 Dünle Karşılaştırma',
@@ -277,6 +278,37 @@ const tr = {
       ipucu:    '"Pışşş... pışşş... sakin ol yavrucuğum..." gibi sakinleştirici sesler kaydedin.',
     },
   },
+
+  // ── UYKU REHBERİ ──────────────────────────────────────────────────────────
+  uykuRehberiBaslik:        '🧭 Uyku Rehberi',
+  uykuRehberiSiradaki:      'Tahmini sonraki uyku',
+  uykuRehberiRitim:         'Bugünkü ritim',
+  uykuRehberiNot:           'Not',
+  uykuRehberiYetersizKayit: 'Daha doğru tahmin için birkaç uyku kaydı gerekiyor.',
+  uykuRehberiProfilEksik:   'Bebek profilini doldurun (doğum tarihi gerekli).',
+  uykuRehberiRitimler: {
+    dengeli:   '✅ Dengeli',
+    birazKaymis: '⚠️ Biraz kaymış',
+    yorgunluk: '🔴 Yorgunluk birikiyor',
+  },
+  uykuRehberiNotlar: {
+    dengeli:     'Uyku düzeni gayet iyi görünüyor, devam edin!',
+    birazKaymis: 'Uyku saatleri biraz kaymış, rutin oluşturmayı deneyin.',
+    yorgunluk:   'Sık uyanmalar yorgunluk biriktirebilir. Erken yatırmayı deneyin.',
+  },
+  uykuRehberiModalBaslik:   '🧭 Uyku Rehberi Detayı',
+  uykuRehberiBolum1Baslik:  'Bu öneri neye göre hazırlandı?',
+  uykuRehberiBolum1Metin:   (isim: string | null) =>
+    `${isim ? isim + '\'ın' : 'Bebeğinizin'} yaşı, son uyku süresi ve son günlerdeki uyku düzeni dikkate alınarak hazırlandı. Kesin saat değil, tahmini bir penceredir.\n\nUygulama uyku takibini yaptıkça tahminler daha da kişiselleşir ve doğruya yaklaşır.`,
+  uykuRehberiBolum2Baslik:  'Bugün için not',
+  uykuRehberiBolum2Kisauyku: 'Son uyku kısa geçti, biraz daha erken yorulabilir.',
+  uykuRehberiBolum2Bolundu:  'Gece çok bölündü, bugün daha kısa uyanıklık iyi gelebilir.',
+  uykuRehberiBolum2Dengeli:  'Bugünkü düzen yaşına uygun görünüyor.',
+  uykuRehberiBolum2Aksam:    'Tahmini uyku zamanından önce sakin bir geçiş rutini başlatabilirsiniz.',
+  uykuRehberiBolum3Baslik:  'Daha fazlası',
+  uykuRehberiGecmiseGit:    '📊 Geçmiş Uykulara Git',
+  uykuRehberiGrafigeGit:    '📈 7 Günlük Grafiği Gör',
+  uykuZamaniBildirim:       (isim: string | null) => `${isim ? isim + ' için' : 'Bebek için'} uyku zamanı yaklaşıyor olabilir 🌙`,
 };
 
 const en = {
@@ -352,11 +384,12 @@ const en = {
   premiumUpgradeBtn:   '👑 Go Premium',
   premiumTrialBtn:     '🎁 Start Free Trial',
   tablo: [
-    { ozellik: '🌙 Night Detector',      ucretsiz: '60 min/day',   premium: 'Unlimited' },
+    { ozellik: '🌙 Sleep Detector',      ucretsiz: '60 min/day',   premium: 'Unlimited' },
     { ozellik: '🎤 Cry Analysis',         ucretsiz: '1 use/day',    premium: 'Unlimited' },
     { ozellik: '💜 Mom\'s Voice',         ucretsiz: '—',            premium: '✓'          },
     { ozellik: '📳 Parent Alerts',        ucretsiz: '—',            premium: 'QR + Watch' },
-    { ozellik: '📊 Sleep History',        ucretsiz: '—',            premium: 'Full Archive'},
+    { ozellik: '📊 Past Sleeps',           ucretsiz: '—',            premium: 'Full Archive'},
+    { ozellik: '🧭 Sleep Guide',           ucretsiz: '—',            premium: '✓'          },
     { ozellik: '📈 Sleep Graph',          ucretsiz: '—',            premium: '✓'          },
     { ozellik: '🎵 Lullabies',            ucretsiz: 'Unlimited',    premium: 'Unlimited'  },
     { ozellik: '📖 Stories',              ucretsiz: 'First 1 min',  premium: 'Unlimited'  },
@@ -365,7 +398,7 @@ const en = {
   ],
 
   // ── ASSISTANT (ANALİZ) ─────────────────────────────────────────────────────
-  geceModu:               '🌙 Night Mode',
+  geceModu:               '🌙 Sleep Mode',
   gecePremiumSinirsiz:    '👑 Unlimited with Premium',
   bebekUyanik:            (isim: string | null) => isim ? `👀 ${isim} is awake` : '👀 Baby is awake',
   bebekUyuyor:            (isim: string | null) => isim ? `😴 ${isim} is sleeping` : '😴 Baby is sleeping',
@@ -379,14 +412,14 @@ const en = {
   aktif:                  '● ACTIVE',
   agladiSayisi:           (n: number) => `😢 Cried ${n} time${n !== 1 ? 's' : ''}`,
   kalanSure:              (s: string) => `⏱ ${s} remaining`,
-  geceModuSec:            '🌙 Select night mode:',
+  geceModuSec:            '🌙 Select sleep mode:',
   bugunDetektor:          (n: number) => `🎯 You have ${n} detector session${n !== 1 ? 's' : ''} today`,
-  denemeDetektorSinirsiz: '🌙 Trial: detector is unlimited',
+  denemeDetektorSinirsiz: '',
   aglamaDedektorBaslik:   'Cry\nDetector',
   aglamaDedektorAcik:     'Lullaby starts when baby cries',
   kolikDedektorBaslik:    'Colic\nDetector',
   kolikDedektorAcik:      'White noise starts when baby cries',
-  gecmisGeceler:          'Sleep History',
+  gecmisGeceler:          'Past Sleeps',
   premiumKilit:           '👑 Premium',
   arsivKilit:             '🔒 Archive & detailed reports in Premium',
   arsivKilitAlt:          '👑 Go Premium →',
@@ -414,14 +447,14 @@ const en = {
   uykuyaDalma:            '⏱ Time to Fall Asleep',
   enUzunUyku:             '💤 Longest Sleep',
   uykuKalitesi:           '⭐ Sleep Quality',
-  gecekez:                (n: number) => `${n} time${n !== 1 ? 's' : ''} tonight`,
+  gecekez:                (n: number) => `${n} time${n !== 1 ? 's' : ''}`,
   detayKilit:             '🔒 Detailed analysis & sleep score in Premium',
   puanDetayBaslik:        '📊 Score Details',
   analizYorumBaslik:      '💬 Analysis',
   analizYorum:            (n: number) =>
-    n === 0 ? '• Great! Baby didn\'t cry at all tonight 🎉'
+    n === 0 ? '• Great! Baby didn\'t cry at all 🎉'
     : n <= 2 ? `• Good night! Baby woke up only ${n} time${n !== 1 ? 's' : ''}.`
-    : `• Baby woke up ${n} times tonight. Consider reviewing the sleep routine.`,
+    : `• Baby woke up ${n} times. Consider reviewing the sleep routine.`,
   dunleKarsilastirma:     '📈 Compared to Yesterday',
   uyku:                   'Sleep Duration',
   aglamaKars:             'Crying',
@@ -554,6 +587,37 @@ const en = {
       ipucu:    'Record soothing sounds like "shhhh... shhhh... calm down my dear..."',
     },
   },
+
+  // ── SLEEP GUIDE ───────────────────────────────────────────────────────────
+  uykuRehberiBaslik:        '🧭 Sleep Guide',
+  uykuRehberiSiradaki:      'Estimated next sleep',
+  uykuRehberiRitim:         "Today's rhythm",
+  uykuRehberiNot:           'Note',
+  uykuRehberiYetersizKayit: 'A few sleep records are needed for a more accurate estimate.',
+  uykuRehberiProfilEksik:   'Please fill in the baby profile (date of birth required).',
+  uykuRehberiRitimler: {
+    dengeli:     '✅ Balanced',
+    birazKaymis: '⚠️ Slightly off',
+    yorgunluk:   '🔴 Fatigue building up',
+  },
+  uykuRehberiNotlar: {
+    dengeli:     'Sleep pattern looks great, keep it up!',
+    birazKaymis: 'Sleep times are slightly off. Try establishing a routine.',
+    yorgunluk:   'Frequent wake-ups may cause fatigue. Try an earlier bedtime.',
+  },
+  uykuRehberiModalBaslik:   '🧭 Sleep Guide Details',
+  uykuRehberiBolum1Baslik:  'How was this suggestion made?',
+  uykuRehberiBolum1Metin:   (isim: string | null) =>
+    `This was prepared based on ${isim ? isim + '\'s' : 'your baby\'s'} age, last sleep duration, and recent sleep pattern. It\'s an estimated window, not an exact time.\n\nAs you track more sleep sessions, predictions become more personalized and accurate.`,
+  uykuRehberiBolum2Baslik:  'Note for today',
+  uykuRehberiBolum2Kisauyku: 'Last sleep was short — they may get tired a bit earlier today.',
+  uykuRehberiBolum2Bolundu:  'Sleep was quite fragmented last night — shorter awake windows might work better today.',
+  uykuRehberiBolum2Dengeli:  'Today\'s pattern looks right for their age.',
+  uykuRehberiBolum2Aksam:    'You can start a calm transition routine a little before the estimated sleep time.',
+  uykuRehberiBolum3Baslik:  'Explore more',
+  uykuRehberiGecmiseGit:    '📊 Go to Past Sleeps',
+  uykuRehberiGrafigeGit:    '📈 See 7-Day Chart',
+  uykuZamaniBildirim:       (isim: string | null) => `Sleep time might be approaching for ${isim ?? 'baby'} 🌙`,
 };
 
 export const translations = { tr, en };

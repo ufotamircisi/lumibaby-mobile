@@ -316,10 +316,12 @@ export default function TabLayout() {
 
   useEffect(() => {
     AsyncStorage.getItem('bebek_adi').then(v => { if (v) setBebekAdi(v); });
+    AsyncStorage.getItem('bebek_dogum_tarihi').then(v => { if (v) setDogumTarihi(v); });
   }, []);
 
   const handleBebekKaydet = async () => {
     await AsyncStorage.setItem('bebek_adi', bebekAdi);
+    await AsyncStorage.setItem('bebek_dogum_tarihi', dogumTarihi);
     setBebekModal(false);
   };
 

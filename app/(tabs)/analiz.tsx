@@ -3,8 +3,9 @@ import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
+import * as Notifications from 'expo-notifications';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { sendAlertToAll } from './_layout';
 
 const CLAUDE_API_KEY = process.env.EXPO_PUBLIC_CLAUDE_API_KEY;
@@ -120,6 +121,13 @@ export default function Analiz() {
   const [kayitYapiliyor, setKayitYapiliyor] = useState(false);
   const [geriSayim, setGeriSayim]           = useState<number | null>(null);
   const [detektorSure, setDetektorSure]     = useState(0);
+  const [dogumTarihi, setDogumTarihi]       = useState<string>('');
+  const [rehberModal, setRehberModal]       = useState(false);
+  const scrollRef           = useRef<ScrollView>(null);
+  const gecmisOffsetRef     = useRef<number>(0);
+  const grafikOffsetRef     = useRef<number>(0);
+  const bildirimIdRef       = useRef<string | null>(null);
+  const { height: screenHeight } = useWindowDimensions();
 
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
   const detektorTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -146,6 +154,7 @@ export default function Analiz() {
     AsyncStorage.getItem('anne_ninni_kayit').then(v => { if (v) setAnneNinniUri(JSON.parse(v).uri); });
     AsyncStorage.getItem('anne_pispis_kayit').then(v => { if (v) setAnnePisPisUri(JSON.parse(v).uri); });
     AsyncStorage.getItem('bebek_adi').then(v => { if (v) setBebekAdi(v); });
+    AsyncStorage.getItem('bebek_dogum_tarihi').then(v => { if (v) setDogumTarihi(v); });
   }, []);
 
   const bebekIsmi = bebekAdi.trim() || null;
@@ -171,6 +180,53 @@ export default function Analiz() {
     haftaBasi.setDate(d.getDate() - (gun === 0 ? 6 : gun - 1));
     return haftaBasi.getDate() + ' ' + t.grafikAylar[haftaBasi.getMonth()] + ' ' + haftaBasi.getFullYear();
   };
+  // ── UYKU REHBERİ ALGORİTMASI ──────────────────────────────────────────────
+  const uykuRehberiHesapla = () => {
+    // Doğum tarihi yoksa profil eksik
+    const dogumDate = dogumTarihi ? (() => {
+      const p = dogumTarihi.split('.');
+      if (p.length === 3) return new Date(+p[2], +p[1] - 1, +p[0]);
+      return null;
+    })() : null;
+
+    if (!dogumDate || isNaN(dogumDate.getTime())) return { tip: 'profilEksik' as const };
+    if (geceRaporlari.length < 3) return { tip: 'yetersizKayit' as const };
+
+    // Yaşa göre uyanıklık penceresi (dakika)
+    const haftalar = Math.floor((Date.now() - dogumDate.getTime()) / (7 * 24 * 3600 * 1000));
+    let pencereDk = 90; // varsayılan
+    if (haftalar < 6)        pencereDk = 52;
+    else if (haftalar < 12)  pencereDk = 75;
+    else if (haftalar < 16)  pencereDk = 97;
+    else if (haftalar < 24)  pencereDk = 150;
+    else if (haftalar < 36)  pencereDk = 180;
+    else                     pencereDk = 210;
+
+    const sonRaporR   = geceRaporlari[0];
+    const sonUykuSn   = sonRaporR.enUzunUyku;   // saniye
+    const uyananKez   = sonRaporR.aglamaSayisi;
+    const bitisSaati  = sonRaporR.bitis;         // ms timestamp
+
+    // Düzeltmeler
+    let duzeltmeDk = 0;
+    if (sonUykuSn < 40 * 60)  duzeltmeDk -= 15;
+    if (uyananKez >= 3)       duzeltmeDk -= 15;
+    if (sonUykuSn > 90 * 60)  duzeltmeDk += 10;
+
+    const tahminiMs = bitisSaati + (pencereDk + duzeltmeDk) * 60 * 1000;
+    const tahminiD  = new Date(tahminiMs);
+    const tahminiSaat = tahminiD.getHours().toString().padStart(2, '0') + ':' + tahminiD.getMinutes().toString().padStart(2, '0');
+
+    // Ritim etiketi
+    let ritim: 'dengeli' | 'birazKaymis' | 'yorgunluk';
+    if (uyananKez >= 3)     ritim = 'yorgunluk';
+    else if (duzeltmeDk < 0) ritim = 'birazKaymis';
+    else                    ritim = 'dengeli';
+
+    return { tip: 'sonuc' as const, tahminiSaat, ritim };
+  };
+  const rehberSonuc = uykuRehberiHesapla();
+
   const haftayaGoreGrupla = (raporlar: GeceRaporu[]) => {
     const gruplar: { [key: string]: GeceRaporu[] } = {};
     raporlar.forEach(r => { const key = haftaKeyGetir(r.baslangic); if (!gruplar[key]) gruplar[key] = []; gruplar[key].push(r); });
@@ -246,6 +302,42 @@ export default function Analiz() {
     setUyuyorMu(true); setSure(0); setDetektorSure(0);
     geceBaslangicRef.current = Date.now(); aglamaSayisiRef.current = 0; ilkAglamaZamaniRef.current = null; setAglamaSayisi(0);
     timerRef.current = setInterval(() => setSure(s => s + 1), 1000);
+
+    // Zamanlı uyku bildirimi planla
+    (async () => {
+      try {
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status !== 'granted') return;
+        const sonuc = uykuRehberiHesapla();
+        if (sonuc.tip !== 'sonuc') return;
+        const sonRaporR = geceRaporlari[0];
+        const haftalar = dogumTarihi ? (() => {
+          const p = dogumTarihi.split('.');
+          if (p.length === 3) return Math.floor((Date.now() - new Date(+p[2], +p[1] - 1, +p[0]).getTime()) / (7 * 24 * 3600 * 1000));
+          return 0;
+        })() : 0;
+        let pencereDk = 90;
+        if (haftalar < 6) pencereDk = 52;
+        else if (haftalar < 12) pencereDk = 75;
+        else if (haftalar < 16) pencereDk = 97;
+        else if (haftalar < 24) pencereDk = 150;
+        else if (haftalar < 36) pencereDk = 180;
+        else pencereDk = 210;
+        let duzeltmeDk = 0;
+        if (sonRaporR && sonRaporR.enUzunUyku < 40 * 60) duzeltmeDk -= 15;
+        if (sonRaporR && sonRaporR.aglamaSayisi >= 3) duzeltmeDk -= 15;
+        if (sonRaporR && sonRaporR.enUzunUyku > 90 * 60) duzeltmeDk += 10;
+        const toplamDk = pencereDk + duzeltmeDk;
+        const tetikSaniye = Math.round(toplamDk * 60 * 0.75);
+        if (tetikSaniye <= 0) return;
+        if (bildirimIdRef.current) await Notifications.cancelScheduledNotificationAsync(bildirimIdRef.current).catch(() => {});
+        const id = await Notifications.scheduleNotificationAsync({
+          content: { title: 'LumiBaby 🌙', body: t.uykuZamaniBildirim(bebekIsmi), sound: true },
+          trigger: { seconds: tetikSaniye, type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL },
+        });
+        bildirimIdRef.current = id;
+      } catch (_) {}
+    })();
   };
 
   const dedektoraBasildi = async (tip: DedektorTip) => {
@@ -355,6 +447,10 @@ export default function Analiz() {
   };
 
   const bebekUyandi = async () => {
+    if (bildirimIdRef.current) {
+      await Notifications.cancelScheduledNotificationAsync(bildirimIdRef.current).catch(() => {});
+      bildirimIdRef.current = null;
+    }
     await herSeyiDurdur();
     const bitis = Date.now(), baslangic = geceBaslangicRef.current;
     const toplamUyku  = Math.floor((bitis - baslangic) / 1000);
@@ -391,7 +487,7 @@ export default function Analiz() {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
         {/* UYKU KARTI */}
         <View style={styles.sleepCard}>
@@ -429,7 +525,6 @@ export default function Analiz() {
           <View style={styles.dedektorSection}>
             <Text style={styles.dedektorBaslik}>{t.geceModuSec}</Text>
             {free && <View style={styles.hakBilgi}><Text style={styles.hakBilgiYazi}>{t.bugunDetektor(detektorHak)}</Text></View>}
-            {isTrial && <View style={styles.hakBilgi}><Text style={styles.hakBilgiYazi}>{t.denemeDetektorSinirsiz}</Text></View>}
             <View style={styles.dedektorRow}>
               <View style={styles.dedektorKolumn}>
                 <TouchableOpacity style={[styles.dedektorKart, seciliDetektor === 'aglama' && styles.dedektorKartAktif]} onPress={() => dedektoraBasildi('aglama')}>
@@ -454,6 +549,7 @@ export default function Analiz() {
         )}
 
         {/* GEÇMİŞ GECELER */}
+        <View onLayout={e => { gecmisOffsetRef.current = e.nativeEvent.layout.y; }}>
         <Text style={styles.bolumBaslik}>{t.gecmisGeceler}</Text>
         {free ? (
           <TouchableOpacity style={styles.arsivKilitKutu} onPress={() => { setPaywallTip('premium'); setPaywallVisible(true); }}>
@@ -486,8 +582,39 @@ export default function Analiz() {
             </View>
           ))
         )}
+        </View>
+
+        {/* UYKU REHBERİ */}
+        <TouchableOpacity activeOpacity={0.85} onPress={() => { free ? (setPaywallTip('premium'), setPaywallVisible(true)) : setRehberModal(true); }} style={styles.rehberKart}>
+          <View style={styles.rehberBaslikRow}>
+            <Text style={styles.rehberBaslik}>{t.uykuRehberiBaslik}</Text>
+            <Text style={styles.rehberOk}>›</Text>
+          </View>
+          {rehberSonuc.tip === 'profilEksik' ? (
+            <Text style={styles.rehberUyari}>{t.uykuRehberiProfilEksik}</Text>
+          ) : rehberSonuc.tip === 'yetersizKayit' ? (
+            <Text style={styles.rehberUyari}>{t.uykuRehberiYetersizKayit}</Text>
+          ) : (
+            <>
+              <View style={styles.rehberSatir}>
+                <Text style={styles.rehberEtiket}>{t.uykuRehberiSiradaki}</Text>
+                <Text style={styles.rehberDeger}>{rehberSonuc.tahminiSaat}</Text>
+              </View>
+              <View style={styles.rehberSatir}>
+                <Text style={styles.rehberEtiket}>{t.uykuRehberiRitim}</Text>
+                <Text style={[styles.rehberDeger, rehberSonuc.ritim === 'dengeli' ? styles.rehberYesil : rehberSonuc.ritim === 'yorgunluk' ? styles.rehberKirmizi : styles.rehberSari]}>
+                  {t.uykuRehberiRitimler[rehberSonuc.ritim]}
+                </Text>
+              </View>
+              <View style={styles.rehberNotKutu}>
+                <Text style={styles.rehberNotYazi}>💡 {t.uykuRehberiNotlar[rehberSonuc.ritim]}</Text>
+              </View>
+            </>
+          )}
+        </TouchableOpacity>
 
         {/* 7 GÜNLÜK GRAFİK */}
+        <View onLayout={e => { grafikOffsetRef.current = e.nativeEvent.layout.y; }}>
         <Text style={[styles.bolumBaslik, { marginTop: 16 }]}>{t.yedıGunGrafik}</Text>
         {free ? (
           <TouchableOpacity style={styles.premiumKilitKutu} onPress={() => { setPaywallTip('premium'); setPaywallVisible(true); }}>
@@ -523,6 +650,7 @@ export default function Analiz() {
             </View>
           </View>
         )}
+        </View>
 
         {/* AĞLAMA ANALİZİ */}
         <View style={styles.aglamaAnalizKart}>
@@ -792,6 +920,59 @@ export default function Analiz() {
         </View>
       </Modal>
 
+      {/* UYKU REHBERİ BOTTOM SHEET */}
+      <Modal visible={rehberModal} transparent animationType="slide" onRequestClose={() => setRehberModal(false)}>
+        <TouchableOpacity style={styles.rehberOverlay} activeOpacity={1} onPress={() => setRehberModal(false)} />
+        <View style={[styles.rehberSheet, { maxHeight: screenHeight * 0.75 }]}>
+          <View style={styles.rehberSheetHandle} />
+          <Text style={styles.rehberSheetBaslik}>{t.uykuRehberiModalBaslik}</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+
+            {/* BÖLÜM 1 */}
+            <View style={styles.rehberSheetBolum}>
+              <Text style={styles.rehberSheetBolumBaslik}>{t.uykuRehberiBolum1Baslik}</Text>
+              <Text style={styles.rehberSheetMetin}>{t.uykuRehberiBolum1Metin(bebekIsmi)}</Text>
+            </View>
+
+            {/* BÖLÜM 2 — dinamik not */}
+            {rehberSonuc.tip === 'sonuc' && (() => {
+              const sonRaporR = geceRaporlari[0];
+              const notlar: string[] = [];
+              if (sonRaporR.enUzunUyku < 40 * 60) notlar.push(t.uykuRehberiBolum2Kisauyku);
+              else if (sonRaporR.aglamaSayisi >= 3) notlar.push(t.uykuRehberiBolum2Bolundu);
+              else notlar.push(t.uykuRehberiBolum2Dengeli);
+              notlar.push(t.uykuRehberiBolum2Aksam);
+              return (
+                <View style={styles.rehberSheetBolum}>
+                  <Text style={styles.rehberSheetBolumBaslik}>{t.uykuRehberiBolum2Baslik}</Text>
+                  {notlar.map((not, i) => (
+                    <Text key={i} style={styles.rehberSheetMetin}>• {not}</Text>
+                  ))}
+                </View>
+              );
+            })()}
+
+            {/* BÖLÜM 3 — navigasyon butonlar */}
+            <View style={styles.rehberSheetBolum}>
+              <Text style={styles.rehberSheetBolumBaslik}>{t.uykuRehberiBolum3Baslik}</Text>
+              <TouchableOpacity style={styles.rehberNavBtn} onPress={() => {
+                setRehberModal(false);
+                setTimeout(() => scrollRef.current?.scrollTo({ y: gecmisOffsetRef.current, animated: true }), 150);
+              }}>
+                <Text style={styles.rehberNavBtnYazi}>{t.uykuRehberiGecmiseGit}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.rehberNavBtn} onPress={() => {
+                setRehberModal(false);
+                setTimeout(() => scrollRef.current?.scrollTo({ y: grafikOffsetRef.current, animated: true }), 150);
+              }}>
+                <Text style={styles.rehberNavBtnYazi}>{t.uykuRehberiGrafigeGit}</Text>
+              </TouchableOpacity>
+            </View>
+
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* PAYWALL */}
       <Paywall
         visible={paywallVisible}
@@ -868,6 +1049,28 @@ const styles = StyleSheet.create({
   puanDaire:              { width: 42, height: 42, borderRadius: 21, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   puanYazi:               { fontSize: 13, fontWeight: 'bold' },
   geceOk:                 { color: 'rgba(255,255,255,0.4)', fontSize: 22 },
+  rehberKart:             { backgroundColor: 'rgba(157,140,239,0.08)', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(157,140,239,0.2)', gap: 10 },
+  rehberBaslikRow:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  rehberBaslik:           { color: '#b8a8f8', fontSize: 15, fontWeight: 'bold' },
+  rehberOk:               { color: 'rgba(157,140,239,0.6)', fontSize: 20, fontWeight: '300' },
+  rehberUyari:            { color: 'rgba(255,255,255,0.45)', fontSize: 13, lineHeight: 20 },
+  rehberSatir:            { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  rehberEtiket:           { color: 'rgba(255,255,255,0.5)', fontSize: 13 },
+  rehberDeger:            { color: 'white', fontSize: 14, fontWeight: 'bold' },
+  rehberYesil:            { color: '#4ade80' },
+  rehberSari:             { color: '#facc15' },
+  rehberKirmizi:          { color: '#f87171' },
+  rehberNotKutu:          { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 10 },
+  rehberNotYazi:          { color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 18 },
+  rehberOverlay:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  rehberSheet:            { backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40, gap: 4 },
+  rehberSheetHandle:      { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 2, alignSelf: 'center', marginBottom: 12 },
+  rehberSheetBaslik:      { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
+  rehberSheetBolum:       { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 16, marginBottom: 12, gap: 8 },
+  rehberSheetBolumBaslik: { color: '#b8a8f8', fontSize: 13, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 },
+  rehberSheetMetin:       { color: 'rgba(255,255,255,0.7)', fontSize: 14, lineHeight: 22 },
+  rehberNavBtn:           { backgroundColor: 'rgba(157,140,239,0.15)', borderRadius: 12, padding: 13, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(157,140,239,0.25)' },
+  rehberNavBtnYazi:       { color: '#b8a8f8', fontSize: 14, fontWeight: '600' },
   grafikKart:             { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   grafikIcerik:           { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 },
   grafikSutun:            { flex: 1, alignItems: 'center', gap: 4 },
