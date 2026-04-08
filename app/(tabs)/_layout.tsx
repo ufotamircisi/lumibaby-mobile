@@ -319,7 +319,7 @@ const pm = StyleSheet.create({
 
 // ─── ANA LAYOUT ──────────────────────────────────────────────────────────────
 export default function TabLayout() {
-  const { isTrial, isPremium, trialKalanGun, premiumAktifEt } = usePremium();
+  const { isTrial, isPremium, trialKalanGun, premiumAktifEt, yuklendi } = usePremium();
   const { lang, setLang, t } = useLang();
   const free = !isPremium && !isTrial;
   const [fontsLoaded] = useFonts({ Nunito_800ExtraBold });
@@ -332,6 +332,8 @@ export default function TabLayout() {
   const [bebekAdi, setBebekAdi]           = useState('');
   const [dogumTarihi, setDogumTarihi]     = useState('');
   const [bildirimIzni, setBildirimIzni]   = useState<boolean | null>(null);
+  const [trial5Popup, setTrial5Popup]     = useState(false);
+  const [trial6Popup, setTrial6Popup]     = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('bebek_adi').then(v => { if (v) setBebekAdi(v); });
@@ -353,6 +355,23 @@ export default function TabLayout() {
       setBildirimIzni(status === 'granted');
     }).catch(() => setBildirimIzni(false));
   }, []);
+
+  // Trial gün popup'ları — yuklendi değişince kontrol et
+  useEffect(() => {
+    if (!yuklendi || !isTrial) return;
+    (async () => {
+      // 5. gün: trialKalanGun === 3 (7 - 4 = 3)
+      if (trialKalanGun === 3) {
+        const shown = await AsyncStorage.getItem('lumibaby_trial5_popup');
+        if (!shown) setTrial5Popup(true);
+      }
+      // 6. gün: trialKalanGun === 2 (7 - 5 = 2)
+      if (trialKalanGun === 2) {
+        const shown = await AsyncStorage.getItem('lumibaby_trial6_popup');
+        if (!shown) setTrial6Popup(true);
+      }
+    })();
+  }, [yuklendi]);
 
   const handleBebekKaydet = async () => {
     await AsyncStorage.setItem('bebek_adi', bebekAdi);
@@ -591,6 +610,58 @@ export default function TabLayout() {
         </TouchableOpacity>
       </Modal>
 
+      {/* TRİAL 5. GÜN POPUP — değerlendirme */}
+      <Modal visible={trial5Popup} transparent animationType="fade" onRequestClose={() => setTrial5Popup(false)}>
+        <View style={s.popupBackdrop}>
+          <View style={s.popupKart}>
+            <Text style={s.popupIkon}>⭐</Text>
+            <Text style={s.popupBaslik}>{t.trial5Baslik}</Text>
+            <Text style={s.popupMetin}>{t.trial5Metin}</Text>
+            <TouchableOpacity style={s.popupPrimaryBtn} onPress={async () => {
+              await AsyncStorage.setItem('lumibaby_trial5_popup', '1');
+              setTrial5Popup(false);
+              const url = Platform.OS === 'ios'
+                ? 'itms-apps://itunes.apple.com/app/id000000000?action=write-review'
+                : 'https://play.google.com/store/apps/details?id=com.lumibaby&showAllReviews=true';
+              Linking.openURL(url).catch(() => {});
+            }}>
+              <Text style={s.popupPrimaryBtnYazi}>{t.trial5Evet}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.popupSecondaryBtn} onPress={async () => {
+              await AsyncStorage.setItem('lumibaby_trial5_popup', '1');
+              setTrial5Popup(false);
+            }}>
+              <Text style={s.popupSecondaryBtnYazi}>{t.trial5Hayir}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* TRİAL 6. GÜN POPUP — premium hatırlatma */}
+      <Modal visible={trial6Popup} transparent animationType="fade" onRequestClose={() => setTrial6Popup(false)}>
+        <View style={s.popupBackdrop}>
+          <View style={s.popupKart}>
+            <Text style={s.popupIkon}>👑</Text>
+            <Text style={s.popupBaslik}>{t.trial6Baslik}</Text>
+            <Text style={s.popupMetin}>{t.trial6Metin}</Text>
+            <Text style={s.popupAlt}>{t.trial6Alt}</Text>
+            <TouchableOpacity style={s.popupPrimaryBtn} onPress={async () => {
+              await AsyncStorage.setItem('lumibaby_trial6_popup', '1');
+              setTrial6Popup(false);
+              setPremiumModal(true);
+            }}>
+              <Text style={s.popupPrimaryBtnYazi}>{t.trial6Upgrade}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.popupSecondaryBtn} onPress={async () => {
+              await AsyncStorage.setItem('lumibaby_trial6_popup', '1');
+              setTrial6Popup(false);
+            }}>
+              <Text style={s.popupSecondaryBtnYazi}>{t.trial6Sonra}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -666,4 +737,14 @@ const s = StyleSheet.create({
   kapatBtnYazi:        { color: 'rgba(255,255,255,0.6)', fontSize: 15 },
   bildirimUyariBox:    { backgroundColor: 'rgba(251,146,60,0.08)', borderRadius: 12, padding: 10, marginTop: 6, borderWidth: 1, borderColor: 'rgba(251,146,60,0.25)' },
   bildirimUyariYazi:   { color: 'rgba(251,146,60,0.85)', fontSize: 11, lineHeight: 17 },
+  popupBackdrop:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  popupKart:           { backgroundColor: '#0f1e33', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', borderWidth: 1, borderColor: 'rgba(157,140,239,0.2)', gap: 10 },
+  popupIkon:           { fontSize: 44, marginBottom: 4 },
+  popupBaslik:         { color: 'white', fontSize: 20, fontWeight: 'bold', textAlign: 'center', lineHeight: 26 },
+  popupMetin:          { color: 'rgba(255,255,255,0.6)', fontSize: 14, textAlign: 'center', lineHeight: 22 },
+  popupAlt:            { color: 'rgba(255,255,255,0.35)', fontSize: 12, textAlign: 'center', lineHeight: 18 },
+  popupPrimaryBtn:     { backgroundColor: '#9d8cef', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 24, width: '100%', alignItems: 'center', marginTop: 6 },
+  popupPrimaryBtnYazi: { color: 'white', fontSize: 15, fontWeight: 'bold' },
+  popupSecondaryBtn:   { paddingVertical: 10, width: '100%', alignItems: 'center' },
+  popupSecondaryBtnYazi: { color: 'rgba(255,255,255,0.4)', fontSize: 14 },
 });

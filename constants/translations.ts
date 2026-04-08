@@ -26,6 +26,17 @@ const tr = {
   headerAyarlar:  '⚙️ Ayarlar',
   trialBanner:    (gun: number) => `⏳ Ücretsiz Deneme — ${gun} gün kaldı`,
 
+  // ── TRİAL POPUP'LARI ───────────────────────────────────────────────────────
+  trial5Baslik:   'Uygulamamızı beğendiniz mi?',
+  trial5Metin:    'Minik Uyku son günlerde size destek olduysa değerlendirmeniz bizi çok mutlu eder.',
+  trial5Evet:     'Evet, beğendim ⭐',
+  trial5Hayir:    'Henüz değil',
+  trial6Baslik:   'Premium özellikler yarın kapanıyor',
+  trial6Metin:    'Uyku rehberi, anne sesi, dedektörler ve diğer gelişmiş özellikleri kesintisiz kullanmaya devam etmek için şimdi Premium\'a geçebilirsiniz.',
+  trial6Alt:      'Deneme süresi bitince uygulama ücretsiz sürüme döner.',
+  trial6Upgrade:  '👑 Premium\'a Geç',
+  trial6Sonra:    'Daha sonra',
+
   // ── BEBEK MODAL ────────────────────────────────────────────────────────────
   bebekBaslik:        'Bebek Ayarları',
   bebekAlt:           'Kişiselleştirilmiş deneyim için',
@@ -304,7 +315,7 @@ const tr = {
   uykuRehberiModalBaslik:   '🧭 Uyku Rehberi Detayı',
   uykuRehberiBolum1Baslik:  'Bu öneri neye göre hazırlandı?',
   uykuRehberiBolum1Metin:   (isim: string | null) =>
-    `${isim ? isim + '\'ın' : 'Bebeğinizin'} yaşı, son uyku süresi ve son günlerdeki uyku düzeni dikkate alınarak hazırlandı. Kesin saat değil, tahmini bir penceredir.\n\nUygulama uyku takibini yaptıkça tahminler daha da kişiselleşir ve doğruya yaklaşır.`,
+    `${isim ? isim + '\'ın' : 'Bebeğinizin'} yaşı, son uyku süresi ve son günlerdeki uyku düzeni dikkate alınarak hesaplandı. Kesin saat değil, tahmini bir penceredir. Uygulama uyku takibini yaptıkça tahminler daha da kişiselleşir ve doğruya yaklaşır.`,
   uykuRehberiBolum2Baslik:  'Bugün için not',
   uykuRehberiBolum2Kisauyku: 'Son uyku kısa geçti, biraz daha erken yorulabilir.',
   uykuRehberiBolum2Bolundu:  'Gece çok bölündü, bugün daha kısa uyanıklık iyi gelebilir.',
@@ -339,6 +350,17 @@ const en = {
   headerPremium:  '👑 Premium',
   headerAyarlar:  '⚙️ Settings',
   trialBanner:    (gun: number) => `⏳ Free Trial — ${gun} days left`,
+
+  // ── TRIAL POPUPS ───────────────────────────────────────────────────────────
+  trial5Baslik:   'Enjoying the app?',
+  trial5Metin:    "If LumiBaby has been helpful, we'd love to hear your thoughts.",
+  trial5Evet:     'Yes, I love it ⭐',
+  trial5Hayir:    'Not yet',
+  trial6Baslik:   'Premium features expire tomorrow',
+  trial6Metin:    'Continue using the Sleep Guide, parent voice, detectors and other advanced features by upgrading to Premium now.',
+  trial6Alt:      'When the trial ends, the app returns to the free version.',
+  trial6Upgrade:  '👑 Upgrade to Premium',
+  trial6Sonra:    'Maybe later',
 
   // ── BABY MODAL ─────────────────────────────────────────────────────────────
   bebekBaslik:        'Baby Settings',
@@ -618,7 +640,7 @@ const en = {
   uykuRehberiModalBaslik:   '🧭 Sleep Guide Details',
   uykuRehberiBolum1Baslik:  'How was this suggestion made?',
   uykuRehberiBolum1Metin:   (isim: string | null) =>
-    `This was prepared based on ${isim ? isim + '\'s' : 'your baby\'s'} age, last sleep duration, and recent sleep pattern. It\'s an estimated window, not an exact time.\n\nAs you track more sleep sessions, predictions become more personalized and accurate.`,
+    `This was calculated based on ${isim ? isim + '\'s' : 'your baby\'s'} age, last sleep duration, and recent sleep pattern. It\'s an estimated window, not an exact time. As you track more sleep sessions, predictions become more personalized and accurate.`,
   uykuRehberiBolum2Baslik:  'Note for today',
   uykuRehberiBolum2Kisauyku: 'Last sleep was short — they may get tired a bit earlier today.',
   uykuRehberiBolum2Bolundu:  'Sleep was quite fragmented last night — shorter awake windows might work better today.',
