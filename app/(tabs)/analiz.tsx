@@ -105,6 +105,7 @@ export default function Analiz() {
   const [sesListeModal, setSesListeModal]   = useState(false);
   const [modalTip, setModalTip]             = useState<DedektorTip | null>(null);
   const [dinleniyor, setDinleniyor]         = useState(false);
+  const [kalibrasyon, setKalibrasyon]       = useState(false);
   const [caliniyor, setCaliniyor]           = useState(false);
   const [aglamaSayisi, setAglamaSayisi]     = useState(0);
   const [raporModal, setRaporModal]         = useState(false);
@@ -129,6 +130,7 @@ export default function Analiz() {
   const gecmisOffsetRef     = useRef<number>(0);
   const grafikOffsetRef     = useRef<number>(0);
   const bildirimIdRef       = useRef<string | null>(null);
+  const aglamaEsigiRef      = useRef<number>(AGLAMA_ESIGI_DB);
   const { height: screenHeight } = useWindowDimensions();
 
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -409,9 +411,42 @@ export default function Analiz() {
     setTimeout(() => dinlemeBaslat(ses), 400);
   };
 
+  const kalibrasyonYap = async (): Promise<number> => {
+    const KALIBRASYON_SURE_MS = 3000;
+    const OFFSET_DB = 15;
+    const MIN_ESIK = -35;
+    const MAX_ESIK = -10;
+    setKalibrasyon(true);
+    let kalRec: Audio.Recording | null = null;
+    try {
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
+      const { recording } = await Audio.Recording.createAsync({ ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true });
+      kalRec = recording;
+      const ornekler: number[] = [];
+      const interval = setInterval(async () => {
+        try { const st = await recording.getStatusAsync(); const db = (st as any).metering ?? -160; if (db > -160) ornekler.push(db); } catch (_) {}
+      }, 200);
+      await new Promise(res => setTimeout(res, KALIBRASYON_SURE_MS));
+      clearInterval(interval);
+      await kalRec.stopAndUnloadAsync();
+      kalRec = null;
+      if (ornekler.length === 0) throw new Error('no samples');
+      const ort = ornekler.reduce((a, b) => a + b, 0) / ornekler.length;
+      const esik = Math.min(MAX_ESIK, Math.max(MIN_ESIK, ort + OFFSET_DB));
+      await AsyncStorage.setItem('lumibaby_noise_threshold', String(esik));
+      return esik;
+    } catch (_) {
+      if (kalRec) { try { await kalRec.stopAndUnloadAsync(); } catch (__) {} }
+      return AGLAMA_ESIGI_DB;
+    } finally {
+      setKalibrasyon(false);
+    }
+  };
+
   const dinlemeBaslat = async (ses: SesTip) => {
     if (dinlemeRef.current) return;
     dinlemeRef.current = true; setDinleniyor(true); aglamaCountRef.current = 0;
+    aglamaEsigiRef.current = await kalibrasyonYap();
     try {
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
       const { recording } = await Audio.Recording.createAsync({ ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true });
@@ -421,7 +456,7 @@ export default function Analiz() {
         try {
           const status = await recording.getStatusAsync();
           const db = (status as any).metering ?? -160;
-          if (db > AGLAMA_ESIGI_DB) {
+          if (db > aglamaEsigiRef.current) {
             aglamaCountRef.current += 1;
             if (aglamaCountRef.current >= AGLAMA_COUNT_ESIGI) {
               aglamaCountRef.current = 0;
@@ -542,6 +577,7 @@ export default function Analiz() {
               ? t.bebekUyanik(bebekIsmi)
               : caliniyor
                 ? (seciliDetektor === 'aglama' ? t.ninnlCalıyor : t.beyazGurultuCalıyor)
+                : kalibrasyon ? t.kalibrasyonMesaj
                 : dinleniyor ? t.dinleniyor
                 : t.bebekUyuyor(bebekIsmi)}
           </Text>
