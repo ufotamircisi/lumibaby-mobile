@@ -124,6 +124,7 @@ export default function Analiz() {
   const [detektorSure, setDetektorSure]     = useState(0);
   const [dogumTarihi, setDogumTarihi]       = useState<string>('');
   const [rehberModal, setRehberModal]       = useState(false);
+  const [nasılCalisirModal, setNasılCalisirModal] = useState(false);
   const scrollRef           = useRef<ScrollView>(null);
   const gecmisOffsetRef     = useRef<number>(0);
   const grafikOffsetRef     = useRef<number>(0);
@@ -529,7 +530,12 @@ export default function Analiz() {
         <View style={styles.sleepCard}>
           <View style={styles.sleepCardUst}>
             <Text style={styles.sleepCardBaslik}>{t.geceModu}</Text>
-            {free && <View style={styles.premiumMiniRozet}><Text style={styles.premiumMiniRozetYazi}>{t.gecePremiumSinirsiz}</Text></View>}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {free && <View style={styles.premiumMiniRozet}><Text style={styles.premiumMiniRozetYazi}>{t.gecePremiumSinirsiz}</Text></View>}
+              <TouchableOpacity onPress={() => setNasılCalisirModal(true)}>
+                <Text style={styles.nasılCalisirLink}>{t.nasılCalisirLink}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           <Text style={styles.sleepStatus}>
             {!uyuyorMu
@@ -961,6 +967,42 @@ export default function Analiz() {
         </View>
       </Modal>
 
+      {/* NASIL ÇALIŞIR BOTTOM SHEET */}
+      <Modal visible={nasılCalisirModal} transparent animationType="slide" onRequestClose={() => setNasılCalisirModal(false)}>
+        <TouchableOpacity style={styles.rehberOverlay} activeOpacity={1} onPress={() => setNasılCalisirModal(false)} />
+        <View style={[styles.rehberSheet, { maxHeight: screenHeight * 0.82 }]}>
+          <View style={styles.rehberSheetHandle} />
+          <Text style={styles.rehberSheetBaslik}>{t.nasılCalisirBaslik}</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+
+            <View style={styles.rehberSheetBolum}>
+              <Text style={styles.rehberSheetBolumBaslik}>{t.nasılCalisirB1Baslik}</Text>
+              <Text style={styles.rehberSheetMetin}>{t.nasılCalisirB1Metin}</Text>
+            </View>
+
+            <View style={styles.rehberSheetBolum}>
+              <Text style={styles.rehberSheetBolumBaslik}>{t.nasılCalisirB2Baslik}</Text>
+              <Text style={styles.rehberSheetMetin}>{t.nasılCalisirB2Metin}</Text>
+            </View>
+
+            <View style={styles.rehberSheetBolum}>
+              <Text style={styles.rehberSheetBolumBaslik}>{t.nasılCalisirB3Baslik}</Text>
+              <Text style={styles.rehberSheetMetin}>{t.nasılCalisirB3Metin}</Text>
+            </View>
+
+            <View style={styles.rehberSheetBolum}>
+              <Text style={styles.rehberSheetBolumBaslik}>{t.nasılCalisirB4Baslik}</Text>
+              <Text style={styles.rehberSheetMetin}>{t.nasılCalisirB4Metin}</Text>
+            </View>
+
+            <View style={styles.nasılCalisirNotKutu}>
+              <Text style={styles.nasılCalisirNotYazi}>{t.nasılCalisirNot}</Text>
+            </View>
+
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* UYKU REHBERİ BOTTOM SHEET */}
       <Modal visible={rehberModal} transparent animationType="slide" onRequestClose={() => setRehberModal(false)}>
         <TouchableOpacity style={styles.rehberOverlay} activeOpacity={1} onPress={() => setRehberModal(false)} />
@@ -1112,6 +1154,9 @@ const styles = StyleSheet.create({
   rehberSheetMetin:       { color: 'rgba(255,255,255,0.7)', fontSize: 14, lineHeight: 22 },
   rehberNavBtn:           { backgroundColor: 'rgba(157,140,239,0.15)', borderRadius: 12, padding: 13, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(157,140,239,0.25)' },
   rehberNavBtnYazi:       { color: '#b8a8f8', fontSize: 14, fontWeight: '600' },
+  nasılCalisirLink:       { color: '#9d8cef', fontSize: 11, fontWeight: '600' },
+  nasılCalisirNotKutu:    { backgroundColor: 'rgba(251,146,60,0.1)', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(251,146,60,0.3)' },
+  nasılCalisirNotYazi:    { color: 'rgba(251,200,100,0.9)', fontSize: 13, lineHeight: 20 },
   grafikKart:             { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   grafikIcerik:           { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 },
   grafikSutun:            { flex: 1, alignItems: 'center', gap: 4 },
