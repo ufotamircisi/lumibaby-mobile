@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Notifications from 'expo-notifications';
 import { Tabs, router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -28,6 +29,7 @@ export async function sendAlertToAll(
 ): Promise<void> {
   const anneToken    = await AsyncStorage.getItem(KEY_ANNE_TOKEN);
   const partnerToken = await AsyncStorage.getItem(KEY_PARTNER_TOKEN);
+  const myToken      = await AsyncStorage.getItem(KEY_MY_TOKEN);
   const messages = {
     crying:  { title: '👶 Bebek Ağlıyor',   body: 'LumiBaby ağlama sesi algıladı.' },
     colic:   { title: '😣 Kolik Belirtisi',  body: 'Kolik sesi algılandı, müzik çalınıyor.' },
@@ -35,15 +37,25 @@ export async function sendAlertToAll(
     silence: { title: '😴 Bebek Sakinleşti', body: 'Artık ses algılanmıyor.' },
   };
   const { title, body } = messages[type];
-  const targets: { to: string; fromSelf: boolean }[] = [];
-  if (anneToken)    targets.push({ to: anneToken,    fromSelf: true });
-  if (partnerToken) targets.push({ to: partnerToken, fromSelf: false });
+  const targets: { to: string; sound: boolean }[] = [];
+  if (anneToken)    targets.push({ to: anneToken,    sound: false }); // baby's phone — silent so Watch sees it
+  if (partnerToken) targets.push({ to: partnerToken, sound: true  }); // parent's phone — loud
+  // No paired devices → send to own token with sound so Apple/WearOS Watch gets notified
+  if (targets.length === 0 && myToken) targets.push({ to: myToken, sound: true });
   if (targets.length === 0) return;
-  await Promise.all(targets.map(({ to, fromSelf }) =>
+  await Promise.all(targets.map(({ to, sound }) =>
     fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, title, body, data: { type, timestamp: Date.now(), fromSelf }, sound: 'default', priority: 'high', channelId: 'lumibaby-alerts' }),
+      body: JSON.stringify({
+        to,
+        title,
+        body,
+        data: { type, timestamp: Date.now() },
+        sound: sound ? 'default' : null,
+        priority: 'high',
+        channelId: 'lumibaby-alerts',
+      }),
     }).catch(() => {})
   ));
 }
@@ -152,7 +164,8 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
     );
   }
   if (ekran === 'qr_goster') {
-    const qrData = myToken ? `LUMIBABY:${myToken}` : null;
+    const isProductionToken = myToken?.startsWith('ExponentPushToken[') ?? false;
+    const qrData = isProductionToken ? `LUMIBABY:${myToken}` : null;
     return (
       <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setEkran('menu')}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
@@ -167,8 +180,8 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
               ) : (
                 <View style={pm.productionBox}>
                   <Text style={{ fontSize: 40 }}>🏗️</Text>
-                  <Text style={pm.productionYazi}>{lang === 'en' ? 'QR code is generated in production build' : "QR kod production build'de oluşur"}</Text>
-                  <Text style={pm.productionAlt}>{lang === 'en' ? 'Will appear here when published to the store.' : "Store'a yüklendiğinde burada görünecek."}</Text>
+                  <Text style={pm.productionYazi}>{lang === 'en' ? 'Notifications will be active in production build' : "Bildirimler production build'de aktif olacak"}</Text>
+                  <Text style={pm.productionAlt}>{lang === 'en' ? "You're in Expo Go. QR pairing will work after store upload." : "Şu an Expo Go'dasınız. Store'a yüklendiğinde QR eşleştirmesi aktif olur."}</Text>
                 </View>
               )}
             </View>
@@ -250,7 +263,12 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
                       : (lang === 'en' ? '⚪ No pairing yet' : '⚪ Henüz eşleşme yok')}
                 </Text>
               </View>
-              <View style={pm.notBox}><Text style={pm.notYazi}>{lang === 'en' ? '⚠️ Notifications are active in production build. QR pairing works now.' : "⚠️ Bildirimler production build'de aktif olur. QR eşleştirmesi şimdi çalışır."}</Text></View>
+              {myToken && !myToken.startsWith('ExponentPushToken[') && (
+                <View style={pm.notBox}>
+                  <Text style={pm.notYazi}>{lang === 'en' ? '⚠️ Notifications will be active in production build' : "⚠️ Bildirimler production build'de aktif olacak"}</Text>
+                  <Text style={[pm.notYazi, { marginTop: 4, opacity: 0.7 }]}>{lang === 'en' ? "You're in Expo Go. Notifications become fully active after store upload." : "Şu an Expo Go'dasınız. Store'a yüklendiğinde bildirimler tam aktif olur."}</Text>
+                </View>
+              )}
             </ScrollView>
           )}
           <TouchableOpacity style={pm.kapatBtn} onPress={onClose}><Text style={pm.kapatBtnYazi}>{lang === 'en' ? 'Close' : 'Kapat'}</Text></TouchableOpacity>
@@ -306,17 +324,34 @@ export default function TabLayout() {
   const free = !isPremium && !isTrial;
   const [fontsLoaded] = useFonts({ Nunito_800ExtraBold });
 
-  const [premiumModal, setPremiumModal] = useState(false);
-  const [ayarlarModal, setAyarlarModal] = useState(false);
-  const [bebekModal, setBebekModal]     = useState(false);
-  const [partnerModal, setPartnerModal] = useState(false);
-  const [fiyatModu, setFiyatModu]       = useState<'aylik' | 'yillik'>('aylik');
-  const [bebekAdi, setBebekAdi]         = useState('');
-  const [dogumTarihi, setDogumTarihi]   = useState('');
+  const [premiumModal, setPremiumModal]   = useState(false);
+  const [ayarlarModal, setAyarlarModal]   = useState(false);
+  const [bebekModal, setBebekModal]       = useState(false);
+  const [partnerModal, setPartnerModal]   = useState(false);
+  const [fiyatModu, setFiyatModu]         = useState<'aylik' | 'yillik'>('aylik');
+  const [bebekAdi, setBebekAdi]           = useState('');
+  const [dogumTarihi, setDogumTarihi]     = useState('');
+  const [bildirimIzni, setBildirimIzni]   = useState<boolean | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem('bebek_adi').then(v => { if (v) setBebekAdi(v); });
     AsyncStorage.getItem('bebek_dogum_tarihi').then(v => { if (v) setDogumTarihi(v); });
+
+    // Android notification channel
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('lumibaby-alerts', {
+        name: 'LumiBaby Alerts',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+        enableVibrate: true,
+      }).catch(() => {});
+    }
+
+    // Request notification permission on first launch
+    Notifications.requestPermissionsAsync().then(({ status }) => {
+      setBildirimIzni(status === 'granted');
+    }).catch(() => setBildirimIzni(false));
   }, []);
 
   const handleBebekKaydet = async () => {
@@ -499,6 +534,11 @@ export default function TabLayout() {
                   <Text style={s.ok}>{free ? '🔒' : '›'}</Text>
                 </TouchableOpacity>
               </View>
+              {bildirimIzni === false && (
+                <TouchableOpacity style={s.bildirimUyariBox} onPress={() => Linking.openSettings()}>
+                  <Text style={s.bildirimUyariYazi}>{t.bildirimIzniUyari}</Text>
+                </TouchableOpacity>
+              )}
 
               <Text style={s.bolumBaslik}>{t.ayarlarDilBolum}</Text>
               <View style={s.grup}>
@@ -624,4 +664,6 @@ const s = StyleSheet.create({
   alt:                 { color: 'rgba(255,255,255,0.2)', fontSize: 11, textAlign: 'center', marginTop: 24, marginBottom: 8 },
   kapatBtn:            { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12 },
   kapatBtnYazi:        { color: 'rgba(255,255,255,0.6)', fontSize: 15 },
+  bildirimUyariBox:    { backgroundColor: 'rgba(251,146,60,0.08)', borderRadius: 12, padding: 10, marginTop: 6, borderWidth: 1, borderColor: 'rgba(251,146,60,0.25)' },
+  bildirimUyariYazi:   { color: 'rgba(251,146,60,0.85)', fontSize: 11, lineHeight: 17 },
 });
