@@ -118,6 +118,7 @@ export default function Analiz() {
   const [annePisPisUri, setAnnePisPisUri]   = useState<string | null>(null);
   const [analizYapiliyor, setAnalizYapiliyor] = useState(false);
   const [analizSonuc, setAnalizSonuc]       = useState<AnalizSonuc | null>(null);
+  const [analizHata, setAnalizHata]         = useState<string | null>(null);
   const [kayitYapiliyor, setKayitYapiliyor] = useState(false);
   const [geriSayim, setGeriSayim]           = useState<number | null>(null);
   const [detektorSure, setDetektorSure]     = useState(0);
@@ -264,7 +265,7 @@ export default function Analiz() {
     try {
       const izin = await Audio.requestPermissionsAsync();
       if (!izin.granted) { alert(t.mikrofonIzni); return; }
-      setAnalizSonuc(null); setKayitYapiliyor(true); setGeriSayim(10);
+      setAnalizSonuc(null); setAnalizHata(null); setKayitYapiliyor(true); setGeriSayim(10);
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
       const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       analizRecordingRef.current = recording;
@@ -282,15 +283,50 @@ export default function Analiz() {
           const prompt = lang === 'en'
             ? 'You are a baby cry analysis expert. Estimate percentages for each category (total must be 100). Reply ONLY with JSON: {"aclik": 0, "gaz": 0, "uyku": 0, "bez": 0, "diger": 0}'
             : 'Sen bir bebek ağlama analiz uzmanısın. Kategoriler için yüzde tahmin et (toplam 100). Sadece JSON: {"aclik": 0, "gaz": 0, "uyku": 0, "bez": 0, "diger": 0}';
-          const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': CLAUDE_API_KEY || '', 'anthropic-version': '2023-06-01' },
-            body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 200, messages: [{ role: 'user', content: prompt }] })
-          });
-          const data = await response.json();
-          setAnalizSonuc(JSON.parse(data.content[0].text));
+
+          const claudeFetch = async (): Promise<AnalizSonuc> => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            try {
+              const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': CLAUDE_API_KEY || '', 'anthropic-version': '2023-06-01' },
+                body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 200, messages: [{ role: 'user', content: prompt }] }),
+                signal: controller.signal,
+              });
+              clearTimeout(timeoutId);
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const data = await response.json();
+              return JSON.parse(data.content[0].text) as AnalizSonuc;
+            } catch (err: any) {
+              clearTimeout(timeoutId);
+              throw err;
+            }
+          };
+
+          const isNetworkError = (err: any) =>
+            err instanceof TypeError || err?.message?.includes('Network') || err?.message?.includes('Failed to fetch');
+
+          let sonuc: AnalizSonuc | null = null;
+          let lastErr: any = null;
+          const MAX_RETRY = 2;
+          for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
+            try {
+              sonuc = await claudeFetch();
+              break;
+            } catch (err: any) {
+              lastErr = err;
+              if (attempt < MAX_RETRY) await new Promise(res => setTimeout(res, 2000));
+            }
+          }
+
+          if (sonuc) {
+            setAnalizSonuc(sonuc);
+          } else {
+            setAnalizHata(isNetworkError(lastErr) ? t.analizInternetHata : t.analizHataMesaji);
+          }
         } catch (e) {
-          setAnalizSonuc({ aclik: 45, gaz: 25, uyku: 15, bez: 10, diger: 5 });
+          setAnalizHata(t.analizHataMesaji);
         } finally { setAnalizYapiliyor(false); }
       }, 10000);
     } catch (e) { setKayitYapiliyor(false); setGeriSayim(null); if (geriSayimRef.current) clearInterval(geriSayimRef.current); }
@@ -680,6 +716,11 @@ export default function Analiz() {
               <Text style={styles.aglamaAnalizBtnYazi}>{t.analizBtn}</Text>
             )}
           </TouchableOpacity>
+          {analizHata && (
+            <View style={styles.analizHataBox}>
+              <Text style={styles.analizHataYazi}>⚠️ {analizHata}</Text>
+            </View>
+          )}
           {analizSonuc && (
             <View style={styles.sonucBox}>
               {t.analizSonuclar.map((item, i) => {
@@ -1094,6 +1135,8 @@ const styles = StyleSheet.create({
   aglamaAnalizBtnYazi:    { color: 'white', fontSize: 15, fontWeight: 'bold' },
   geriSayimDaire:         { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
   geriSayimYazi:          { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  analizHataBox:          { marginTop: 12, backgroundColor: 'rgba(229,115,115,0.1)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(229,115,115,0.25)' },
+  analizHataYazi:         { color: '#E57373', fontSize: 13, lineHeight: 18, textAlign: 'center' },
   sonucBox:               { marginTop: 14, gap: 8 },
   sonucRow:               { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sonucLabel:             { color: 'white', fontSize: 12, width: 110 },
