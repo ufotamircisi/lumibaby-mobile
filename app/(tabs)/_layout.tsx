@@ -319,7 +319,7 @@ const pm = StyleSheet.create({
 
 // ─── ANA LAYOUT ──────────────────────────────────────────────────────────────
 export default function TabLayout() {
-  const { isTrial, isPremium, trialKalanGun, premiumAktifEt, yuklendi } = usePremium();
+  const { isTrial, isPremium, trialKalanGun, presentPaywall, restorePurchases, yuklendi } = usePremium();
   const { lang, setLang, t } = useLang();
   const free = !isPremium && !isTrial;
   const [fontsLoaded] = useFonts({ Nunito_800ExtraBold });
@@ -503,7 +503,7 @@ export default function TabLayout() {
               <Text style={s.reklamNot}>{t.premiumReklamNot}</Text>
             </ScrollView>
 
-            <TouchableOpacity style={s.upgradeBtn} onPress={() => { premiumAktifEt(); setPremiumModal(false); }}>
+            <TouchableOpacity style={s.upgradeBtn} onPress={() => { setPremiumModal(false); presentPaywall(); }}>
               <Text style={s.upgradeBtnText}>{isTrial ? t.premiumTrialBtn : t.premiumUpgradeBtn}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.cancelBtn} onPress={() => setPremiumModal(false)}>
@@ -538,7 +538,14 @@ export default function TabLayout() {
                   <Text style={s.satirYazi}>{t.ayarlarAbonelik}</Text><Text style={s.ok}>›</Text>
                 </TouchableOpacity>
                 <View style={s.ayrac} />
-                <TouchableOpacity style={s.satir} onPress={() => Alert.alert(t.ayarlarSatinaTitle, t.ayarlarSatinaGeri)}>
+                <TouchableOpacity style={s.satir} onPress={async () => {
+                  setAyarlarModal(false);
+                  const ok = await restorePurchases();
+                  Alert.alert(
+                    ok ? (lang === 'en' ? 'Restored' : 'Geri Yüklendi') : (lang === 'en' ? 'Not Found' : 'Bulunamadı'),
+                    ok ? (lang === 'en' ? 'Your premium subscription has been restored.' : 'Premium aboneliğiniz geri yüklendi.') : (lang === 'en' ? 'No active subscription found.' : 'Aktif abonelik bulunamadı.')
+                  );
+                }}>
                   <Text style={s.satirYazi}>{t.ayarlarGeriYukle}</Text><Text style={s.ok}>›</Text>
                 </TouchableOpacity>
               </View>
