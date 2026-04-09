@@ -474,10 +474,17 @@ export default function TabLayout() {
             </View>
 
             <View style={s.fiyatKartTek}>
-              <View style={s.fiyatKartIc}>
-                <Text style={s.fiyatTutar}>{fiyatModu === 'aylik' ? t.premiumFiyatAylik : t.premiumFiyatYillik}</Text>
-                <Text style={s.fiyatPeriyot}>{fiyatModu === 'aylik' ? t.premiumPerAylik : t.premiumPerYillik}</Text>
+              <View style={s.lansmanRozetRow}>
+                <View style={s.lansmanRozet}><Text style={s.lansmanRozetYazi}>{t.premiumLansmanRozet}</Text></View>
               </View>
+              <View style={s.fiyatKartIc}>
+                <Text style={s.eskiFiyat}>{fiyatModu === 'aylik' ? t.premiumEskiFiyatAylik : t.premiumEskiFiyatYillik}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
+                  <Text style={s.fiyatTutar}>{fiyatModu === 'aylik' ? t.premiumFiyatAylik : t.premiumFiyatYillik}</Text>
+                  <Text style={s.fiyatPeriyot}>{fiyatModu === 'aylik' ? t.premiumPerAylik : t.premiumPerYillik}</Text>
+                </View>
+              </View>
+              <Text style={s.lansmanAlt}>{t.premiumLansmanAlt}</Text>
               {fiyatModu === 'yillik' && <Text style={s.fiyatGunluk}>{t.premiumGunluk}</Text>}
             </View>
 
@@ -504,8 +511,9 @@ export default function TabLayout() {
             </ScrollView>
 
             <TouchableOpacity style={s.upgradeBtn} onPress={() => { setPremiumModal(false); presentPaywall(); }}>
-              <Text style={s.upgradeBtnText}>{isTrial ? t.premiumTrialBtn : t.premiumUpgradeBtn}</Text>
+              <Text style={s.upgradeBtnText}>{t.premiumUpgradeBtn}</Text>
             </TouchableOpacity>
+            <Text style={s.iptalNotu}>{t.premiumIptalNotu}</Text>
             <TouchableOpacity style={s.cancelBtn} onPress={() => setPremiumModal(false)}>
               <Text style={s.cancelBtnText}>{t.simdilikIptal}</Text>
             </TouchableOpacity>
@@ -709,11 +717,17 @@ const s = StyleSheet.create({
   priceTabTextActive:  { color: 'white' },
   indirimRozet:        { backgroundColor: 'rgba(74,222,128,0.2)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 },
   indirimRozetYazi:    { color: '#4ade80', fontSize: 9, fontWeight: 'bold' },
-  fiyatKartTek:        { width: '100%', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 24, borderWidth: 1, borderColor: 'rgba(157,140,239,0.3)', marginBottom: 16, alignItems: 'center', gap: 4 },
-  fiyatKartIc:         { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  fiyatKartTek:        { width: '100%', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 24, borderWidth: 1, borderColor: 'rgba(157,140,239,0.3)', marginBottom: 16, alignItems: 'center', gap: 4 },
+  lansmanRozetRow:     { width: '100%', alignItems: 'flex-start' },
+  lansmanRozet:        { backgroundColor: 'rgba(251,191,36,0.18)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
+  lansmanRozetYazi:    { color: '#fbbf24', fontSize: 10, fontWeight: 'bold', letterSpacing: 0.3 },
+  eskiFiyat:           { color: 'rgba(255,255,255,0.35)', fontSize: 14, textDecorationLine: 'line-through', textDecorationStyle: 'solid' },
+  fiyatKartIc:         { flexDirection: 'column', alignItems: 'center', gap: 0 },
   fiyatTutar:          { color: 'white', fontSize: 30, fontWeight: 'bold' },
-  fiyatPeriyot:        { color: 'rgba(255,255,255,0.5)', fontSize: 16 },
-  fiyatGunluk:         { color: '#4ade80', fontSize: 11, marginTop: 4, fontWeight: '600' },
+  fiyatPeriyot:        { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
+  lansmanAlt:          { color: 'rgba(255,255,255,0.4)', fontSize: 11, textAlign: 'center' },
+  fiyatGunluk:         { color: '#4ade80', fontSize: 11, fontWeight: '600' },
+  iptalNotu:           { color: 'rgba(255,255,255,0.35)', fontSize: 12, textAlign: 'center', marginBottom: 4 },
   tabloKutu:           { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', width: '100%', marginBottom: 12 },
   tabloBaslikRow:      { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: 'rgba(157,140,239,0.1)' },
   tabloBaslik:         { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 'bold', flex: 1 },

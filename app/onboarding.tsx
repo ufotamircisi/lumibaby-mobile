@@ -141,7 +141,7 @@ export default function Onboarding(): JSX.Element {
     } else {
       await setLang(selectedLang);
       await AsyncStorage.setItem('lumibaby_onboarding_done', '1');
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/analiz');
     }
   };
 

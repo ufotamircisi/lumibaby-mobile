@@ -46,11 +46,11 @@ function uykuSkoruHesapla(
   else if (toplamUyku >= 18000) { detaylar.push({ baslik: lang === 'en' ? 'Fair sleep (5h+)' : 'Orta uyku süresi (5s+)',  puan: 20, pozitif: true });  toplam += 20; }
   else                          { detaylar.push({ baslik: lang === 'en' ? 'Short sleep' : 'Kısa uyku süresi',             puan: -10, pozitif: false }); toplam -= 10; }
 
-  if (aglamaSayisi === 0)      { detaylar.push({ baslik: lang === 'en' ? 'Did not wake up at all' : 'Hiç uyanmadı',        puan: 30, pozitif: true }); toplam += 30; }
-  else if (aglamaSayisi === 1) { detaylar.push({ baslik: lang === 'en' ? 'Woke up once' : '1 kez uyandı',                 puan: 20, pozitif: true }); toplam += 20; }
-  else if (aglamaSayisi === 2) { detaylar.push({ baslik: lang === 'en' ? 'Woke up twice' : '2 kez uyandı',                puan: 10, pozitif: true }); toplam += 10; }
-  else if (aglamaSayisi <= 4)  { detaylar.push({ baslik: lang === 'en' ? `Woke up ${aglamaSayisi} times` : aglamaSayisi + ' kez uyandı', puan: 0, pozitif: false }); }
-  else                         { detaylar.push({ baslik: lang === 'en' ? `Woke up ${aglamaSayisi} times (frequent)` : aglamaSayisi + ' kez uyandı (sık)', puan: -10, pozitif: false }); toplam -= 10; }
+  if (aglamaSayisi === 0)      { detaylar.push({ baslik: lang === 'en' ? 'Did not cry at all' : 'Hiç ağlamadı',            puan: 30, pozitif: true }); toplam += 30; }
+  else if (aglamaSayisi === 1) { detaylar.push({ baslik: lang === 'en' ? 'Cried once' : '1 kez ağladı',                   puan: 20, pozitif: true }); toplam += 20; }
+  else if (aglamaSayisi === 2) { detaylar.push({ baslik: lang === 'en' ? 'Cried twice' : '2 kez ağladı',                  puan: 10, pozitif: true }); toplam += 10; }
+  else if (aglamaSayisi <= 4)  { detaylar.push({ baslik: lang === 'en' ? `Cried ${aglamaSayisi} times` : aglamaSayisi + ' kez ağladı', puan: 0, pozitif: false }); }
+  else                         { detaylar.push({ baslik: lang === 'en' ? `Cried ${aglamaSayisi} times (frequent)` : aglamaSayisi + ' kez ağladı (sık)', puan: -10, pozitif: false }); toplam -= 10; }
 
   const saat = new Date(baslangicSaat).getHours();
   if (saat >= 19 && saat <= 21) { detaylar.push({ baslik: lang === 'en' ? 'Regular bedtime' : 'Düzenli uyku saati',     puan: 20, pozitif: true }); toplam += 20; }

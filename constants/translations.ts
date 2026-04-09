@@ -76,18 +76,22 @@ const tr = {
   premiumAylik:        'Aylık',
   premiumYillik:       'Yıllık',
   premiumIndirim:      '%33',
+  premiumEskiFiyatAylik:  '99,99₺',
+  premiumEskiFiyatYillik: '799₺',
   premiumFiyatAylik:   '69,99₺',
   premiumFiyatYillik:  '559,99₺',
   premiumPerAylik:     '/aylık',
   premiumPerYillik:    '/yıllık',
   premiumGunluk:       'aylık 46,67₺\'ye geliyor',
+  premiumLansmanRozet: 'Lansmana Özel',
+  premiumLansmanAlt:   'Yeni abonelere özel sınırlı süre',
+  premiumIptalNotu:    'Dilediğiniz zaman iptal edebilirsiniz.',
   premiumTrialBanner:  '🎁 İlk 7 gün tamamen ücretsiz!',
   tabloOzellik:        'Özellik',
   tabloUcretsiz:       'Ücretsiz',
   tabloPremium:        '👑 Premium',
   premiumReklamNot:    '💡 Ücretsiz kullanıcılar reklam izleyerek ek hak kazanabilir',
   premiumUpgradeBtn:   "👑 Premium'a Geç",
-  premiumTrialBtn:     '🎁 Ücretsiz Denemeyi Başlat',
   tablo: [
     { ozellik: '🌙 Uyku Dedektörü',    ucretsiz: 'Günde 60 dk',  premium: 'Sınırsız' },
     { ozellik: '🎤 Ağlama Analizi',     ucretsiz: 'Günde 1 hak',  premium: 'Sınırsız' },
@@ -171,9 +175,9 @@ const tr = {
   puanDetayBaslik:        '📊 Puan Detayı',
   analizYorumBaslik:      '💬 Analiz',
   analizYorum:            (n: number) =>
-    n === 0 ? '• Harika! Bebeğiniz hiç ağlamadı 🎉'
-    : n <= 2 ? `• İyi bir gece geçirdiniz. Sadece ${n} kez uyandı.`
-    : `• Bebek bu gece ${n} kez uyandı. Uyku rutinini gözden geçirin.`,
+    n === 0 ? '• Harika! Uyku boyunca hiç ağlamadı 🎉'
+    : n <= 2 ? `• İyi bir uyku geçirdiniz. Sadece ${n} kez ağladı.`
+    : `• Uyku boyunca ${n} kez ağladı. Uyku rutinini gözden geçirin.`,
   dunleKarsilastirma:     '📈 Dünle Karşılaştırma',
   uyku:                   'Uyku Süresi',
   aglamaKars:             'Ağlama',
@@ -330,7 +334,7 @@ const tr = {
     `${isim ? isim + '\'ın' : 'Bebeğinizin'} yaşı, son uyku süresi ve son günlerdeki uyku düzeni dikkate alınarak hesaplandı. Kesin saat değil, tahmini bir penceredir. Uygulama uyku takibini yaptıkça tahminler daha da kişiselleşir ve doğruya yaklaşır.`,
   uykuRehberiBolum2Baslik:  'Bugün için not',
   uykuRehberiBolum2Kisauyku: 'Son uyku kısa geçti, biraz daha erken yorulabilir.',
-  uykuRehberiBolum2Bolundu:  'Gece çok bölündü, bugün daha kısa uyanıklık iyi gelebilir.',
+  uykuRehberiBolum2Bolundu:  'Uyku çok bölündü, bugün daha kısa uyanıklık iyi gelebilir.',
   uykuRehberiBolum2Dengeli:  'Bugünkü düzen yaşına uygun görünüyor.',
   uykuRehberiBolum2Aksam:    'Tahmini uyku zamanından önce sakin bir geçiş rutini başlatabilirsiniz.',
   uykuRehberiBolum3Baslik:  'Daha fazlası',
@@ -413,18 +417,22 @@ const en = {
   premiumAylik:        'Monthly',
   premiumYillik:       'Yearly',
   premiumIndirim:      '33% Off',
+  premiumEskiFiyatAylik:  '$9.99',
+  premiumEskiFiyatYillik: '$79.99',
   premiumFiyatAylik:   '$6.99',
   premiumFiyatYillik:  '$55.99',
   premiumPerAylik:     '/month',
   premiumPerYillik:    '/year',
   premiumGunluk:       'only $4.67/month',
+  premiumLansmanRozet: 'Launch Special',
+  premiumLansmanAlt:   'Limited time for new subscribers',
+  premiumIptalNotu:    'Cancel anytime.',
   premiumTrialBanner:  '🎁 First 7 days completely free!',
   tabloOzellik:        'Feature',
   tabloUcretsiz:       'Free',
   tabloPremium:        '👑 Premium',
   premiumReklamNot:    '💡 Free users can watch ads to earn extra credits',
   premiumUpgradeBtn:   '👑 Go Premium',
-  premiumTrialBtn:     '🎁 Start Free Trial',
   tablo: [
     { ozellik: '🌙 Sleep Detector',      ucretsiz: '60 min/day',   premium: 'Unlimited' },
     { ozellik: '🎤 Cry Analysis',         ucretsiz: '1 use/day',    premium: 'Unlimited' },
@@ -508,9 +516,9 @@ const en = {
   puanDetayBaslik:        '📊 Score Details',
   analizYorumBaslik:      '💬 Analysis',
   analizYorum:            (n: number) =>
-    n === 0 ? '• Great! Baby didn\'t cry at all 🎉'
-    : n <= 2 ? `• Good night! Baby woke up only ${n} time${n !== 1 ? 's' : ''}.`
-    : `• Baby woke up ${n} times. Consider reviewing the sleep routine.`,
+    n === 0 ? '• Great! Baby didn\'t cry at all during sleep 🎉'
+    : n <= 2 ? `• Good sleep! Baby cried only ${n} time${n !== 1 ? 's' : ''}.`
+    : `• Baby cried ${n} times during sleep. Consider reviewing the sleep routine.`,
   dunleKarsilastirma:     '📈 Compared to Yesterday',
   uyku:                   'Sleep Duration',
   aglamaKars:             'Crying',
@@ -667,7 +675,7 @@ const en = {
     `This was calculated based on ${isim ? isim + '\'s' : 'your baby\'s'} age, last sleep duration, and recent sleep pattern. It\'s an estimated window, not an exact time. As you track more sleep sessions, predictions become more personalized and accurate.`,
   uykuRehberiBolum2Baslik:  'Note for today',
   uykuRehberiBolum2Kisauyku: 'Last sleep was short — they may get tired a bit earlier today.',
-  uykuRehberiBolum2Bolundu:  'Sleep was quite fragmented last night — shorter awake windows might work better today.',
+  uykuRehberiBolum2Bolundu:  'Sleep was quite fragmented — shorter awake windows might work better today.',
   uykuRehberiBolum2Dengeli:  'Today\'s pattern looks right for their age.',
   uykuRehberiBolum2Aksam:    'You can start a calm transition routine a little before the estimated sleep time.',
   uykuRehberiBolum3Baslik:  'Explore more',
