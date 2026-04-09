@@ -550,8 +550,9 @@ export default function TabLayout() {
                   setAyarlarModal(false);
                   const ok = await restorePurchases();
                   Alert.alert(
-                    ok ? (lang === 'en' ? 'Restored' : 'Geri Yüklendi') : (lang === 'en' ? 'Not Found' : 'Bulunamadı'),
-                    ok ? (lang === 'en' ? 'Your premium subscription has been restored.' : 'Premium aboneliğiniz geri yüklendi.') : (lang === 'en' ? 'No active subscription found.' : 'Aktif abonelik bulunamadı.')
+                    ok
+                      ? (lang === 'en' ? 'Your subscription has been restored' : 'Aboneliğiniz geri yüklendi')
+                      : (lang === 'en' ? 'No subscription found to restore' : 'Geri yüklenecek abonelik bulunamadı')
                   );
                 }}>
                   <Text style={s.satirYazi}>{t.ayarlarGeriYukle}</Text><Text style={s.ok}>›</Text>
