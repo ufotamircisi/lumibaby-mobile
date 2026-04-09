@@ -1,14 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, Stack } from 'expo-router';
 import { useEffect } from 'react';
-import Purchases from 'react-native-purchases';
 
 const RC_API_KEY = 'test_NEQGTCZprAVYcQdZUYZcAHvMdEd';
 
 export default function RootLayout() {
   useEffect(() => {
-    // Initialize RevenueCat
-    Purchases.configure({ apiKey: RC_API_KEY });
+    // Initialize RevenueCat — only available in EAS Build (native module), not Expo Go
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const Purchases = require('react-native-purchases').default;
+      Purchases.configure({ apiKey: RC_API_KEY });
+    } catch {
+      // Native module not linked (Expo Go) — skip
+    }
 
     AsyncStorage.getItem('lumibaby_onboarding_done').then(v => {
       if (!v) router.replace('/onboarding');

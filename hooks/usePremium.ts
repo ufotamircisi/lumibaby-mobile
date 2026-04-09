@@ -1,8 +1,17 @@
 // hooks/usePremium.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
-import Purchases from 'react-native-purchases';
-import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
+
+// RC modules are only available in EAS Build (native), not Expo Go — loaded lazily
+function getRCPurchases() {
+  try { return require('react-native-purchases').default; } catch { return null; }
+}
+function getRCUI() {
+  try { return require('react-native-purchases-ui').default; } catch { return null; }
+}
+function getPAYWALL_RESULT() {
+  try { return require('react-native-purchases-ui').PAYWALL_RESULT; } catch { return {}; }
+}
 
 const KEYS = {
   TRIAL_START:       'lumibaby_trial_start',
@@ -24,6 +33,8 @@ function bugunKey() {
 
 async function rcIsPremium(): Promise<boolean> {
   try {
+    const Purchases = getRCPurchases();
+    if (!Purchases) return false;
     const info = await Purchases.getCustomerInfo();
     return info.entitlements.active[ENTITLEMENT] !== undefined;
   } catch {
@@ -99,6 +110,9 @@ export function usePremium() {
   // ── Paywall göster ────────────────────────────────────────────────────────
   const presentPaywall = useCallback(async (): Promise<boolean> => {
     try {
+      const RevenueCatUI   = getRCUI();
+      const PAYWALL_RESULT = getPAYWALL_RESULT();
+      if (!RevenueCatUI) return false;
       const result = await RevenueCatUI.presentPaywall();
       if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
         await yukle();
@@ -113,6 +127,8 @@ export function usePremium() {
   // ── Satın almaları geri yükle ─────────────────────────────────────────────
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     try {
+      const Purchases = getRCPurchases();
+      if (!Purchases) return false;
       const info = await Purchases.restorePurchases();
       if (info.entitlements.active[ENTITLEMENT] !== undefined) {
         await yukle();
