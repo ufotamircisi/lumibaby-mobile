@@ -1,6 +1,8 @@
+import AdBanner from '@/components/AdBanner';
 import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
+import { showInterstitialIfReady } from '@/services/adMob';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
@@ -539,6 +541,12 @@ export default function Analiz() {
     aktifSesRef.current = null; aktifDedektorRef.current = null;
   };
 
+  // Rapor modalı kapat + interstitial göster (dedektör aktifken asla)
+  const closeRaporModal = () => {
+    setRaporModal(false);
+    showInterstitialIfReady(uyuyorMu).catch(() => {});
+  };
+
   const raporDetayAc = (rapor: GeceRaporu) => {
     if (free) { setPaywallTip('premium'); setPaywallVisible(true); return; }
     setSeciliRapor(rapor); setDetayModal(true);
@@ -559,6 +567,9 @@ export default function Analiz() {
 
   return (
     <View style={styles.container}>
+      {/* BANNER REKLAM — sadece ücretsiz kullanıcılara göster */}
+      {free && <AdBanner />}
+
       <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
         {/* UYKU KARTI */}
@@ -837,7 +848,7 @@ export default function Analiz() {
       </Modal>
 
       {/* GECE RAPORU MODAL */}
-      <Modal visible={raporModal} transparent animationType="fade" onRequestClose={() => setRaporModal(false)}>
+      <Modal visible={raporModal} transparent animationType="fade" onRequestClose={closeRaporModal}>
         <View style={styles.raporModalArkaPlan}>
           <ScrollView contentContainerStyle={{ padding: 20 }}>
             {sonRapor && (
@@ -939,7 +950,7 @@ export default function Analiz() {
                     })()}
                   </View>
                 )}
-                <TouchableOpacity style={[styles.raporModalBtn, { marginTop: 20 }]} onPress={() => setRaporModal(false)}>
+                <TouchableOpacity style={[styles.raporModalBtn, { marginTop: 20 }]} onPress={closeRaporModal}>
                   <Text style={styles.raporModalBtnYazi}>{t.tamam}</Text>
                 </TouchableOpacity>
               </View>
@@ -1098,8 +1109,8 @@ export default function Analiz() {
         onClose={() => setPaywallVisible(false)}
         onPremium={() => { setPaywallVisible(false); premiumAktifEt(); }}
         onReklam={isTrial ? undefined
-          : paywallTip === 'detektor' ? async () => { setPaywallVisible(false); await reklamIzleDetektor(); }
-          : paywallTip === 'analiz'   ? async () => { setPaywallVisible(false); await reklamIzleAnaliz(); }
+          : paywallTip === 'detektor' ? async () => { setPaywallVisible(false); await reklamIzleDetektor(lang); }
+          : paywallTip === 'analiz'   ? async () => { setPaywallVisible(false); await reklamIzleAnaliz(lang); }
           : undefined}
         baslik={paywallTip === 'detektor' ? t.paywallDetektorBaslik : paywallTip === 'analiz' ? t.paywallAnalizBaslik : t.paywallPremiumBaslik}
         aciklama={paywallTip === 'detektor' ? t.paywallDetektorAcik : paywallTip === 'analiz' ? t.paywallAnalizAcik : t.paywallPremiumAcik}

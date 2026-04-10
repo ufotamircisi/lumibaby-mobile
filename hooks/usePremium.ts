@@ -1,6 +1,8 @@
 // hooks/usePremium.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
+import { Alert } from 'react-native';
+import { showRewarded } from '@/services/adMob';
 
 // RC modules are only available in EAS Build (native), not Expo Go — loaded lazily
 function getRCPurchases() {
@@ -166,9 +168,17 @@ export function usePremium() {
     return true;
   }, [durum, analizHak]);
 
-  // ── Reklam izleyince +1 hak (sadece free kullanıcılar için) ───────────────
-  const reklamIzleDetektor = useCallback(async () => {
+  // ── Rewarded reklam izleyince +1 hak (sadece free kullanıcılar için) ────────
+  const reklamIzleDetektor = useCallback(async (lang: string = 'tr') => {
     if (durum !== 'free') return;
+    const result = await showRewarded();
+    if (result === 'unavailable') {
+      Alert.alert(
+        lang === 'en' ? "Ad couldn't load, please try again" : 'Reklam şu an yüklenemedi, lütfen tekrar deneyin'
+      );
+      return;
+    }
+    if (result !== 'earned') return; // kullanıcı reklamı kapattı
     const bugun = bugunKey();
     const data = await AsyncStorage.getItem(KEYS.DETEKTOR_EKSTRA);
     const obj = data ? JSON.parse(data) : {};
@@ -177,8 +187,16 @@ export function usePremium() {
     setDetektorHak(prev => prev + 1);
   }, [durum]);
 
-  const reklamIzleAnaliz = useCallback(async () => {
+  const reklamIzleAnaliz = useCallback(async (lang: string = 'tr') => {
     if (durum !== 'free') return;
+    const result = await showRewarded();
+    if (result === 'unavailable') {
+      Alert.alert(
+        lang === 'en' ? "Ad couldn't load, please try again" : 'Reklam şu an yüklenemedi, lütfen tekrar deneyin'
+      );
+      return;
+    }
+    if (result !== 'earned') return;
     const bugun = bugunKey();
     const data = await AsyncStorage.getItem(KEYS.ANALIZ_EKSTRA);
     const obj = data ? JSON.parse(data) : {};
