@@ -135,6 +135,12 @@ export async function initAdMob(): Promise<void> {
   if (!ads) return;
 
   try {
+    const { MaxAdContentRating } = ads;
+    await ads.MobileAds().setRequestConfiguration({
+      maxAdContentRating:          MaxAdContentRating.PG,
+      tagForChildDirectedTreatment: false,
+      tagForUnderAgeOfConsent:      false,
+    });
     await ads.MobileAds().initialize();
   } catch {}
 

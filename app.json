@@ -75,7 +75,10 @@
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-9989976581430768~3083871670",
-          "iosAppId": "ca-app-pub-9989976581430768~6639973309"
+          "iosAppId": "ca-app-pub-9989976581430768~6639973309",
+          "tagForChildDirectedTreatment": false,
+          "tagForUnderAgeOfConsent": false,
+          "maxAdContentRating": "PG"
         }
       ]
     ],
