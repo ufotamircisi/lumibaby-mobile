@@ -205,9 +205,9 @@ export default function Hikayeler() {
     if (!masal?.file) return;
 
     const isFree = freeRef.current;
+    // onFinish only fires on natural end — audioManager.stop() nulls activeOnFinish
+    // before unloading so this never executes after a manual/timer stop.
     const onFinish = !isFree ? () => {
-      // Only auto-next if sleep timer hasn't fired already
-      if (audioManager.getState().tab !== 'hikayeler') return;
       const list = sabitMasallarRef.current;
       const idx = list.findIndex((m) => m.id === id);
       if (idx === -1) return;
@@ -235,7 +235,11 @@ export default function Hikayeler() {
     // Clear any running 1-min limit timer (same as toggleMasal)
     clearSinirTimer();
     if (calananId === 999) { await audioManager.stop(); return; }
-    await audioManager.play({ uri: anneHikayeUri }, 999, 'hikayeler', { loop: true });
+    const anneOnFinish = () => {
+      const list = sabitMasallarRef.current;
+      if (list.length > 0) playMasalRef.current(list[0].id);
+    };
+    await audioManager.play({ uri: anneHikayeUri }, 999, 'hikayeler', { loop: false, onFinish: anneOnFinish });
   };
 
   const formatSureTag = (s: number) => {
