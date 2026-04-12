@@ -87,7 +87,7 @@ export default function Ninniler() {
     const appStateSub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active' && timerBitisTarihiRef.current) {
         const kalan = Math.round((timerBitisTarihiRef.current - Date.now()) / 1000);
-        if (kalan <= 0) { timerIptal(); stopSes(); } else setTimerSaniye(kalan);
+        if (kalan <= 0) { timerIptal(); if (audioManager.getState().tab === 'ninniler') stopSes(); } else setTimerSaniye(kalan);
       }
     });
     return () => {

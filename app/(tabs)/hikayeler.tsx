@@ -3,6 +3,7 @@ import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import * as audioManager from '@/services/audioManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -50,6 +51,8 @@ export default function Hikayeler() {
   const [timerAcik, setTimerAcik]             = useState(false);
   const [timerSaniye, setTimerSaniye]         = useState<number | null>(null);
   const [secilenDk, setSecilenDk]             = useState<number | null>(null);
+  // Real durations loaded from audio files: { [id]: 'MM:SS' }
+  const [sureler, setSureler]                 = useState<Record<number, string>>({});
 
   // Refs to avoid stale closures in onFinish callbacks
   const sabitMasallarRef = useRef(sabitMasallar);
@@ -57,14 +60,37 @@ export default function Hikayeler() {
   const freeRef = useRef(free);
   useEffect(() => { freeRef.current = free; }, [free]);
 
-  const scrollViewRef    = useRef<ScrollView>(null);
-  const sinirTimerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const sinirSayacRef    = useRef<number>(0);
-  const timerRef         = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scrollViewRef       = useRef<ScrollView>(null);
+  const sinirTimerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sinirSayacRef       = useRef<number>(0);
+  const timerRef            = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerBitisTarihiRef = useRef<number | null>(null);
+  const playMasalRef        = useRef<(id: number) => Promise<void>>(async () => {});
 
-  // Ref to the latest playMasal function (prevents stale closure in onFinish)
-  const playMasalRef = useRef<(id: number) => Promise<void>>(async () => {});
+  // ── Load real durations from audio files ────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    const masalListesi = lang === 'en' ? masallarEN : masallarTR;
+
+    (async () => {
+      for (const masal of masalListesi) {
+        if (cancelled) return;
+        try {
+          const { sound, status } = await Audio.Sound.createAsync(masal.file, { shouldPlay: false });
+          if (status.isLoaded && status.durationMillis) {
+            const ms  = status.durationMillis;
+            const dk  = Math.floor(ms / 60000);
+            const sn  = Math.round((ms % 60000) / 1000);
+            const label = `${dk}:${sn.toString().padStart(2, '0')}`;
+            if (!cancelled) setSureler(prev => ({ ...prev, [masal.id]: label }));
+          }
+          await sound.unloadAsync();
+        } catch (_) {}
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [lang]);
 
   const anneHikayesiYukle = async () => {
     try {
@@ -81,7 +107,7 @@ export default function Hikayeler() {
     anneHikayesiYukle();
     scrollViewRef.current?.scrollTo({ y: 0, animated: false });
     return () => {
-      // Don't stop global audio on tab blur — just clear local timers
+      // Don't stop global audio on tab blur — just clear local sinir timer
       if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
       sinirSayacRef.current = 0; setKalanSure(null);
     };
@@ -142,6 +168,7 @@ export default function Hikayeler() {
         // Also stop free-user limit timer
         if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
         sinirSayacRef.current = 0; setKalanSure(null);
+        // Only stop audio from this tab
         if (audioManager.getState().tab === 'hikayeler') audioManager.stop();
       } else setTimerSaniye(kalan);
     };
@@ -167,6 +194,11 @@ export default function Hikayeler() {
     }, 1000);
   }, []);
 
+  const clearSinirTimer = () => {
+    if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
+    sinirSayacRef.current = 0; setKalanSure(null);
+  };
+
   const playMasal = async (id: number) => {
     const masallar = sabitMasallarRef.current;
     const masal = masallar.find((m) => m.id === id);
@@ -174,6 +206,8 @@ export default function Hikayeler() {
 
     const isFree = freeRef.current;
     const onFinish = !isFree ? () => {
+      // Only auto-next if sleep timer hasn't fired already
+      if (audioManager.getState().tab !== 'hikayeler') return;
       const list = sabitMasallarRef.current;
       const idx = list.findIndex((m) => m.id === id);
       if (idx === -1) return;
@@ -184,12 +218,10 @@ export default function Hikayeler() {
     await audioManager.play(masal.file, id, 'hikayeler', { loop: false, onFinish });
     if (isFree) sinirBaslat();
   };
-  // Keep ref current on every render
   playMasalRef.current = playMasal;
 
   const toggleMasal = async (id: number) => {
-    if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
-    sinirSayacRef.current = 0; setKalanSure(null);
+    clearSinirTimer();
     if (calananId === id) {
       await audioManager.stop();
       return;
@@ -200,6 +232,8 @@ export default function Hikayeler() {
   const toggleAnneHikaye = async () => {
     if (free) { setPaywallSinirMi(false); setPaywallVisible(true); return; }
     if (!anneHikayeUri) return;
+    // Clear any running 1-min limit timer (same as toggleMasal)
+    clearSinirTimer();
     if (calananId === 999) { await audioManager.stop(); return; }
     await audioManager.play({ uri: anneHikayeUri }, 999, 'hikayeler', { loop: false });
   };
@@ -313,7 +347,9 @@ export default function Hikayeler() {
               <Text style={styles.masalTitle}>{masal.name}</Text>
               <Text style={styles.masalDesc}>{masal.desc}</Text>
               <View style={styles.tagRow}>
-                <View style={styles.tag}><Text style={styles.tagText}>{'⏱ ' + masal.duration}</Text></View>
+                <View style={styles.tag}>
+                  <Text style={styles.tagText}>{'⏱ ' + (sureler[masal.id] ?? masal.duration)}</Text>
+                </View>
                 {free && <View style={styles.sinirTag}><Text style={styles.sinirTagText}>{t.ilkBirDk}</Text></View>}
               </View>
             </View>
