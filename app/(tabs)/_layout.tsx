@@ -538,7 +538,14 @@ export default function TabLayout() {
           <TouchableOpacity activeOpacity={1} style={s.ayarlarSheet}>
             <View style={s.modalHandle} />
             <Text style={s.ayarlarBaslik}>{t.ayarlarBaslik}</Text>
-            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+            <ScrollView
+              decelerationRate="normal"
+              scrollEventThrottle={16}
+              showsVerticalScrollIndicator={false}
+              bounces={true}
+              overScrollMode="always"
+              nestedScrollEnabled={true}
+            >
 
               <Text style={s.bolumBaslik}>{t.ayarlarPremiumBolum}</Text>
               <View style={s.grup}>
@@ -605,7 +612,7 @@ export default function TabLayout() {
                   <Text style={s.satirYazi}>{t.ayarlarDegerlendir}</Text><Text style={s.ok}>›</Text>
                 </TouchableOpacity>
                 <View style={s.ayrac} />
-                <TouchableOpacity style={s.satir} onPress={() => Linking.openURL('mailto:destek@lumibaby.app')}>
+                <TouchableOpacity style={s.satir} onPress={() => Linking.openURL(lang === 'en' ? 'mailto:lumisoftstudio@gmail.com?subject=Support' : 'mailto:lumisoftstudio@gmail.com?subject=Destek')}>
                   <Text style={s.satirYazi}>{t.ayarlarIletisim}</Text><Text style={s.ok}>›</Text>
                 </TouchableOpacity>
               </View>
