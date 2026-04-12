@@ -7,39 +7,39 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const beyazGurultuTR = [
-  { id: 1, name: 'Saç Kurutma Makinesi', icon: '💨', desc: 'Klasik beyaz gürültü' },
-  { id: 2, name: 'Elektrikli Süpürge',   icon: '🌀', desc: 'Düzenli ve sakinleştirici' },
-  { id: 3, name: 'Piş Piş',              icon: '🫧', desc: 'Bebeği sakinleştiren klasik ses' },
-  { id: 4, name: 'Fan Sesi',             icon: '🌬️', desc: 'Hafif ve sürekli' },
+type KolikSes = { id: number; name: string; icon: string; desc: string; file: any };
+
+const beyazGurultuTR: KolikSes[] = [
+  { id: 1, name: 'Saç Kurutma Makinesi', icon: '💨', desc: 'Klasik beyaz gürültü',            file: require('../../assets/sounds/hairdryer.mp3') },
+  { id: 2, name: 'Elektrikli Süpürge',   icon: '🌀', desc: 'Düzenli ve sakinleştirici',       file: require('../../assets/sounds/vacuum.mp3')    },
+  { id: 3, name: 'Piş Piş',              icon: '🫧', desc: 'Bebeği sakinleştiren klasik ses', file: require('../../assets/sounds/pispis.mp3')    },
+  { id: 4, name: 'Fan Sesi',             icon: '🌬️', desc: 'Hafif ve sürekli',                file: require('../../assets/sounds/ac.mp3')        },
 ];
-const beyazGurultuEN = [
-  { id: 1, name: 'Hair Dryer',    icon: '💨', desc: 'Classic white noise' },
-  { id: 2, name: 'Vacuum Cleaner',icon: '🌀', desc: 'Steady and soothing' },
-  { id: 3, name: 'Shushing',      icon: '🫧', desc: 'Classic baby calming sound' },
-  { id: 4, name: 'Fan Sound',     icon: '🌬️', desc: 'Gentle and continuous' },
+const beyazGurultuEN: KolikSes[] = [
+  { id: 1, name: 'Hair Dryer',     icon: '💨', desc: 'Classic white noise',          file: require('../../assets/sounds/hairdryer.mp3') },
+  { id: 2, name: 'Vacuum Cleaner', icon: '🌀', desc: 'Steady and soothing',          file: require('../../assets/sounds/vacuum.mp3')    },
+  { id: 3, name: 'Shushing',       icon: '🫧', desc: 'Classic baby calming sound',   file: require('../../assets/sounds/pispis.mp3')    },
+  { id: 4, name: 'Fan Sound',      icon: '🌬️', desc: 'Gentle and continuous',        file: require('../../assets/sounds/ac.mp3')        },
 ];
-const dogaSesleriTR = [
-  { id: 10, name: 'Yağmur Sesi',    icon: '🌧️', desc: 'Dingin yağmur damlaları' },
-  { id: 11, name: 'Deniz Dalgaları',icon: '🌊', desc: 'Sahilin huzur veren sesi' },
-  { id: 12, name: 'Orman Sesi',     icon: '🌲', desc: 'Kuş sesleri ve yapraklar' },
-  { id: 13, name: 'Şelale',         icon: '💧', desc: 'Akan suyun rahatlatıcı sesi' },
+const dogaSesleriTR: KolikSes[] = [
+  { id: 10, name: 'Yağmur Sesi',    icon: '🌧️', desc: 'Dingin yağmur damlaları',       file: require('../../assets/sounds/rain.mp3')   },
+  { id: 11, name: 'Deniz Dalgaları',icon: '🌊', desc: 'Sahilin huzur veren sesi',      file: require('../../assets/sounds/waves.mp3')  },
+  { id: 12, name: 'Orman Sesi',     icon: '🌲', desc: 'Kuş sesleri ve yapraklar',      file: require('../../assets/sounds/forest.mp3') },
+  { id: 13, name: 'Şelale',         icon: '💧', desc: 'Akan suyun rahatlatıcı sesi',   file: require('../../assets/sounds/stream.mp3') },
 ];
-const dogaSesleriEN = [
-  { id: 10, name: 'Rain Sound',    icon: '🌧️', desc: 'Peaceful rain drops' },
-  { id: 11, name: 'Ocean Waves',   icon: '🌊', desc: 'Calming sounds of the shore' },
-  { id: 12, name: 'Forest Sounds', icon: '🌲', desc: 'Bird songs and leaves' },
-  { id: 13, name: 'Waterfall',     icon: '💧', desc: 'Relaxing sound of flowing water' },
+const dogaSesleriEN: KolikSes[] = [
+  { id: 10, name: 'Rain Sound',     icon: '🌧️', desc: 'Peaceful rain drops',              file: require('../../assets/sounds/rain.mp3')   },
+  { id: 11, name: 'Ocean Waves',    icon: '🌊', desc: 'Calming sounds of the shore',      file: require('../../assets/sounds/waves.mp3')  },
+  { id: 12, name: 'Forest Sounds',  icon: '🌲', desc: 'Bird songs and leaves',            file: require('../../assets/sounds/forest.mp3') },
+  { id: 13, name: 'Waterfall',      icon: '💧', desc: 'Relaxing sound of flowing water',  file: require('../../assets/sounds/stream.mp3') },
 ];
-const rahatlaticiTR = [
-  { id: 20, name: 'Kedi Mırıltısı',  icon: '🐱', desc: 'Huzur veren kedi sesi' },
-  { id: 21, name: 'Kalp Atışı',      icon: '💗', desc: 'Anne karnındaki sıcak ses' },
-  { id: 22, name: 'Nefes Egzersizi', icon: '🧘', desc: 'Sakinleştirici nefes ritmi' },
+const rahatlaticiTR: KolikSes[] = [
+  { id: 21, name: 'Kalp Atışı',   icon: '💗', desc: 'Anne karnındaki sıcak ses',      file: require('../../assets/sounds/heart.mp3')      },
+  { id: 22, name: 'Beyaz Gürültü',icon: '🔊', desc: 'Sabit frekans, derin rahatlama', file: require('../../assets/sounds/whitenoise.mp3') },
 ];
-const rahatlaticiEN = [
-  { id: 20, name: 'Cat Purring',     icon: '🐱', desc: 'Peaceful cat sound' },
-  { id: 21, name: 'Heartbeat',       icon: '💗', desc: 'Warm sound from the womb' },
-  { id: 22, name: 'Breathing Exercise',icon: '🧘', desc: 'Calming breath rhythm' },
+const rahatlaticiEN: KolikSes[] = [
+  { id: 21, name: 'Heartbeat',    icon: '💗', desc: 'Warm sound from the womb',         file: require('../../assets/sounds/heart.mp3')      },
+  { id: 22, name: 'White Noise',  icon: '🔊', desc: 'Steady frequency for deep calm',   file: require('../../assets/sounds/whitenoise.mp3') },
 ];
 
 export default function Kolik() {
@@ -87,10 +87,10 @@ export default function Kolik() {
     } catch (e) { console.log('Ses hatası:', e); }
   };
 
-  const SesKart = ({ ses, id }: { ses: { name: string; icon: string; desc: string }; id: number }) => (
+  const SesKart = ({ ses, id }: { ses: KolikSes; id: number }) => (
     <TouchableOpacity
       style={[styles.sesCard, calananId === id && styles.sesCardActive]}
-      onPress={() => toggleSes(require('../../assets/sounds/dandini.mp3'), id)}
+      onPress={() => toggleSes(ses.file, id)}
     >
       <View style={styles.sesIconBox}><Text style={styles.sesIcon}>{ses.icon}</Text></View>
       <View style={styles.sesInfo}>

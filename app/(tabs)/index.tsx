@@ -10,10 +10,28 @@ import { AppState, ScrollView, StyleSheet, Text, TouchableOpacity, View } from '
 type SesTip = { id: number; name: string; desc: string; tag: string; icon: string; file: any; premium: boolean; };
 
 const sabitNinnilerTR: SesTip[] = [
-  { id: 1, name: 'Dandini Dandini', desc: 'Nesilden nesile aktarılan klasik Türk ninnisi', tag: 'Anadolu', icon: '⭐', file: require('../../assets/sounds/dandini.mp3'), premium: false },
+  { id:  1, name: 'Dandini Dastana',      desc: 'Nesilden nesile aktarılan klasik Türk ninnisi',    tag: 'Anadolu',      icon: '⭐', file: require('../../assets/sounds/dandini_dastana_tr.mp3'),           premium: false },
+  { id:  2, name: 'Müzik Kutusu 1',       desc: 'Huzur veren hafif müzik kutusu melodisi',          tag: 'Melodi',       icon: '🎵', file: require('../../assets/sounds/muzik_kutusu_tr.mp3'),              premium: false },
+  { id:  3, name: 'Müzik Kutusu 2',       desc: 'Nazik ve sakinleştirici ikinci melodi',             tag: 'Melodi',       icon: '🎶', file: require('../../assets/sounds/muzik_kutusu_2_tr.mp3'),            premium: false },
+  { id:  4, name: 'Müzik Kutusu 3',       desc: 'Üçüncü müzik kutusu ninnisi',                      tag: 'Melodi',       icon: '🎼', file: require('../../assets/sounds/muzik_kutusu_3_tr.mp3'),            premium: false },
+  { id:  5, name: 'Yumuşak Piyano Ninnisi', desc: 'Piyano ile çalınan yumuşak uyku melodisi',       tag: 'Piyano',       icon: '🎹', file: require('../../assets/sounds/yumusak_piyano_ninnisi_tr.mp3'),    premium: false },
+  { id:  6, name: 'Enstrümantal Ninni',   desc: 'Sözüz enstrümanlarla hazırlanmış ninni',            tag: 'Enstrümantal', icon: '🎻', file: require('../../assets/sounds/enstrumantal_ninni_tr.mp3'),        premium: false },
+  { id:  7, name: 'Uyu Yavrum',           desc: 'Bebeğinizi yavaşça uyutacak sevgi dolu ninni',     tag: 'Türkçe',       icon: '🌙', file: require('../../assets/sounds/uyu_yavrum_tr.mp3'),                premium: false },
+  { id:  8, name: 'Yağmur Ninnisi',       desc: 'Yağmur damlalarının ritmiyle hazırlanmış ninni',   tag: 'Doğa',         icon: '🌧️', file: require('../../assets/sounds/yagmur_ninnisi_tr.mp3'),             premium: false },
+  { id:  9, name: 'Güzel Annem',          desc: 'Anneye duyulan sevgiyi anlatan sıcak ninni',       tag: 'Türkçe',       icon: '💜', file: require('../../assets/sounds/guzel_annem_tr.mp3'),               premium: false },
+  { id: 10, name: 'Uyusun da Büyüsün',   desc: 'Bebeğe büyümesi için söylenen geleneksel ninni',   tag: 'Geleneksel',   icon: '🌟', file: require('../../assets/sounds/uyusun_da_buyusun_ninni_tr.mp3'),   premium: false },
 ];
 const sabitNinnilerEN: SesTip[] = [
-  { id: 1, name: 'Dandini Dandini', desc: 'A classic Turkish lullaby passed down through generations', tag: 'Traditional', icon: '⭐', file: require('../../assets/sounds/dandini.mp3'), premium: false },
+  { id:  1, name: 'Little Star',          desc: 'A shining star guides baby to dreamland',           tag: 'Classic',      icon: '⭐', file: require('../../assets/sounds/star_in_the_sky_en.mp3'),          premium: false },
+  { id:  2, name: 'Hush Now Baby',        desc: 'Gentle hush tones to ease baby into sleep',         tag: 'Soft',         icon: '🤫', file: require('../../assets/sounds/hush_now_baby_en.mp3'),            premium: false },
+  { id:  3, name: 'Rock-a-Bye',           desc: 'The timeless cradle song for peaceful nights',      tag: 'Traditional',  icon: '🍃', file: require('../../assets/sounds/rock_a_bye_en.mp3'),               premium: false },
+  { id:  4, name: 'Sleep Baby',           desc: 'Warm melodies for a cozy and restful sleep',        tag: 'Lullaby',      icon: '😴', file: require('../../assets/sounds/sleep_baby_en.mp3'),               premium: false },
+  { id:  5, name: 'A Candle',             desc: 'Soft candlelight melodies for serene bedtimes',     tag: 'Ambient',      icon: '🕯️', file: require('../../assets/sounds/a_candle_en.mp3'),                 premium: false },
+  { id:  6, name: 'Music Box 1',          desc: 'Delicate music box melody to drift off gently',     tag: 'Melody',       icon: '🎵', file: require('../../assets/sounds/music_box_en.mp3'),                premium: false },
+  { id:  7, name: 'Music Box 2',          desc: 'Second soothing music box tune',                    tag: 'Melody',       icon: '🎶', file: require('../../assets/sounds/music_box_2_en.mp3'),              premium: false },
+  { id:  8, name: 'Music Box 3',          desc: 'Third gentle music box lullaby',                    tag: 'Melody',       icon: '🎼', file: require('../../assets/sounds/music_box_3_en.mp3'),              premium: false },
+  { id:  9, name: 'Soft Piano Lullaby',   desc: 'Tender piano notes for the sweetest dreams',        tag: 'Piano',        icon: '🎹', file: require('../../assets/sounds/soft_piano_lullaby_en.mp3'),       premium: false },
+  { id: 10, name: 'Instrumental Lullaby', desc: 'Wordless instrumental tones for calm sleep',        tag: 'Instrumental', icon: '🎻', file: require('../../assets/sounds/instrumental_lullaby_en.mp3'),    premium: false },
 ];
 
 export default function Ninniler() {

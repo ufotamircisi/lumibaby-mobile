@@ -7,19 +7,31 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const masallarTR = [
-  { id: 1, name: 'Ay Işığında Uyku',       desc: 'Küçük bir yıldızın uyku yolculuğu',      duration: '8 dk'  },
-  { id: 2, name: 'Bulut Bebek',            desc: 'Pamuk bulutların arasında tatlı rüyalar', duration: '10 dk' },
-  { id: 3, name: 'Orman Ninnicisi',        desc: 'Ormanın sakin seslerinde uyuyan tavşan',  duration: '12 dk' },
-  { id: 4, name: 'Deniz Kızının Şarkısı',  desc: 'Dalgaların ritmiyle gelen uyku',          duration: '9 dk'  },
-  { id: 5, name: 'Yıldız Toplayıcı',       desc: 'Geceleri yıldız toplayan küçük çocuk',    duration: '11 dk' },
+type MasalTip = { id: number; name: string; desc: string; duration: string; file: any };
+
+const masallarTR: MasalTip[] = [
+  { id:  1, name: 'Küçük Deniz Kızının Huzur Koyu',     desc: 'Dalgaların arasında huzurlu bir uyku yolculuğu',          duration: '8 dk',  file: require('../../assets/sounds/kucuk_deniz_kizinin_huzur_koyu_tr.mp3')   },
+  { id:  2, name: 'Kadife Tavşanın Sessiz Gecesi',       desc: 'Yumuşacık tüylerin arasında tatlı rüyalar',               duration: '10 dk', file: require('../../assets/sounds/kadife_tavsanin_sessiz_gecesi_tr.mp3')     },
+  { id:  3, name: 'Ayın Altındaki Küçük Tilki',         desc: 'Ay ışığında ormanın sakin seslerinde uyuyan tilki',        duration: '9 dk',  file: require('../../assets/sounds/ayin_altindaki_kucuk_tilki_tr.mp3')       },
+  { id:  4, name: 'Yağmur Şarkısı',                     desc: 'Yağmur damlalarının melodisiyle gelen dingin uyku',        duration: '7 dk',  file: require('../../assets/sounds/yagmur_sarkisi_tr.mp3')                   },
+  { id:  5, name: 'Bulutların Çobanı',                  desc: 'Pamuk bulutları güden küçük çobanın uyku masalı',          duration: '11 dk', file: require('../../assets/sounds/bulutlarin_cobani_tr.mp3')                 },
+  { id:  6, name: 'Küçük Deniz Atı',                    desc: 'Okyanusun derinliklerinde sürüklenen uyku masalı',         duration: '8 dk',  file: require('../../assets/sounds/kucuk_deniz_ati_tr.mp3')                  },
+  { id:  7, name: 'Küçük Ayının Yıldız Sayısı',         desc: 'Geceleri gökyüzündeki yıldızları sayan küçük ayı',        duration: '10 dk', file: require('../../assets/sounds/kucuk_ayinin_yildiz_sayisi_tr.mp3')        },
+  { id:  8, name: 'Tırtılın Sıcak Kozası',              desc: 'Sıcacık bir kozanın içinde derinlemesine uyuyan tırtıl',  duration: '9 dk',  file: require('../../assets/sounds/tirtilin_sicak_kozasi_tr.mp3')             },
+  { id:  9, name: 'Küçük Fenerci Balık',                desc: 'Karanlık okyanusta ışık saçan küçük balığın masalı',      duration: '8 dk',  file: require('../../assets/sounds/kucuk_fenerci_balik_tr.mp3')              },
+  { id: 10, name: 'Küçük Kaplumbağanın Uzun Gecesi',   desc: 'Yavaş yavaş yürüyerek uykuya yolculuk eden kaplumbağa',  duration: '11 dk', file: require('../../assets/sounds/kucuk_kaplumbaganin_uzun_gecesi_tr.mp3')  },
 ];
-const masallarEN = [
-  { id: 1, name: 'Moonlight Sleep',        desc: 'A little star\'s journey to sleep',       duration: '8 min' },
-  { id: 2, name: 'Cloud Baby',             desc: 'Sweet dreams among cotton clouds',         duration: '10 min'},
-  { id: 3, name: 'Forest Lullaby',         desc: 'A bunny sleeping in the calm forest',      duration: '12 min'},
-  { id: 4, name: 'Mermaid\'s Song',        desc: 'Sleep coming with the rhythm of the waves',duration: '9 min' },
-  { id: 5, name: 'Star Collector',         desc: 'A little child collecting stars at night', duration: '11 min'},
+const masallarEN: MasalTip[] = [
+  { id:  1, name: 'The Velveteen Rabbit\'s Quiet Night',       desc: 'A soft toy finds peace in the stillness of night',         duration: '10 min', file: require('../../assets/sounds/the_velveteen_rabbit_quiet_night_en.mp3')     },
+  { id:  2, name: 'Thumbelina Finds Her Bed',                  desc: 'Tiny Thumbelina searches for the coziest place to sleep',  duration: '9 min',  file: require('../../assets/sounds/thumbelina_finds_her_bed_en.mp3')             },
+  { id:  3, name: 'Little Red Riding Hood\'s Sleepy Evening',  desc: 'A calm evening walk through the forest toward dreamland',  duration: '8 min',  file: require('../../assets/sounds/little_red_riding_hood_sleepy_evening_en.mp3') },
+  { id:  4, name: 'The Moonbeam That Couldn\'t Sleep',         desc: 'A little moonbeam wanders the sky looking for rest',       duration: '7 min',  file: require('../../assets/sounds/the_moonbeam_that_couldnt_sleep_en.mp3')      },
+  { id:  5, name: 'The Tortoise and the Bedtime',              desc: 'Slow and steady, the tortoise finds the perfect sleep',    duration: '11 min', file: require('../../assets/sounds/the_tortoise_and_the_bedtime_en.mp3')          },
+  { id:  6, name: 'Goldilocks and the Softest Bed',            desc: 'Goldilocks finally finds the bed that\'s just right',      duration: '9 min',  file: require('../../assets/sounds/goldilocks_and_the_softest_bed_en.mp3')        },
+  { id:  7, name: 'The Ugly Duckling\'s Peaceful Lake',        desc: 'The little duckling drifts off by the shimmering lake',    duration: '8 min',  file: require('../../assets/sounds/the_ugly_duckling_peaceful_lake_en.mp3')       },
+  { id:  8, name: 'The Snow Queen\'s Lullaby',                 desc: 'Snowflakes and silence bring the deepest of sleeps',       duration: '10 min', file: require('../../assets/sounds/the_snow_queen_lullaby_en.mp3')               },
+  { id:  9, name: 'The Little Mermaid\'s Lullaby Cove',        desc: 'Gentle waves and soft singing from the deep blue sea',     duration: '8 min',  file: require('../../assets/sounds/the_little_mermaid_lullaby_cove_en.mp3')      },
+  { id: 10, name: 'Cinderella\'s Quiet Night',                 desc: 'After the ball, Cinderella drifts into peaceful sleep',    duration: '9 min',  file: require('../../assets/sounds/cinderella_quiet_night_en.mp3')               },
 ];
 
 export default function Hikayeler() {
@@ -80,10 +92,12 @@ export default function Hikayeler() {
 
   const toggleMasal = async (id: number) => {
     if (calananId === id) { await stopSes(); return; }
+    const masal = sabitMasallar.find(m => m.id === id);
+    if (!masal?.file) return;
     await stopSes();
     try {
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, staysActiveInBackground: true });
-      const { sound } = await Audio.Sound.createAsync(require('../../assets/sounds/dandini.mp3'), { shouldPlay: true });
+      const { sound } = await Audio.Sound.createAsync(masal.file, { shouldPlay: true });
       soundRef.current = sound; setCalananId(id);
       sound.setOnPlaybackStatusUpdate((s) => { if (s.isLoaded && s.didJustFinish) { stopSes(); } });
       if (free) sinirBaslat();
