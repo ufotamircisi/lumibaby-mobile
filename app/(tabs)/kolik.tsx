@@ -24,14 +24,14 @@ const beyazGurultuEN: KolikSes[] = [
   { id: 5, name: 'White Noise',    icon: '🔊', desc: 'Steady frequency for deep calm', file: require('../../assets/sounds/whitenoise.mp3') },
 ];
 const rahatlaticiTR: KolikSes[] = [
-  { id: 20, name: 'Kedi Mırıltısı',  icon: '🐱', desc: 'Sakinleştirici kedi sesi',  file: null                                          },
-  { id: 21, name: 'Kalp Atışı',      icon: '💗', desc: 'Anne karnındaki sıcak ses',  file: require('../../assets/sounds/heart.mp3')      },
-  { id: 22, name: 'Nefes Egzersizi', icon: '🧘', desc: 'Sakinleştirici nefes ritmi', file: null                                          },
+  { id: 20, name: 'Kedi Mırıltısı',  icon: '🐱', desc: 'Sakinleştirici kedi sesi',  file: require('../../assets/sounds/kedi_miriltisi.mp3')   },
+  { id: 21, name: 'Kalp Atışı',      icon: '💗', desc: 'Anne karnındaki sıcak ses',  file: require('../../assets/sounds/heart.mp3')             },
+  { id: 22, name: 'Nefes Egzersizi', icon: '🧘', desc: 'Sakinleştirici nefes ritmi', file: require('../../assets/sounds/nefes_egzersizi.mp3')   },
 ];
 const rahatlaticiEN: KolikSes[] = [
-  { id: 20, name: 'Cat Purring',        icon: '🐱', desc: 'Soothing cat purring sound', file: null                                          },
-  { id: 21, name: 'Heartbeat',          icon: '💗', desc: 'Warm sound from the womb',   file: require('../../assets/sounds/heart.mp3')      },
-  { id: 22, name: 'Breathing Exercise', icon: '🧘', desc: 'Calming breathing rhythm',    file: null                                          },
+  { id: 20, name: 'Cat Purring',        icon: '🐱', desc: 'Soothing cat purring sound', file: require('../../assets/sounds/kedi_miriltisi.mp3') },
+  { id: 21, name: 'Heartbeat',          icon: '💗', desc: 'Warm sound from the womb',   file: require('../../assets/sounds/heart.mp3')          },
+  { id: 22, name: 'Breathing Exercise', icon: '🧘', desc: 'Calming breathing rhythm',    file: require('../../assets/sounds/nefes_egzersizi.mp3') },
 ];
 const dogaSesleriTR: KolikSes[] = [
   { id: 10, name: 'Yağmur Sesi',     icon: '🌧️', desc: 'Dingin yağmur damlaları',     file: require('../../assets/sounds/rain.mp3')    },

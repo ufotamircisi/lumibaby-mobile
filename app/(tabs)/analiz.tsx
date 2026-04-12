@@ -267,6 +267,10 @@ export default function Analiz() {
       const hakKullanildi = await analizKullan();
       if (!hakKullanildi) { setPaywallTip('analiz'); setPaywallVisible(true); return; }
     }
+    if (!CLAUDE_API_KEY) {
+      setAnalizHata(lang === 'en' ? 'API key not configured. Check your .env.local file.' : 'API anahtarı bulunamadı. .env.local dosyasını kontrol edin.');
+      return;
+    }
     try {
       const izin = await Audio.requestPermissionsAsync();
       if (!izin.granted) { alert(t.mikrofonIzni); return; }
@@ -300,9 +304,15 @@ export default function Analiz() {
                 signal: controller.signal,
               });
               clearTimeout(timeoutId);
-              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              if (!response.ok) {
+                if (response.status === 401) throw new Error('API key invalid (401)');
+                throw new Error(`HTTP ${response.status}`);
+              }
               const data = await response.json();
-              return JSON.parse(data.content[0].text) as AnalizSonuc;
+              const rawText = data.content?.[0]?.text ?? '';
+              const match = rawText.match(/\{[\s\S]*\}/);
+              if (!match) throw new Error('No JSON in response');
+              return JSON.parse(match[0]) as AnalizSonuc;
             } catch (err: any) {
               clearTimeout(timeoutId);
               throw err;
@@ -334,7 +344,11 @@ export default function Analiz() {
           setAnalizHata(t.analizHataMesaji);
         } finally { setAnalizYapiliyor(false); }
       }, 10000);
-    } catch (e) { setKayitYapiliyor(false); setGeriSayim(null); if (geriSayimRef.current) clearInterval(geriSayimRef.current); }
+    } catch (e) {
+      setKayitYapiliyor(false); setGeriSayim(null);
+      if (geriSayimRef.current) clearInterval(geriSayimRef.current);
+      setAnalizHata(t.analizHataMesaji);
+    }
   };
 
   const bebekUyudu = () => {
