@@ -1,8 +1,8 @@
 import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
+import * as audioManager from '@/services/audioManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -10,16 +10,16 @@ import { AppState, ScrollView, StyleSheet, Text, TouchableOpacity, View } from '
 type SesTip = { id: number; name: string; desc: string; tag: string; icon: string; file: any; premium: boolean; };
 
 const sabitNinnilerTR: SesTip[] = [
-  { id:  1, name: 'Dandini Dastana',      desc: 'Nesilden nesile aktarılan klasik Türk ninnisi',    tag: 'Anadolu',      icon: '⭐', file: require('../../assets/sounds/dandini_dastana_tr.mp3'),           premium: false },
-  { id:  2, name: 'Müzik Kutusu 1',       desc: 'Huzur veren hafif müzik kutusu melodisi',          tag: 'Melodi',       icon: '🎵', file: require('../../assets/sounds/muzik_kutusu_tr.mp3'),              premium: false },
-  { id:  3, name: 'Müzik Kutusu 2',       desc: 'Nazik ve sakinleştirici ikinci melodi',             tag: 'Melodi',       icon: '🎶', file: require('../../assets/sounds/muzik_kutusu_2_tr.mp3'),            premium: false },
-  { id:  4, name: 'Müzik Kutusu 3',       desc: 'Üçüncü müzik kutusu ninnisi',                      tag: 'Melodi',       icon: '🎼', file: require('../../assets/sounds/muzik_kutusu_3_tr.mp3'),            premium: false },
-  { id:  5, name: 'Yumuşak Piyano Ninnisi', desc: 'Piyano ile çalınan yumuşak uyku melodisi',       tag: 'Piyano',       icon: '🎹', file: require('../../assets/sounds/yumusak_piyano_ninnisi_tr.mp3'),    premium: false },
-  { id:  6, name: 'Enstrümantal Ninni',   desc: 'Sözüz enstrümanlarla hazırlanmış ninni',            tag: 'Enstrümantal', icon: '🎻', file: require('../../assets/sounds/enstrumantal_ninni_tr.mp3'),        premium: false },
-  { id:  7, name: 'Uyu Yavrum',           desc: 'Bebeğinizi yavaşça uyutacak sevgi dolu ninni',     tag: 'Türkçe',       icon: '🌙', file: require('../../assets/sounds/uyu_yavrum_tr.mp3'),                premium: false },
-  { id:  8, name: 'Yağmur Ninnisi',       desc: 'Yağmur damlalarının ritmiyle hazırlanmış ninni',   tag: 'Doğa',         icon: '🌧️', file: require('../../assets/sounds/yagmur_ninnisi_tr.mp3'),             premium: false },
-  { id:  9, name: 'Güzel Annem',          desc: 'Anneye duyulan sevgiyi anlatan sıcak ninni',       tag: 'Türkçe',       icon: '💜', file: require('../../assets/sounds/guzel_annem_tr.mp3'),               premium: false },
-  { id: 10, name: 'Uyusun da Büyüsün',   desc: 'Bebeğe büyümesi için söylenen geleneksel ninni',   tag: 'Geleneksel',   icon: '🌟', file: require('../../assets/sounds/uyusun_da_buyusun_ninni_tr.mp3'),   premium: false },
+  { id:  1, name: 'Dandini Dastana',        desc: 'Nesilden nesile aktarılan klasik Türk ninnisi',    tag: 'Anadolu',      icon: '⭐', file: require('../../assets/sounds/dandini_dastana_tr.mp3'),          premium: false },
+  { id:  2, name: 'Uyusun da Büyüsün',     desc: 'Bebeğe büyümesi için söylenen geleneksel ninni',   tag: 'Geleneksel',   icon: '🌟', file: require('../../assets/sounds/uyusun_da_buyusun_ninni_tr.mp3'),  premium: false },
+  { id:  3, name: 'Güzel Annem',           desc: 'Anneye duyulan sevgiyi anlatan sıcak ninni',       tag: 'Türkçe',       icon: '💜', file: require('../../assets/sounds/guzel_annem_tr.mp3'),              premium: false },
+  { id:  4, name: 'Yağmur Ninnisi',        desc: 'Yağmur damlalarının ritmiyle hazırlanmış ninni',   tag: 'Doğa',         icon: '🌧️', file: require('../../assets/sounds/yagmur_ninnisi_tr.mp3'),            premium: false },
+  { id:  5, name: 'Uyu Yavrum',            desc: 'Bebeğinizi yavaşça uyutacak sevgi dolu ninni',     tag: 'Türkçe',       icon: '🌙', file: require('../../assets/sounds/uyu_yavrum_tr.mp3'),               premium: false },
+  { id:  6, name: 'Müzik Kutusu 1',        desc: 'Huzur veren hafif müzik kutusu melodisi',          tag: 'Melodi',       icon: '🎵', file: require('../../assets/sounds/muzik_kutusu_tr.mp3'),             premium: false },
+  { id:  7, name: 'Müzik Kutusu 2',        desc: 'Nazik ve sakinleştirici ikinci melodi',            tag: 'Melodi',       icon: '🎶', file: require('../../assets/sounds/muzik_kutusu_2_tr.mp3'),           premium: false },
+  { id:  8, name: 'Müzik Kutusu 3',        desc: 'Üçüncü müzik kutusu ninnisi',                     tag: 'Melodi',       icon: '🎼', file: require('../../assets/sounds/muzik_kutusu_3_tr.mp3'),           premium: false },
+  { id:  9, name: 'Yumuşak Piyano Ninnisi', desc: 'Piyano ile çalınan yumuşak uyku melodisi',       tag: 'Piyano',       icon: '🎹', file: require('../../assets/sounds/yumusak_piyano_ninnisi_tr.mp3'),   premium: false },
+  { id: 10, name: 'Enstrümantal Ninni',    desc: 'Sözsüz enstrümanlarla hazırlanmış ninni',          tag: 'Enstrümantal', icon: '🎻', file: require('../../assets/sounds/enstrumantal_ninni_tr.mp3'),       premium: false },
 ];
 const sabitNinnilerEN: SesTip[] = [
   { id:  1, name: 'Little Star',          desc: 'A shining star guides baby to dreamland',           tag: 'Classic',      icon: '⭐', file: require('../../assets/sounds/star_in_the_sky_en.mp3'),          premium: false },
@@ -47,8 +47,6 @@ export default function Ninniler() {
   const [timerSaniye, setTimerSaniye]     = useState<number | null>(null);
   const [secilenDk, setSecilenDk]         = useState<number | null>(null);
 
-  const soundRef            = useRef<Audio.Sound | null>(null);
-  const isLoadingRef        = useRef(false);
   const timerRef            = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerBitisTarihiRef = useRef<number | null>(null);
 
@@ -62,15 +60,15 @@ export default function Ninniler() {
 
   useFocusEffect(useCallback(() => { anneNinnisiYukle(); }, []));
 
+  // Sync calananId with global audio state
+  useEffect(() => {
+    return audioManager.subscribe((id, tab) => {
+      setCalananId(tab === 'ninniler' ? id : null);
+    });
+  }, []);
+
   const stopSes = useCallback(async () => {
-    try {
-      if (soundRef.current) {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
-    } catch (e) {}
-    setCalananId(null);
+    await audioManager.stop();
   }, []);
 
   const timerIptal = useCallback(() => {
@@ -82,7 +80,6 @@ export default function Ninniler() {
   }, []);
 
   useEffect(() => {
-    Audio.setAudioModeAsync({ allowsRecordingIOS: false, staysActiveInBackground: true, playsInSilentModeIOS: true, shouldDuckAndroid: true });
     const appStateSub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active' && timerBitisTarihiRef.current) {
         const kalan = Math.round((timerBitisTarihiRef.current - Date.now()) / 1000);
@@ -91,7 +88,6 @@ export default function Ninniler() {
     });
     return () => {
       appStateSub.remove();
-      soundRef.current?.unloadAsync();
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [stopSes, timerIptal]);
@@ -108,7 +104,7 @@ export default function Ninniler() {
         timerBitisTarihiRef.current = null;
         setTimerSaniye(null);
         setSecilenDk(null);
-        stopSes();
+        if (audioManager.getState().tab === 'ninniler') stopSes();
       } else setTimerSaniye(kalan);
     };
     tick();
@@ -119,18 +115,12 @@ export default function Ninniler() {
     Math.floor(saniye / 60) + ':' + (saniye % 60).toString().padStart(2, '0');
 
   const toggleNinni = async (file: any, id: number) => {
-    if (isLoadingRef.current) return;
     if (id === 999 && free) { setPaywallVisible(true); return; }
-    isLoadingRef.current = true;
-    try {
-      if (calananId === id) { await stopSes(); }
-      else {
-        await stopSes();
-        const { sound } = await Audio.Sound.createAsync(file, { shouldPlay: true, isLooping: true });
-        soundRef.current = sound; setCalananId(id);
-      }
-    } catch (e) { console.log('Ses hatası:', e); }
-    finally { isLoadingRef.current = false; }
+    if (calananId === id) {
+      await audioManager.stop();
+    } else {
+      await audioManager.play(file, id, 'ninniler', { loop: true });
+    }
   };
 
   return (

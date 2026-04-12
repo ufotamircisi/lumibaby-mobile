@@ -76,17 +76,17 @@ function son7GunHazirla(raporlar: GeceRaporu[], gunIsimleri: string[]) {
 }
 
 const sabitNinniListesi: SesTip[] = [
-  { id: 1, name: 'Dandini Dandini', icon: '⭐', file: require('../../assets/sounds/dandini.mp3') },
-  { id: 2, name: 'Laylim Lay',      icon: '🌙', file: require('../../assets/sounds/dandini.mp3') },
-  { id: 3, name: 'Uyu da Büyü',    icon: '🌟', file: require('../../assets/sounds/dandini.mp3') },
-  { id: 4, name: 'Ninni Ninni',     icon: '🎵', file: require('../../assets/sounds/dandini.mp3') },
+  { id: 1, name: 'Dandini Dastana',   icon: '⭐', file: require('../../assets/sounds/dandini_dastana_tr.mp3')          },
+  { id: 2, name: 'Uyu Yavrum',        icon: '🌙', file: require('../../assets/sounds/uyu_yavrum_tr.mp3')               },
+  { id: 3, name: 'Uyusun da Büyüsün', icon: '🌟', file: require('../../assets/sounds/uyusun_da_buyusun_ninni_tr.mp3')  },
+  { id: 4, name: 'Müzik Kutusu',      icon: '🎵', file: require('../../assets/sounds/muzik_kutusu_tr.mp3')             },
 ];
 
 const sabitKolikListesi: SesTip[] = [
-  { id: 1, name: 'White Noise',  icon: '💨', file: require('../../assets/sounds/dandini.mp3') },
-  { id: 2, name: 'Rain Sound',   icon: '🌧️', file: require('../../assets/sounds/dandini.mp3') },
-  { id: 3, name: 'Hair Dryer',   icon: '🔊', file: require('../../assets/sounds/dandini.mp3') },
-  { id: 4, name: 'Car Sound',    icon: '🚗', file: require('../../assets/sounds/dandini.mp3') },
+  { id: 1, name: 'Beyaz Gürültü',        icon: '🔊', file: require('../../assets/sounds/whitenoise.mp3') },
+  { id: 2, name: 'Yağmur Sesi',          icon: '🌧️', file: require('../../assets/sounds/rain.mp3')       },
+  { id: 3, name: 'Saç Kurutma Makinesi', icon: '💨', file: require('../../assets/sounds/hairdryer.mp3')  },
+  { id: 4, name: 'Fan Sesi',             icon: '🌬️', file: require('../../assets/sounds/ac.mp3')         },
 ];
 
 export default function Analiz() {

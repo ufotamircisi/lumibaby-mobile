@@ -1,10 +1,10 @@
 import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
+import * as audioManager from '@/services/audioManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
 import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type MasalTip = { id: number; name: string; desc: string; duration: string; file: any };
@@ -48,9 +48,17 @@ export default function Hikayeler() {
   const [calananId, setCalananId]             = useState<number | null>(null);
   const [kalanSure, setKalanSure]             = useState<number | null>(null);
 
-  const soundRef       = useRef<Audio.Sound | null>(null);
-  const sinirTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
-  const sinirSayacRef  = useRef<number>(0);
+  // Refs to avoid stale closures in onFinish callbacks
+  const sabitMasallarRef = useRef(sabitMasallar);
+  useEffect(() => { sabitMasallarRef.current = sabitMasallar; }, [sabitMasallar]);
+  const freeRef = useRef(free);
+  useEffect(() => { freeRef.current = free; }, [free]);
+
+  const sinirTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sinirSayacRef = useRef<number>(0);
+
+  // Ref to the latest playMasal function (prevents stale closure in onFinish)
+  const playMasalRef = useRef<(id: number) => Promise<void>>(async () => {});
 
   const anneHikayesiYukle = async () => {
     try {
@@ -66,16 +74,24 @@ export default function Hikayeler() {
   useFocusEffect(useCallback(() => {
     anneHikayesiYukle();
     return () => {
-      soundRef.current?.unloadAsync();
-      if (sinirTimerRef.current) clearInterval(sinirTimerRef.current);
+      // Don't stop global audio on tab blur — just clear local timer
+      if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
+      sinirSayacRef.current = 0; setKalanSure(null);
     };
   }, []));
 
-  const stopSes = useCallback(async () => {
-    if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
-    sinirSayacRef.current = 0; setKalanSure(null);
-    try { await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync(); } catch (_) {}
-    soundRef.current = null; setCalananId(null);
+  // Sync calananId with global audio state
+  useEffect(() => {
+    return audioManager.subscribe((id, tab) => {
+      setCalananId(tab === 'hikayeler' ? id : null);
+      // If audio switches away from hikayeler, cancel the free-user limit timer
+      if (tab !== 'hikayeler' && sinirTimerRef.current) {
+        clearInterval(sinirTimerRef.current);
+        sinirTimerRef.current = null;
+        sinirSayacRef.current = 0;
+        setKalanSure(null);
+      }
+    });
   }, []);
 
   const sinirBaslat = useCallback(() => {
@@ -85,36 +101,49 @@ export default function Hikayeler() {
       sinirSayacRef.current -= 1; setKalanSure(sinirSayacRef.current);
       if (sinirSayacRef.current <= 0) {
         clearInterval(sinirTimerRef.current!); sinirTimerRef.current = null;
-        stopSes(); setPaywallSinirMi(true); setPaywallVisible(true);
+        if (audioManager.getState().tab === 'hikayeler') {
+          audioManager.stop();
+          setPaywallSinirMi(true); setPaywallVisible(true);
+        }
       }
     }, 1000);
-  }, [stopSes]);
+  }, []);
+
+  const playMasal = async (id: number) => {
+    const masallar = sabitMasallarRef.current;
+    const masal = masallar.find((m) => m.id === id);
+    if (!masal?.file) return;
+
+    const isFree = freeRef.current;
+    const onFinish = !isFree ? () => {
+      const list = sabitMasallarRef.current;
+      const idx = list.findIndex((m) => m.id === id);
+      if (idx === -1) return;
+      const next = list[(idx + 1) % list.length];
+      playMasalRef.current(next.id);  // always calls latest version
+    } : undefined;
+
+    await audioManager.play(masal.file, id, 'hikayeler', { loop: false, onFinish });
+    if (isFree) sinirBaslat();
+  };
+  // Keep ref current on every render
+  playMasalRef.current = playMasal;
 
   const toggleMasal = async (id: number) => {
-    if (calananId === id) { await stopSes(); return; }
-    const masal = sabitMasallar.find(m => m.id === id);
-    if (!masal?.file) return;
-    await stopSes();
-    try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, staysActiveInBackground: true });
-      const { sound } = await Audio.Sound.createAsync(masal.file, { shouldPlay: true });
-      soundRef.current = sound; setCalananId(id);
-      sound.setOnPlaybackStatusUpdate((s) => { if (s.isLoaded && s.didJustFinish) { stopSes(); } });
-      if (free) sinirBaslat();
-    } catch (e) { console.log('Ses hatası:', e); }
+    if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
+    sinirSayacRef.current = 0; setKalanSure(null);
+    if (calananId === id) {
+      await audioManager.stop();
+      return;
+    }
+    await playMasal(id);
   };
 
   const toggleAnneHikaye = async () => {
     if (free) { setPaywallSinirMi(false); setPaywallVisible(true); return; }
     if (!anneHikayeUri) return;
-    if (calananId === 999) { await stopSes(); return; }
-    await stopSes();
-    try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, staysActiveInBackground: true });
-      const { sound } = await Audio.Sound.createAsync({ uri: anneHikayeUri }, { shouldPlay: true });
-      soundRef.current = sound; setCalananId(999);
-      sound.setOnPlaybackStatusUpdate((s) => { if (s.isLoaded && s.didJustFinish) { stopSes(); } });
-    } catch (e) { console.log('Ses hatası:', e); }
+    if (calananId === 999) { await audioManager.stop(); return; }
+    await audioManager.play({ uri: anneHikayeUri }, 999, 'hikayeler', { loop: false });
   };
 
   const formatSure = (s: number) => {
