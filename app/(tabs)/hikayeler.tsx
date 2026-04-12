@@ -235,7 +235,7 @@ export default function Hikayeler() {
     // Clear any running 1-min limit timer (same as toggleMasal)
     clearSinirTimer();
     if (calananId === 999) { await audioManager.stop(); return; }
-    await audioManager.play({ uri: anneHikayeUri }, 999, 'hikayeler', { loop: false });
+    await audioManager.play({ uri: anneHikayeUri }, 999, 'hikayeler', { loop: true });
   };
 
   const formatSureTag = (s: number) => {

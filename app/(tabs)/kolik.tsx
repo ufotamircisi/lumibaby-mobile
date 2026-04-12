@@ -184,6 +184,18 @@ export default function Kolik() {
             </TouchableOpacity>
           </View>
         )}
+        {calananId && (() => {
+          const ses = calananId === 999
+            ? { name: t.anneSesiPisPis, icon: '💜' }
+            : [...beyazGurultu, ...rahatlatici, ...dogaSesleri].find(s => s.id === calananId) ?? null;
+          if (!ses) return null;
+          return (
+            <View style={styles.nowPlaying}>
+              <Text style={styles.npText}>{ses.icon + ' ' + ses.name}</Text>
+              <Text style={styles.npSub}>{t.donguAktif}</Text>
+            </View>
+          );
+        })()}
 
         {/* Anne Sesi */}
         <View style={styles.sectionHeader}>
@@ -284,6 +296,9 @@ const styles = StyleSheet.create({
   miniTimer:             { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(157,140,239,0.1)', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(157,140,239,0.2)' },
   miniTimerText:         { color: '#b8a8f8', fontSize: 13 },
   miniTimerIptal:        { color: 'rgba(255,255,255,0.5)', fontSize: 13 },
+  nowPlaying:            { backgroundColor: 'rgba(157,140,239,0.15)', borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(157,140,239,0.3)' },
+  npText:                { color: 'white', fontSize: 15, fontWeight: 'bold' },
+  npSub:                 { color: '#b8a8f8', fontSize: 12, marginTop: 4 },
   sectionHeader:         { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12, marginTop: 8 },
   sectionTitle:          { color: 'white', fontSize: 18, fontWeight: 'bold' },
   freeBadge:             { backgroundColor: '#4ade80', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
