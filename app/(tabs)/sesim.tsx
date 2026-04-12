@@ -3,8 +3,9 @@ import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AudioModule, RecordingPresets, useAudioRecorder } from 'expo-audio';
+import { useFocusEffect } from 'expo-router';
 import { Audio } from 'expo-av';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type KayitTip = 'ninni' | 'hikaye' | 'pispis';
@@ -27,9 +28,14 @@ export default function Sesim() {
   const [kayitlar, setKayitlar]       = useState<Partial<Record<KayitTip, KayitBilgi>>>({});
   const [calananTip, setCalananTip]   = useState<KayitTip | null>(null);
 
+  const scrollViewRef = useRef<ScrollView>(null);
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const soundRef      = useRef<Audio.Sound | null>(null);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+
+  useFocusEffect(useCallback(() => {
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+  }, []));
 
   useEffect(() => {
     kayitlariYukle();
@@ -134,7 +140,7 @@ export default function Sesim() {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
         <View style={styles.headerKart}>
           <Text style={styles.headerIkon}>💜</Text>

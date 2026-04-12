@@ -62,6 +62,7 @@ export default function Kolik() {
   const [timerSaniye, setTimerSaniye]     = useState<number | null>(null);
   const [secilenDk, setSecilenDk]         = useState<number | null>(null);
 
+  const scrollViewRef       = useRef<ScrollView>(null);
   const timerRef            = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerBitisTarihiRef = useRef<number | null>(null);
 
@@ -75,6 +76,7 @@ export default function Kolik() {
 
   useFocusEffect(useCallback(() => {
     annePisPisYukle();
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
   }, []));
 
   // Sync calananId with global audio state
@@ -156,7 +158,7 @@ export default function Kolik() {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
         {/* Zamanlayıcı */}
         <TouchableOpacity style={styles.timerBtn} onPress={() => setTimerAcik(!timerAcik)}>

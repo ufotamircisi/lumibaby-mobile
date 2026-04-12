@@ -47,6 +47,7 @@ export default function Ninniler() {
   const [timerSaniye, setTimerSaniye]     = useState<number | null>(null);
   const [secilenDk, setSecilenDk]         = useState<number | null>(null);
 
+  const scrollViewRef       = useRef<ScrollView>(null);
   const timerRef            = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerBitisTarihiRef = useRef<number | null>(null);
 
@@ -58,7 +59,10 @@ export default function Ninniler() {
     } catch (_) {}
   };
 
-  useFocusEffect(useCallback(() => { anneNinnisiYukle(); }, []));
+  useFocusEffect(useCallback(() => {
+    anneNinnisiYukle();
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+  }, []));
 
   // Sync calananId with global audio state
   useEffect(() => {
@@ -125,7 +129,7 @@ export default function Ninniler() {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
         {/* Zamanlayıcı */}
         <TouchableOpacity style={styles.timerBtn} onPress={() => setTimerAcik(!timerAcik)}>

@@ -57,6 +57,7 @@ export default function Hikayeler() {
   const freeRef = useRef(free);
   useEffect(() => { freeRef.current = free; }, [free]);
 
+  const scrollViewRef    = useRef<ScrollView>(null);
   const sinirTimerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const sinirSayacRef    = useRef<number>(0);
   const timerRef         = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -78,6 +79,7 @@ export default function Hikayeler() {
 
   useFocusEffect(useCallback(() => {
     anneHikayesiYukle();
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
     return () => {
       // Don't stop global audio on tab blur — just clear local timers
       if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
@@ -210,7 +212,7 @@ export default function Hikayeler() {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
         {/* Zamanlayıcı */}
         <TouchableOpacity style={styles.timerBtn} onPress={() => setTimerAcik(!timerAcik)}>

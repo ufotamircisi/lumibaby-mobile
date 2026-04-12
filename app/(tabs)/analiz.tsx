@@ -6,7 +6,8 @@ import { showInterstitialIfReady } from '@/services/adMob';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
-import React, { useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { sendAlertToAll } from './_layout';
 
@@ -155,6 +156,10 @@ export default function Analiz() {
   const pollIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { return () => { herSeyiDurdur(); }; }, []);
+
+  useFocusEffect(useCallback(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, []));
 
   useEffect(() => {
     AsyncStorage.getItem('anne_ninni_kayit').then(v => { if (v) setAnneNinniUri(JSON.parse(v).uri); });
