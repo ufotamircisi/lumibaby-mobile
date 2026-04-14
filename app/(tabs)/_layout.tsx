@@ -18,9 +18,10 @@ import {
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
-const KEY_MY_TOKEN      = 'lumibaby_my_token';
-const KEY_ANNE_TOKEN    = 'lumibaby_anne_token';
-const KEY_PARTNER_TOKEN = 'lumibaby_partner_token';
+const KEY_MY_TOKEN        = 'lumibaby_my_token';
+const KEY_ANNE_TOKEN      = 'lumibaby_anne_token';
+const KEY_PARTNER_TOKEN   = 'lumibaby_partner_token';
+const KEY_PARTNER_PREMIUM = 'partner_premium';
 const { width: SCREEN_W } = Dimensions.get('window');
 const QR_SIZE = SCREEN_W * 0.55;
 
@@ -61,7 +62,8 @@ export async function sendAlertToAll(
 }
 
 // ─── QR TARAMA ───────────────────────────────────────────────────────────────
-function QRTaraEkrani({ onScanned, onClose }: { onScanned: (token: string) => void; onClose: () => void; }) {
+function QRTaraEkrani({ onScanned, onClose }: { onScanned: (raw: string) => void; onClose: () => void; }) {
+  const { t } = useLang();
   const [permission, requestPermission] = useCameraPermissions();
   const [tarandi, setTarandi] = useState(false);
   useEffect(() => { if (!permission?.granted) requestPermission(); }, []);
@@ -69,16 +71,15 @@ function QRTaraEkrani({ onScanned, onClose }: { onScanned: (token: string) => vo
     if (tarandi) return;
     if (data.startsWith('ExponentPushToken[') || data.startsWith('LUMIBABY:')) {
       setTarandi(true);
-      const token = data.startsWith('LUMIBABY:') ? data.replace('LUMIBABY:', '') : data;
-      onScanned(token);
+      onScanned(data); // pass full raw string — PartnerModal handles parsing
     }
   };
   if (!permission?.granted) {
     return (
       <View style={qs.izinKutu}>
-        <Text style={qs.izinYazi}>📷 Kamera izni gerekli</Text>
-        <TouchableOpacity style={qs.izinBtn} onPress={requestPermission}><Text style={qs.izinBtnYazi}>İzin Ver</Text></TouchableOpacity>
-        <TouchableOpacity style={qs.kapatBtn} onPress={onClose}><Text style={qs.kapatBtnYazi}>Geri Dön</Text></TouchableOpacity>
+        <Text style={qs.izinYazi}>{t.partnerKameraIzin}</Text>
+        <TouchableOpacity style={qs.izinBtn} onPress={requestPermission}><Text style={qs.izinBtnYazi}>{t.partnerIzinVer}</Text></TouchableOpacity>
+        <TouchableOpacity style={qs.kapatBtn} onPress={onClose}><Text style={qs.kapatBtnYazi}>{t.partnerGeriDon}</Text></TouchableOpacity>
       </View>
     );
   }
@@ -90,9 +91,9 @@ function QRTaraEkrani({ onScanned, onClose }: { onScanned: (token: string) => vo
           <View style={[qs.kose, qs.solUst]} /><View style={[qs.kose, qs.sagUst]} />
           <View style={[qs.kose, qs.solAlt]} /><View style={[qs.kose, qs.sagAlt]} />
         </View>
-        <Text style={qs.taramaYazi}>Diğer cihazdaki LumiBaby QR kodunu çerçeveye getirin</Text>
+        <Text style={qs.taramaYazi}>{t.partnerQRYon}</Text>
       </View>
-      <TouchableOpacity style={qs.geriBtn} onPress={onClose}><Text style={qs.geriBtnYazi}>← Geri</Text></TouchableOpacity>
+      <TouchableOpacity style={qs.geriBtn} onPress={onClose}><Text style={qs.geriBtnYazi}>{t.partnerQRGeriDon}</Text></TouchableOpacity>
     </View>
   );
 }
@@ -120,38 +121,76 @@ const qs = StyleSheet.create({
 // ─── PARTNER MODAL ────────────────────────────────────────────────────────────
 type PartnerEkran = 'menu' | 'qr_goster' | 'qr_tara';
 function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { lang, t } = useLang();
+  const { t } = useLang();
+  const { isPremium, yukle } = usePremium();
   const [ekran, setEkran]                 = useState<PartnerEkran>('menu');
   const [myToken, setMyToken]             = useState<string | null>(null);
   const [bagliCihazlar, setBagliCihazlar] = useState<string[]>([]);
   const [loading, setLoading]             = useState(false);
+  const [bebekAdi, setBebekAdi]           = useState('');
+  const [dogumTarihi, setDogumTarihi]     = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [token, c1, c2] = await Promise.all([AsyncStorage.getItem(KEY_MY_TOKEN), AsyncStorage.getItem(KEY_ANNE_TOKEN), AsyncStorage.getItem(KEY_PARTNER_TOKEN)]);
+    const [token, c1, bebekAdi_, dogumTarihi_] = await Promise.all([
+      AsyncStorage.getItem(KEY_MY_TOKEN),
+      AsyncStorage.getItem(KEY_ANNE_TOKEN),
+      AsyncStorage.getItem('bebek_adi'),
+      AsyncStorage.getItem('bebek_dogum_tarihi'),
+    ]);
     setMyToken(token);
-    setBagliCihazlar([c1, c2].filter(Boolean) as string[]);
+    setBagliCihazlar([c1].filter(Boolean) as string[]);
+    setBebekAdi(bebekAdi_ || '');
+    setDogumTarihi(dogumTarihi_ || '');
     setLoading(false);
   }, []);
 
   useEffect(() => { if (visible) { setEkran('menu'); load(); } }, [visible]);
 
-  const handleScanned = async (token: string) => {
-    if (bagliCihazlar.includes(token)) { setEkran('menu'); Alert.alert(lang === 'en' ? 'Already Paired' : 'Zaten Bağlı', lang === 'en' ? 'This device is already paired.' : 'Bu cihaz zaten eşleştirilmiş.'); return; }
-    if (!await AsyncStorage.getItem(KEY_ANNE_TOKEN)) await AsyncStorage.setItem(KEY_ANNE_TOKEN, token);
-    else await AsyncStorage.setItem(KEY_PARTNER_TOKEN, token);
-    setBagliCihazlar(prev => [...prev, token]);
+  const handleScanned = async (raw: string) => {
+    // Parse LUMIBABY:{token}:{isPremium}:{bebekAdi}:{dogumTarihi}
+    let partnerToken = raw;
+    let partnerIsPremium = false;
+    let partnerBebekAdi = '';
+    let partnerDogumTarihi = '';
+    if (raw.startsWith('LUMIBABY:')) {
+      const parts = raw.slice('LUMIBABY:'.length).split(':');
+      partnerToken       = parts[0] || '';
+      partnerIsPremium   = parts[1] === 'true';
+      partnerBebekAdi    = parts[2] || '';
+      partnerDogumTarihi = parts[3] || '';
+    }
+    if (!partnerToken) return;
+    if (bagliCihazlar.includes(partnerToken)) {
+      setEkran('menu');
+      Alert.alert(t.partnerZatenBagliBaslik, t.partnerZatenBagliAcik);
+      return;
+    }
+    if (bagliCihazlar.length >= 1) {
+      Alert.alert(t.partnerSinirBaslik, t.partnerSinirAcik);
+      return;
+    }
+    // Save partner token
+    await AsyncStorage.setItem(KEY_ANNE_TOKEN, partnerToken);
+    // Save partner premium status
+    if (partnerIsPremium) await AsyncStorage.setItem(KEY_PARTNER_PREMIUM, 'true');
+    // Sync baby info (only if local is empty)
+    if (partnerBebekAdi && !bebekAdi) await AsyncStorage.setItem('bebek_adi', partnerBebekAdi);
+    if (partnerDogumTarihi && !dogumTarihi) await AsyncStorage.setItem('bebek_dogum_tarihi', partnerDogumTarihi);
+    setBagliCihazlar([partnerToken]);
+    await yukle();
     setEkran('menu');
-    Alert.alert('✅ ' + (lang === 'en' ? 'Paired!' : 'Eşleştirildi!'), lang === 'en' ? 'Device connected. You will be notified when baby cries.' : 'Cihaz bağlandı. Bebek ağladığında bildirim gidecek.');
+    Alert.alert(t.partnerBaglandiBaslik, t.partnerBaglandiAcik);
   };
 
   const handleRemove = (token: string) => {
-    Alert.alert(lang === 'en' ? 'Remove Device' : 'Cihazı Kaldır', lang === 'en' ? 'Are you sure?' : 'Emin misiniz?', [
-      { text: lang === 'en' ? 'Cancel' : 'İptal', style: 'cancel' },
-      { text: lang === 'en' ? 'Remove' : 'Kaldır', style: 'destructive', onPress: async () => {
-        const c1 = await AsyncStorage.getItem(KEY_ANNE_TOKEN);
-        if (c1 === token) await AsyncStorage.removeItem(KEY_ANNE_TOKEN); else await AsyncStorage.removeItem(KEY_PARTNER_TOKEN);
-        setBagliCihazlar(prev => prev.filter(c => c !== token));
+    Alert.alert(t.partnerKaldirBaslik, t.partnerKaldirAcik, [
+      { text: t.iptal, style: 'cancel' },
+      { text: t.partnerKaldir, style: 'destructive', onPress: async () => {
+        await AsyncStorage.removeItem(KEY_ANNE_TOKEN);
+        await AsyncStorage.removeItem(KEY_PARTNER_PREMIUM);
+        setBagliCihazlar([]);
+        await yukle();
       }},
     ]);
   };
@@ -165,27 +204,37 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
   }
   if (ekran === 'qr_goster') {
     const isProductionToken = myToken?.startsWith('ExponentPushToken[') ?? false;
-    const qrData = isProductionToken ? `LUMIBABY:${myToken}` : null;
+    const premiumStr = isPremium ? 'true' : 'false';
+    const qrData = isProductionToken
+      ? `LUMIBABY:${myToken}:${premiumStr}:${bebekAdi}:${dogumTarihi}`
+      : null;
+    const cihazVar = bagliCihazlar.length >= 1;
     return (
       <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setEkran('menu')}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setEkran('menu')} />
           <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, alignItems: 'center' }}>
             <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, marginBottom: 16 }} />
-            <Text style={pm.baslik}>{lang === 'en' ? '📱 This Device QR Code' : '📱 Bu Cihazın QR Kodu'}</Text>
-            <Text style={pm.alt}>{lang === 'en' ? 'Scan with LumiBaby on the other device' : 'Diğer cihazdaki LumiBaby ile tara'}</Text>
+            <Text style={pm.baslik}>{t.partnerQRBuCihaz}</Text>
+            <Text style={pm.alt}>{t.partnerQRTaraIle}</Text>
             <View style={{ alignItems: 'center', paddingVertical: 24, gap: 16, width: '100%' }}>
-              {qrData ? (
-                <><QRCode value={qrData} size={QR_SIZE} color="#ffffff" backgroundColor="#0f1e33" /><Text style={pm.qrAcik}>{lang === 'en' ? "Scan this QR with the other phone's Scan QR button" : 'Bu QR kodu diger telefondaki QR Tara ile okutun'}</Text></>
+              {cihazVar ? (
+                <View style={pm.uyariBox}>
+                  <Text style={{ fontSize: 28 }}>⚠️</Text>
+                  <Text style={pm.uyariYazi}>{t.partnerSinirAcik}</Text>
+                  <TouchableOpacity style={pm.kapatBtn} onPress={() => setEkran('menu')}><Text style={pm.kapatBtnYazi}>{t.partnerQRGeriDon}</Text></TouchableOpacity>
+                </View>
+              ) : qrData ? (
+                <><QRCode value={qrData} size={QR_SIZE} color="#ffffff" backgroundColor="#0f1e33" /><Text style={pm.qrAcik}>{t.partnerQROku}</Text></>
               ) : (
                 <View style={pm.productionBox}>
                   <Text style={{ fontSize: 40 }}>🏗️</Text>
-                  <Text style={pm.productionYazi}>{lang === 'en' ? 'Notifications will be active in production build' : "Bildirimler production build'de aktif olacak"}</Text>
-                  <Text style={pm.productionAlt}>{lang === 'en' ? "You're in Expo Go. QR pairing will work after store upload." : "Şu an Expo Go'dasınız. Store'a yüklendiğinde QR eşleştirmesi aktif olur."}</Text>
+                  <Text style={pm.productionYazi}>{t.bildirimProductionUyari}</Text>
+                  <Text style={pm.productionAlt}>{t.partnerQRExpoGo}</Text>
                 </View>
               )}
             </View>
-            <TouchableOpacity style={pm.kapatBtn} onPress={() => setEkran('menu')}><Text style={pm.kapatBtnYazi}>{lang === 'en' ? '← Go Back' : '← Geri Dön'}</Text></TouchableOpacity>
+            {!cihazVar && <TouchableOpacity style={pm.kapatBtn} onPress={() => setEkran('menu')}><Text style={pm.kapatBtnYazi}>{t.partnerQRGeriDon}</Text></TouchableOpacity>}
           </View>
         </View>
       </Modal>
@@ -197,47 +246,47 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
         <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, height: '85%' }}>
           <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
-          <Text style={pm.baslik}>{lang === 'en' ? '📳 Parent Notifications' : '📳 Ebeveyn Bildirimleri'}</Text>
-          <Text style={pm.alt}>{lang === 'en' ? 'When baby cries, all paired devices and Watches get notified' : "Bebek ağlayınca tüm bağlı cihazlara ve Watch'lara bildirim gider"}</Text>
+          <Text style={pm.baslik}>{t.partnerBaslik}</Text>
+          <Text style={pm.alt}>{t.partnerAlt}</Text>
           {loading ? <ActivityIndicator color="#9d8cef" style={{ flex: 1 }} /> : (
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
               <View style={pm.aciklamaBox}>
-                <Text style={pm.aciklamaBaslik}>{lang === 'en' ? '💡 How to pair?' : '💡 Nasıl eşleştirilir?'}</Text>
+                <Text style={pm.aciklamaBaslik}>{t.partnerNasilBaslik}</Text>
                 <View style={pm.kuralKutu}>
                   <Text style={pm.kuralIkon}>👶</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={pm.kuralBaslik}>{lang === 'en' ? 'Device showing the QR code' : 'QR kodunu gösteren cihaz'}</Text>
-                    <Text style={pm.kuralAcik}>{lang === 'en' ? 'Should be next to baby — detector runs on this phone' : 'Bebeğin yanında olmalı — dedektör bu telefonda çalışır'}</Text>
-                    <Text style={[pm.kuralAcik, { color: 'rgba(157,140,239,0.7)', marginTop: 4 }]}>{lang === 'en' ? '📵 Silent notification on phone · ⌚ Shows on Watch' : "📵 Telefona sessiz bildirim gelir · ⌚ Watch'ta görünür"}</Text>
+                    <Text style={pm.kuralBaslik}>{t.partnerCihaz1Baslik}</Text>
+                    <Text style={pm.kuralAcik}>{t.partnerCihaz1Acik}</Text>
+                    <Text style={[pm.kuralAcik, { color: 'rgba(157,140,239,0.7)', marginTop: 4 }]}>{t.partnerCihaz1Not}</Text>
                   </View>
                 </View>
                 <View style={{ alignItems: 'center', paddingVertical: 4 }}><Text style={{ color: 'rgba(157,140,239,0.6)', fontSize: 20 }}>↕</Text></View>
                 <View style={pm.kuralKutu}>
                   <Text style={pm.kuralIkon}>🧑‍🍼</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={pm.kuralBaslik}>{lang === 'en' ? 'Device scanning the QR code' : 'QR kodunu tarayan cihaz'}</Text>
-                    <Text style={pm.kuralAcik}>{lang === 'en' ? 'Should be with parent — notifications come to this phone and Watch' : "Ebeveynin yanında olmalı — bildirim bu telefona ve Watch'a gelir"}</Text>
-                    <Text style={[pm.kuralAcik, { color: 'rgba(157,140,239,0.7)', marginTop: 4 }]}>{lang === 'en' ? '🔔 Sound notification on phone · ⌚ Shows on Watch' : "🔔 Telefona sesli bildirim gelir · ⌚ Watch'ta görünür"}</Text>
+                    <Text style={pm.kuralBaslik}>{t.partnerCihaz2Baslik}</Text>
+                    <Text style={pm.kuralAcik}>{t.partnerCihaz2Acik}</Text>
+                    <Text style={[pm.kuralAcik, { color: 'rgba(157,140,239,0.7)', marginTop: 4 }]}>{t.partnerCihaz2Not}</Text>
                   </View>
                 </View>
                 <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 10 }} />
-                <Text style={pm.aciklamaYazi}>{lang === 'en' ? 'Roles can switch — pair in both directions so both parents get notified simultaneously ⌚' : 'Roller değişebilir — eşleştirmeyi her iki yönde yapın, iki ebeveyn de aynı anda uyarılır ⌚'}</Text>
+                <Text style={pm.aciklamaYazi}>{t.partnerRolNot}</Text>
               </View>
-              <Text style={pm.bolum}>{lang === 'en' ? '🔗 PAIRING' : '🔗 EŞLEŞTİRME'}</Text>
+              <Text style={pm.bolum}>{t.partnerEslestirmeBolum}</Text>
               <View style={pm.grup}>
                 <TouchableOpacity style={pm.satir} onPress={() => setEkran('qr_goster')}>
-                  <View style={pm.satirSol}><Text style={pm.satirIkon}>📲</Text><View><Text style={pm.satirYazi}>{lang === 'en' ? 'Show My QR Code' : 'QR Kodumu Göster'}</Text><Text style={pm.satirAlt}>{lang === 'en' ? 'Other device scans this QR' : "Diğer cihaz bu QR'ı tarar"}</Text></View></View>
+                  <View style={pm.satirSol}><Text style={pm.satirIkon}>📲</Text><View><Text style={pm.satirYazi}>{t.partnerQRGosterBtn}</Text><Text style={pm.satirAlt}>{t.partnerQRGosterAlt}</Text></View></View>
                   <Text style={pm.ok}>›</Text>
                 </TouchableOpacity>
                 <View style={pm.ayrac} />
-                <TouchableOpacity style={[pm.satir, bagliCihazlar.length >= 2 && { opacity: 0.4 }]} onPress={() => bagliCihazlar.length < 2 && setEkran('qr_tara')} disabled={bagliCihazlar.length >= 2}>
-                  <View style={pm.satirSol}><Text style={pm.satirIkon}>📷</Text><View><Text style={pm.satirYazi}>{lang === 'en' ? 'Scan QR' : 'QR Tara'}</Text><Text style={pm.satirAlt}>{bagliCihazlar.length >= 2 ? (lang === 'en' ? 'Maximum 2 devices connected' : 'Maksimum 2 cihaz bağlandı') : (lang === 'en' ? 'Scan the other device QR code' : 'Diğer cihazın QR kodunu okut')}</Text></View></View>
+                <TouchableOpacity style={[pm.satir, bagliCihazlar.length >= 1 && { opacity: 0.4 }]} onPress={() => bagliCihazlar.length < 1 && setEkran('qr_tara')} disabled={bagliCihazlar.length >= 1}>
+                  <View style={pm.satirSol}><Text style={pm.satirIkon}>📷</Text><View><Text style={pm.satirYazi}>{t.partnerQRTaraBtn}</Text><Text style={pm.satirAlt}>{bagliCihazlar.length >= 1 ? t.partnerMaxCihaz : t.partnerQRTaraAlt}</Text></View></View>
                   <Text style={pm.ok}>›</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={pm.bolum}>{lang === 'en' ? `📱 PAIRED DEVICES (${bagliCihazlar.length}/2)` : `📱 BAĞLI CİHAZLAR (${bagliCihazlar.length}/2)`}</Text>
+              <Text style={pm.bolum}>{t.partnerBagliCihazBolum(bagliCihazlar.length)}</Text>
               {bagliCihazlar.length === 0 ? (
-                <View style={pm.bosKutu}><Text style={pm.bosYazi}>{lang === 'en' ? 'No paired devices yet' : 'Henüz bağlı cihaz yok'}</Text></View>
+                <View style={pm.bosKutu}><Text style={pm.bosYazi}>{t.partnerHenuzYok}</Text></View>
               ) : (
                 <View style={pm.grup}>
                   {bagliCihazlar.map((token, i) => (
@@ -246,32 +295,31 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
                       <View style={pm.cihazSatir}>
                         <View style={pm.satirSol}>
                           <Text style={pm.satirIkon}>📱</Text>
-                          <View style={{ flex: 1 }}><Text style={pm.satirYazi}>{lang === 'en' ? `Device ${i + 1} ⌚` : `Cihaz ${i + 1} ⌚`}</Text><Text style={pm.bagliYazi} numberOfLines={1} ellipsizeMode="middle">✅ {token}</Text></View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={pm.satirYazi}>{t.partnerCihazAdi}</Text>
+                            <Text style={pm.bagliYazi} numberOfLines={1} ellipsizeMode="middle">✅ {token}</Text>
+                          </View>
                         </View>
-                        <TouchableOpacity onPress={() => handleRemove(token)} style={pm.kaldirBtn}><Text style={pm.kaldirBtnYazi}>{lang === 'en' ? 'Remove' : 'Kaldır'}</Text></TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleRemove(token)} style={pm.kaldirBtn}><Text style={pm.kaldirBtnYazi}>{t.partnerKaldir}</Text></TouchableOpacity>
                       </View>
                     </View>
                   ))}
                 </View>
               )}
-              <View style={[pm.durumBox, bagliCihazlar.length === 2 ? pm.durumAktif : bagliCihazlar.length === 1 ? pm.durumSari : pm.durumPasif]}>
+              <View style={[pm.durumBox, bagliCihazlar.length === 1 ? pm.durumAktif : pm.durumPasif]}>
                 <Text style={pm.durumYazi}>
-                  {bagliCihazlar.length === 2
-                    ? (lang === 'en' ? '🟢 Two devices paired — Both Watches get notified' : "🟢 İki cihaz bağlı — Her iki Watch'a da bildirim gider")
-                    : bagliCihazlar.length === 1
-                      ? (lang === 'en' ? '🟡 One device paired — Add the second device too' : '🟡 Bir cihaz bağlı — İkinci cihazı da ekleyin')
-                      : (lang === 'en' ? '⚪ No pairing yet' : '⚪ Henüz eşleşme yok')}
+                  {bagliCihazlar.length === 1 ? t.partnerDurumAktif : t.partnerDurumPasif}
                 </Text>
               </View>
               {myToken && !myToken.startsWith('ExponentPushToken[') && (
                 <View style={pm.notBox}>
-                  <Text style={pm.notYazi}>{lang === 'en' ? '⚠️ Notifications will be active in production build' : "⚠️ Bildirimler production build'de aktif olacak"}</Text>
-                  <Text style={[pm.notYazi, { marginTop: 4, opacity: 0.7 }]}>{lang === 'en' ? "You're in Expo Go. Notifications become fully active after store upload." : "Şu an Expo Go'dasınız. Store'a yüklendiğinde bildirimler tam aktif olur."}</Text>
+                  <Text style={pm.notYazi}>⚠️ {t.bildirimProductionUyari}</Text>
+                  <Text style={[pm.notYazi, { marginTop: 4, opacity: 0.7 }]}>{t.bildirimProductionAlt}</Text>
                 </View>
               )}
             </ScrollView>
           )}
-          <TouchableOpacity style={pm.kapatBtn} onPress={onClose}><Text style={pm.kapatBtnYazi}>{lang === 'en' ? 'Close' : 'Kapat'}</Text></TouchableOpacity>
+          <TouchableOpacity style={pm.kapatBtn} onPress={onClose}><Text style={pm.kapatBtnYazi}>{t.kapat}</Text></TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -312,6 +360,8 @@ const pm = StyleSheet.create({
   kapatBtn:       { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12 },
   kapatBtnYazi:   { color: 'rgba(255,255,255,0.6)', fontSize: 15 },
   qrAcik:         { color: 'rgba(255,255,255,0.45)', fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  uyariBox:       { backgroundColor: 'rgba(251,146,60,0.1)', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: 'rgba(251,146,60,0.3)', alignItems: 'center', gap: 12, width: '100%' },
+  uyariYazi:      { color: 'rgba(251,200,100,0.9)', fontSize: 14, textAlign: 'center', lineHeight: 21 },
   productionBox:  { alignItems: 'center', gap: 12, padding: 24, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', width: '100%' },
   productionYazi: { color: 'white', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
   productionAlt:  { color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', lineHeight: 20 },

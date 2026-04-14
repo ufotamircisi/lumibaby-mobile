@@ -55,7 +55,9 @@ export function usePremium() {
     const bugun = bugunKey();
 
     // RC entitlement check
-    const isPremium = await rcIsPremium();
+    const rcPremium      = await rcIsPremium();
+    const partnerPremium = (await AsyncStorage.getItem('partner_premium')) === 'true';
+    const isPremium      = rcPremium || partnerPremium;
 
     // Trial kontrolü
     let trialStart = await AsyncStorage.getItem(KEYS.TRIAL_START);
