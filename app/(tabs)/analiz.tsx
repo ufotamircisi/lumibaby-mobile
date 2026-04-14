@@ -76,18 +76,58 @@ function son7GunHazirla(raporlar: GeceRaporu[], gunIsimleri: string[]) {
   return gunler;
 }
 
-const sabitNinniListesi: SesTip[] = [
-  { id: 1, name: 'Dandini Dastana',   icon: '⭐', file: require('../../assets/sounds/dandini_dastana_tr.mp3')          },
-  { id: 2, name: 'Uyu Yavrum',        icon: '🌙', file: require('../../assets/sounds/uyu_yavrum_tr.mp3')               },
-  { id: 3, name: 'Uyusun da Büyüsün', icon: '🌟', file: require('../../assets/sounds/uyusun_da_buyusun_ninni_tr.mp3')  },
-  { id: 4, name: 'Müzik Kutusu',      icon: '🎵', file: require('../../assets/sounds/muzik_kutusu_tr.mp3')             },
+const sabitNinniListesiTR: SesTip[] = [
+  { id:  1, name: 'Dandini Dastana',        icon: '⭐', file: require('../../assets/sounds/dandini_dastana_tr.mp3')          },
+  { id:  2, name: 'Uyusun da Büyüsün',      icon: '🌟', file: require('../../assets/sounds/uyusun_da_buyusun_ninni_tr.mp3')  },
+  { id:  3, name: 'Güzel Annem',            icon: '💜', file: require('../../assets/sounds/guzel_annem_tr.mp3')              },
+  { id:  4, name: 'Yağmur Ninnisi',         icon: '🌧️', file: require('../../assets/sounds/yagmur_ninnisi_tr.mp3')           },
+  { id:  5, name: 'Uyu Yavrum',             icon: '🌙', file: require('../../assets/sounds/uyu_yavrum_tr.mp3')               },
+  { id:  6, name: 'Müzik Kutusu 1',         icon: '🎵', file: require('../../assets/sounds/muzik_kutusu_tr.mp3')             },
+  { id:  7, name: 'Müzik Kutusu 2',         icon: '🎶', file: require('../../assets/sounds/muzik_kutusu_2_tr.mp3')           },
+  { id:  8, name: 'Müzik Kutusu 3',         icon: '🎼', file: require('../../assets/sounds/muzik_kutusu_3_tr.mp3')           },
+  { id:  9, name: 'Yumuşak Piyano Ninnisi', icon: '🎹', file: require('../../assets/sounds/yumusak_piyano_ninnisi_tr.mp3')   },
+  { id: 10, name: 'Enstrümantal Ninni',      icon: '🎻', file: require('../../assets/sounds/enstrumantal_ninni_tr.mp3')       },
+];
+const sabitNinniListesiEN: SesTip[] = [
+  { id:  1, name: 'Little Star',           icon: '⭐', file: require('../../assets/sounds/star_in_the_sky_en.mp3')        },
+  { id:  2, name: 'Hush Now Baby',         icon: '🤫', file: require('../../assets/sounds/hush_now_baby_en.mp3')          },
+  { id:  3, name: 'Rock-a-Bye',            icon: '🍃', file: require('../../assets/sounds/rock_a_bye_en.mp3')             },
+  { id:  4, name: 'Sleep Baby',            icon: '😴', file: require('../../assets/sounds/sleep_baby_en.mp3')             },
+  { id:  5, name: 'A Candle',              icon: '🕯️', file: require('../../assets/sounds/a_candle_en.mp3')              },
+  { id:  6, name: 'Music Box 1',           icon: '🎵', file: require('../../assets/sounds/music_box_en.mp3')              },
+  { id:  7, name: 'Music Box 2',           icon: '🎶', file: require('../../assets/sounds/music_box_2_en.mp3')            },
+  { id:  8, name: 'Music Box 3',           icon: '🎼', file: require('../../assets/sounds/music_box_3_en.mp3')            },
+  { id:  9, name: 'Soft Piano Lullaby',    icon: '🎹', file: require('../../assets/sounds/soft_piano_lullaby_en.mp3')     },
+  { id: 10, name: 'Instrumental Lullaby',  icon: '🎻', file: require('../../assets/sounds/instrumental_lullaby_en.mp3')   },
 ];
 
-const sabitKolikListesi: SesTip[] = [
-  { id: 1, name: 'Beyaz Gürültü',        icon: '🔊', file: require('../../assets/sounds/whitenoise.mp3') },
-  { id: 2, name: 'Yağmur Sesi',          icon: '🌧️', file: require('../../assets/sounds/rain.mp3')       },
-  { id: 3, name: 'Saç Kurutma Makinesi', icon: '💨', file: require('../../assets/sounds/hairdryer.mp3')  },
-  { id: 4, name: 'Fan Sesi',             icon: '🌬️', file: require('../../assets/sounds/ac.mp3')         },
+const sabitKolikListesiTR: SesTip[] = [
+  { id:  1, name: 'Saç Kurutma Makinesi', icon: '💨', file: require('../../assets/sounds/hairdryer.mp3')       },
+  { id:  2, name: 'Elektrikli Süpürge',   icon: '🌀', file: require('../../assets/sounds/vacuum.mp3')          },
+  { id:  3, name: 'Piş Piş',              icon: '🫧', file: require('../../assets/sounds/pispis.mp3')          },
+  { id:  4, name: 'Fan Sesi',             icon: '🌬️', file: require('../../assets/sounds/ac.mp3')             },
+  { id:  5, name: 'Beyaz Gürültü',        icon: '🔊', file: require('../../assets/sounds/whitenoise.mp3')      },
+  { id:  6, name: 'Kedi Mırıltısı',       icon: '🐱', file: require('../../assets/sounds/kedi_miriltisi.mp3')  },
+  { id:  7, name: 'Kalp Atışı',           icon: '💗', file: require('../../assets/sounds/heart.mp3')           },
+  { id:  8, name: 'Nefes Egzersizi',      icon: '🧘', file: require('../../assets/sounds/nefes_egzersizi.mp3') },
+  { id:  9, name: 'Yağmur Sesi',          icon: '🌧️', file: require('../../assets/sounds/rain.mp3')           },
+  { id: 10, name: 'Deniz Dalgaları',      icon: '🌊', file: require('../../assets/sounds/waves.mp3')           },
+  { id: 11, name: 'Orman Sesi',           icon: '🌲', file: require('../../assets/sounds/forest.mp3')          },
+  { id: 12, name: 'Şelale',               icon: '💧', file: require('../../assets/sounds/stream.mp3')          },
+];
+const sabitKolikListesiEN: SesTip[] = [
+  { id:  1, name: 'Hair Dryer',          icon: '💨', file: require('../../assets/sounds/hairdryer.mp3')       },
+  { id:  2, name: 'Vacuum Cleaner',      icon: '🌀', file: require('../../assets/sounds/vacuum.mp3')          },
+  { id:  3, name: 'Shushing',            icon: '🫧', file: require('../../assets/sounds/pispis.mp3')          },
+  { id:  4, name: 'Fan Sound',           icon: '🌬️', file: require('../../assets/sounds/ac.mp3')             },
+  { id:  5, name: 'White Noise',         icon: '🔊', file: require('../../assets/sounds/whitenoise.mp3')      },
+  { id:  6, name: 'Cat Purring',         icon: '🐱', file: require('../../assets/sounds/kedi_miriltisi.mp3')  },
+  { id:  7, name: 'Heartbeat',           icon: '💗', file: require('../../assets/sounds/heart.mp3')           },
+  { id:  8, name: 'Breathing Exercise',  icon: '🧘', file: require('../../assets/sounds/nefes_egzersizi.mp3') },
+  { id:  9, name: 'Rain Sound',          icon: '🌧️', file: require('../../assets/sounds/rain.mp3')           },
+  { id: 10, name: 'Ocean Waves',         icon: '🌊', file: require('../../assets/sounds/waves.mp3')           },
+  { id: 11, name: 'Forest Sounds',       icon: '🌲', file: require('../../assets/sounds/forest.mp3')          },
+  { id: 12, name: 'Waterfall',           icon: '💧', file: require('../../assets/sounds/stream.mp3')          },
 ];
 
 export default function Analiz() {
@@ -575,9 +615,11 @@ export default function Analiz() {
   const haftaAnahtarlari = Object.keys(haftalikGruplar);
   const son7Gun          = son7GunHazirla(geceRaporlari, t.grafikGunler);
 
+  const sabitNinniler = lang === 'en' ? sabitNinniListesiEN : sabitNinniListesiTR;
+  const sabitKolik    = lang === 'en' ? sabitKolikListesiEN : sabitKolikListesiTR;
   const sesList = modalTip === 'aglama'
-    ? [...(anneNinniUri  ? [{ id: 999, name: lang === 'en' ? "Mom's Lullaby 👑" : 'Anne Sesi Ninnisi 👑', icon: '💜', file: { uri: anneNinniUri  } }] : []), ...sabitNinniListesi]
-    : [...(annePisPisUri ? [{ id: 998, name: lang === 'en' ? "Mom's Shush 👑"    : 'Anne Sesi Pış Pış 👑',  icon: '💜', file: { uri: annePisPisUri } }] : []), ...sabitKolikListesi];
+    ? [...(anneNinniUri  ? [{ id: 999, name: lang === 'en' ? "Mom's Lullaby 👑" : 'Anne Sesi Ninnisi 👑', icon: '💜', file: { uri: anneNinniUri  } }] : []), ...sabitNinniler]
+    : [...(annePisPisUri ? [{ id: 998, name: lang === 'en' ? "Mom's Shush 👑"    : 'Anne Sesi Pış Pış 👑',  icon: '💜', file: { uri: annePisPisUri } }] : []), ...sabitKolik];
 
   const oneriGetir = (sonuc: AnalizSonuc) => {
     const en = (['aclik', 'gaz', 'uyku', 'bez', 'diger'] as const).reduce((a, b) => sonuc[a] >= sonuc[b] ? a : b);
