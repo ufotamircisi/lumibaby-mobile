@@ -7,14 +7,14 @@ const RC_API_KEY = 'test_NEQGTCZprAVYcQdZUYZcAHvMdEd';
 
 export default function RootLayout() {
   useEffect(() => {
-    // Initialize AdMob (native, EAS Build only — no-op in Expo Go)
-    initAdMob().catch(() => {});
+    // AdMob — EAS Build only; getAds() returns null in Expo Go → no-op
+    try { initAdMob().catch(() => {}); } catch {}
 
-    // Initialize RevenueCat — only available in EAS Build (native module), not Expo Go
+    // RevenueCat — EAS Build only; native module absent in Expo Go → skip
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const Purchases = require('react-native-purchases').default;
-      Purchases.configure({ apiKey: RC_API_KEY });
+      if (Purchases?.configure) Purchases.configure({ apiKey: RC_API_KEY });
     } catch {
       // Native module not linked (Expo Go) — skip
     }

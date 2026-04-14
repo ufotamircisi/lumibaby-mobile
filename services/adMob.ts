@@ -30,7 +30,14 @@ function getAdIds() {
 }
 
 function getAds() {
-  try { return require('react-native-google-mobile-ads'); } catch { return null; }
+  try {
+    const mod = require('react-native-google-mobile-ads');
+    // Native module gerçekten yüklenmiş mi kontrol et
+    if (!mod?.MobileAds) return null;
+    return mod;
+  } catch {
+    return null;
+  }
 }
 
 // ── Banner ────────────────────────────────────────────────────────────────────
@@ -45,13 +52,18 @@ let rewardedLoaded       = false;
 function loadRewarded() {
   const ads = getAds();
   if (!ads) return;
-  const { RewardedAd, RewardedAdEventType, AdEventType } = ads;
-  rewardedAd = RewardedAd.createForAdRequest(getAdIds().rewarded, {
-    requestNonPersonalizedAdsOnly: true,
-  });
-  rewardedAd.addAdEventListener(RewardedAdEventType.LOADED, () => { rewardedLoaded = true; });
-  rewardedAd.addAdEventListener(AdEventType.ERROR,          () => { rewardedLoaded = false; });
-  rewardedAd.load();
+  try {
+    const { RewardedAd, RewardedAdEventType, AdEventType } = ads;
+    rewardedAd = RewardedAd.createForAdRequest(getAdIds().rewarded, {
+      requestNonPersonalizedAdsOnly: true,
+    });
+    rewardedAd.addAdEventListener(RewardedAdEventType.LOADED, () => { rewardedLoaded = true; });
+    rewardedAd.addAdEventListener(AdEventType.ERROR,          () => { rewardedLoaded = false; });
+    rewardedAd.load();
+  } catch {
+    rewardedAd    = null;
+    rewardedLoaded = false;
+  }
 }
 
 export type RewardResult = 'earned' | 'skipped' | 'unavailable';
@@ -94,14 +106,19 @@ let interstitialLoaded   = false;
 function loadInterstitial() {
   const ads = getAds();
   if (!ads) return;
-  const { InterstitialAd, AdEventType } = ads;
-  interstitialAd = InterstitialAd.createForAdRequest(getAdIds().interstitial, {
-    requestNonPersonalizedAdsOnly: true,
-  });
-  interstitialAd.addAdEventListener(AdEventType.LOADED, () => { interstitialLoaded = true; });
-  interstitialAd.addAdEventListener(AdEventType.CLOSED, () => { interstitialLoaded = false; loadInterstitial(); });
-  interstitialAd.addAdEventListener(AdEventType.ERROR,  () => { interstitialLoaded = false; });
-  interstitialAd.load();
+  try {
+    const { InterstitialAd, AdEventType } = ads;
+    interstitialAd = InterstitialAd.createForAdRequest(getAdIds().interstitial, {
+      requestNonPersonalizedAdsOnly: true,
+    });
+    interstitialAd.addAdEventListener(AdEventType.LOADED, () => { interstitialLoaded = true; });
+    interstitialAd.addAdEventListener(AdEventType.CLOSED, () => { interstitialLoaded = false; loadInterstitial(); });
+    interstitialAd.addAdEventListener(AdEventType.ERROR,  () => { interstitialLoaded = false; });
+    interstitialAd.load();
+  } catch {
+    interstitialAd    = null;
+    interstitialLoaded = false;
+  }
 }
 
 async function nextThreshold(): Promise<number> {
@@ -131,28 +148,33 @@ export async function showInterstitialIfReady(detectorActive: boolean): Promise<
 
 // ── Başlatma (app/_layout.tsx'te bir kez çağrılır) ───────────────────────────
 export async function initAdMob(): Promise<void> {
+  // Expo Go'da native modül yok — sessizce atla
   const ads = getAds();
   if (!ads) return;
 
   try {
     const { MaxAdContentRating } = ads;
     await ads.MobileAds().setRequestConfiguration({
-      maxAdContentRating:          MaxAdContentRating.PG,
+      maxAdContentRating:           MaxAdContentRating.PG,
       tagForChildDirectedTreatment: false,
       tagForUnderAgeOfConsent:      false,
     });
     await ads.MobileAds().initialize();
+
+    loadRewarded();
+    loadInterstitial();
+  } catch {
+    // Native modül var ama başlatma başarısız — crash etme, reklamları atla
+    return;
+  }
+
+  // Uygulama açılış sayacını artır (reklam bağımsız, AsyncStorage güvenli)
+  try {
+    const val   = await AsyncStorage.getItem(KEY_OPEN_COUNT);
+    const count = parseInt(val ?? '0') + 1;
+    await AsyncStorage.setItem(KEY_OPEN_COUNT, String(count));
+
+    const existing = await AsyncStorage.getItem(KEY_THRESHOLD);
+    if (!existing) await nextThreshold();
   } catch {}
-
-  loadRewarded();
-  loadInterstitial();
-
-  // Uygulama açılış sayacını artır
-  const val   = await AsyncStorage.getItem(KEY_OPEN_COUNT);
-  const count = parseInt(val ?? '0') + 1;
-  await AsyncStorage.setItem(KEY_OPEN_COUNT, String(count));
-
-  // İlk çalışmada eşiği belirle
-  const existing = await AsyncStorage.getItem(KEY_THRESHOLD);
-  if (!existing) await nextThreshold();
 }
