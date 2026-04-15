@@ -4,6 +4,7 @@ import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import { showInterstitialIfReady } from '@/services/adMob';
 import * as audioManager from '@/services/audioManager';
+import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
@@ -344,19 +345,59 @@ export default function Analiz() {
         geriSayimRef.current = null; setGeriSayim(null);
         try {
           setKayitYapiliyor(false); setAnalizYapiliyor(true);
-          if (analizRecordingRef.current) { await analizRecordingRef.current.stopAndUnloadAsync(); analizRecordingRef.current = null; }
-          const prompt = lang === 'en'
-            ? 'You are a baby cry analysis expert. Estimate percentages for each category (total must be 100). Reply ONLY with JSON: {"aclik": 0, "gaz": 0, "uyku": 0, "bez": 0, "diger": 0}'
-            : 'Sen bir bebek ağlama analiz uzmanısın. Kategoriler için yüzde tahmin et (toplam 100). Sadece JSON: {"aclik": 0, "gaz": 0, "uyku": 0, "bez": 0, "diger": 0}';
+
+          // URI'yi durdur öncesi al — dosya silinmez, native kaynak serbest bırakılır
+          const recordingUri = analizRecordingRef.current?.getURI() ?? null;
+          if (analizRecordingRef.current) {
+            await analizRecordingRef.current.stopAndUnloadAsync();
+            analizRecordingRef.current = null;
+          }
+          if (!recordingUri) throw new Error('Kayıt URI bulunamadı');
+
+          // Ses dosyasını base64'e çevir
+          const base64Audio = await FileSystem.readAsStringAsync(recordingUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          // Geçici dosyayı temizle
+          FileSystem.deleteAsync(recordingUri, { idempotent: true }).catch(() => {});
+
+          const promptText = lang === 'en'
+            ? 'Analyze this baby cry audio. Estimate percentages for each cause (must total 100). Reply ONLY with JSON: {"aclik": 0, "gaz": 0, "uyku": 0, "bez": 0, "diger": 0}'
+            : 'Bu bebek ağlama sesini analiz et. Her neden için yüzde tahmin et (toplam 100 olmalı). Sadece JSON döndür: {"aclik": 0, "gaz": 0, "uyku": 0, "bez": 0, "diger": 0}';
 
           const claudeFetch = async (): Promise<AnalizSonuc> => {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const timeoutId = setTimeout(() => controller.abort(), 20000);
             try {
               const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': CLAUDE_API_KEY || '', 'anthropic-version': '2023-06-01' },
-                body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 200, messages: [{ role: 'user', content: prompt }] }),
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': CLAUDE_API_KEY || '',
+                  'anthropic-version': '2023-06-01',
+                  'anthropic-beta': 'audio-1',
+                },
+                body: JSON.stringify({
+                  model: 'claude-haiku-4-5-20251001',
+                  max_tokens: 200,
+                  messages: [{
+                    role: 'user',
+                    content: [
+                      {
+                        type: 'document',
+                        source: {
+                          type: 'base64',
+                          media_type: 'audio/mp4',
+                          data: base64Audio,
+                        },
+                      },
+                      {
+                        type: 'text',
+                        text: promptText,
+                      },
+                    ],
+                  }],
+                }),
                 signal: controller.signal,
               });
               clearTimeout(timeoutId);
