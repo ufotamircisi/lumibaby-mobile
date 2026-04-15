@@ -3,6 +3,7 @@ import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import { showInterstitialIfReady } from '@/services/adMob';
+import * as audioManager from '@/services/audioManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
@@ -178,7 +179,6 @@ export default function Analiz() {
 
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
   const detektorTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
-  const soundRef           = useRef<Audio.Sound | null>(null);
   const dinlemeRef         = useRef(false);
   const caliyorRef         = useRef(false);
   const geceBaslangicRef   = useRef<number>(0);
@@ -196,6 +196,17 @@ export default function Analiz() {
   const pollIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { return () => { herSeyiDurdur(); }; }, []);
+
+  // Başka bir tab sesi devraldığında dedektör çalma durumunu sıfırla
+  useEffect(() => {
+    return audioManager.subscribe((id, tab) => {
+      if (tab !== 'analiz' && caliyorRef.current) {
+        caliyorRef.current = false;
+        setCaliniyor(false);
+        probeTimerTemizle();
+      }
+    });
+  }, []);
 
   useFocusEffect(useCallback(() => {
     scrollRef.current?.scrollTo({ y: 0, animated: false });
@@ -301,7 +312,7 @@ export default function Analiz() {
     if (detektorTimerRef.current) clearInterval(detektorTimerRef.current);
     probeTimerTemizle();
     await kaydiDurdur();
-    if (soundRef.current) { try { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); } catch (_) {} soundRef.current = null; }
+    if (audioManager.getState().tab === 'analiz') await audioManager.stop();
   };
 
   const analizBaslat = async () => {
@@ -466,7 +477,7 @@ export default function Analiz() {
     setSeciliDetektor(tip); aktifSesRef.current = ses; aktifDedektorRef.current = tip; aglamaCountRef.current = 0;
     if (dinlemeRef.current) {
       dinlemeRef.current = false; caliyorRef.current = false; probeTimerTemizle(); await kaydiDurdur();
-      if (soundRef.current) { try { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); } catch (_) {} soundRef.current = null; }
+      if (audioManager.getState().tab === 'analiz') await audioManager.stop();
       setCaliniyor(false); setDinleniyor(false);
     }
     setTimeout(() => dinlemeBaslat(ses), 400);
@@ -535,7 +546,8 @@ export default function Analiz() {
     probeTimerTemizle();
     probeTimerRef.current = setTimeout(async () => {
       if (!dinlemeRef.current || !caliyorRef.current) return;
-      if (soundRef.current) { try { await soundRef.current.setVolumeAsync(0); } catch (_) {} }
+      // Sessizlik ölçümü için sesi kıs
+      await audioManager.setActiveVolume(0);
       let dbOrnekleri: number[] = [];
       let probeRecording: Audio.Recording | null = null;
       try {
@@ -551,12 +563,13 @@ export default function Analiz() {
       const ortDb = dbOrnekleri.length > 0 ? dbOrnekleri.reduce((a, b) => a + b, 0) / dbOrnekleri.length : -160;
       if (ortDb < -30) {
         sendAlertToAll('silence').catch(() => {});
-        if (soundRef.current) { try { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); } catch (_) {} soundRef.current = null; }
+        if (audioManager.getState().tab === 'analiz') await audioManager.stop();
         caliyorRef.current = false; setCaliniyor(false); aglamaCountRef.current = 0;
         dinlemeRef.current = false; setDinleniyor(false);
         setTimeout(() => dinlemeBaslat(ses), 300);
       } else {
-        if (soundRef.current) { try { await soundRef.current.setVolumeAsync(1.0); } catch (_) {} }
+        // Bebek hâlâ ağlıyor — sesi aç, probe'u tekrarla
+        if (audioManager.getState().tab === 'analiz') await audioManager.setActiveVolume(1.0);
         sessizlikProbeBaslat(ses);
       }
     }, 60000);
@@ -570,11 +583,8 @@ export default function Analiz() {
     const bildirimTip = aktifDedektorRef.current === 'kolik' ? 'colic' : 'crying';
     sendAlertToAll(bildirimTip).catch(() => {});
     try {
-      await kaydiDurdur();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
-      if (soundRef.current) { try { await soundRef.current.unloadAsync(); } catch (_) {} soundRef.current = null; }
-      const { sound } = await Audio.Sound.createAsync(ses.file, { shouldPlay: true, isLooping: true, volume: 1.0 });
-      soundRef.current = sound;
+      await kaydiDurdur(); // mikrofon kaydını durdur — playback ile çakışmasın
+      await audioManager.play(ses.file, ses.id, 'analiz', { loop: true });
       sessizlikProbeBaslat(ses);
     } catch (e) { caliyorRef.current = false; setCaliniyor(false); }
   };

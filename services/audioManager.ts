@@ -2,7 +2,7 @@
 // Global singleton — one active audio across all tabs
 import { Audio } from 'expo-av';
 
-export type AudioTab = 'ninniler' | 'kolik' | 'hikayeler';
+export type AudioTab = 'ninniler' | 'kolik' | 'hikayeler' | 'analiz';
 export type PlayOptions = { loop?: boolean; onFinish?: () => void };
 type Listener = (id: number | null, tab: AudioTab | null) => void;
 
@@ -23,6 +23,12 @@ export function subscribe(listener: Listener): () => void {
 
 export function getState(): { id: number | null; tab: AudioTab | null } {
   return { id: activeId, tab: activeTab };
+}
+
+export async function setActiveVolume(volume: number): Promise<void> {
+  if (activeSound) {
+    try { await activeSound.setVolumeAsync(volume); } catch {}
+  }
 }
 
 export async function stop(): Promise<void> {
