@@ -219,7 +219,8 @@ export default function Analiz() {
   const gecmisOffsetRef     = useRef<number>(0);
   const grafikOffsetRef     = useRef<number>(0);
   const bildirimIdRef       = useRef<string | null>(null);
-  const { height: screenHeight } = useWindowDimensions();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const tlBarW = screenWidth - 116; // ScrollView pad 40 + modal pad 48 + kutu pad 28
 
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
   const detektorTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1253,6 +1254,18 @@ export default function Analiz() {
                       <Text style={styles.detayKilitYazi}>{t.detayKilit}</Text>
                       <Text style={styles.detayKilitBtn}>{t.arsivKilitAlt}</Text>
                     </TouchableOpacity>
+                    {/* Timeline teaser — üstü kilitli önizleme */}
+                    <View style={[styles.timelineKutu, { opacity: 0.45 }]}>
+                      <Text style={styles.timelineBaslik}>{t.timelineBaslik}</Text>
+                      <View style={[styles.timelineBar, { height: 40 }]}>
+                        <View style={{ position: 'absolute', left: tlBarW * 0.18, width: tlBarW * 0.58, height: 40, backgroundColor: '#7F77DD', borderRadius: 8 }} />
+                      </View>
+                      <View style={styles.timelineEtiketler}>
+                        <Text style={styles.timelineEtiket}>19:00</Text>
+                        <Text style={styles.timelineEtiket}>01:00</Text>
+                        <Text style={styles.timelineEtiket}>07:00</Text>
+                      </View>
+                    </View>
                   </View>
                 ) : (
                   <View>
@@ -1327,24 +1340,64 @@ export default function Analiz() {
                     {/* TİMELINE */}
                     {(() => {
                       const baslangic = sonRapor.baslangic;
-                      const bitis = sonRapor.bitis;
-                      const toplamMs = bitis - baslangic;
-                      const saatBaslangic = new Date(baslangic).getHours();
-                      const saatBitis    = new Date(bitis).getHours();
-                      const barWidth = 280;
-                      const toplamUykuOran = sonRapor.toplamUyku / (toplamMs / 1000);
+                      const bitis     = sonRapor.bitis;
+                      const startHour = new Date(baslangic).getHours();
+                      const isGece    = startHour >= 19 || startHour < 10;
+
+                      let windowStart: number;
+                      let windowEnd:   number;
+                      if (isGece) {
+                        const d = new Date(baslangic);
+                        d.setHours(19, 0, 0, 0);
+                        if (startHour < 10) d.setDate(d.getDate() - 1);
+                        windowStart = d.getTime();
+                        const e = new Date(windowStart);
+                        e.setDate(e.getDate() + 1);
+                        e.setHours(7, 0, 0, 0);
+                        windowEnd = e.getTime();
+                      } else {
+                        const rawStart   = baslangic - 3 * 3600000;
+                        const rawEnd     = bitis     + 3 * 3600000;
+                        const dur        = rawEnd - rawStart;
+                        const clampedDur = Math.max(4 * 3600000, Math.min(8 * 3600000, dur));
+                        const center     = (baslangic + bitis) / 2;
+                        windowStart = center - clampedDur / 2;
+                        windowEnd   = center + clampedDur / 2;
+                      }
+
+                      const windowDur = windowEnd - windowStart;
+                      const fmtLabel  = (ts: number) => {
+                        const d = new Date(ts);
+                        return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+                      };
+
+                      const sleepLeft  = Math.max(0, ((baslangic - windowStart) / windowDur) * tlBarW);
+                      const sleepRight = Math.min(tlBarW, ((bitis - windowStart) / windowDur) * tlBarW);
+                      const sleepW     = Math.max(0, sleepRight - sleepLeft);
+                      const dotCount   = Math.min(sonRapor.aglamaSayisi, 8);
+
                       return (
                         <View style={styles.timelineKutu}>
                           <Text style={styles.timelineBaslik}>{t.timelineBaslik}</Text>
-                          <View style={styles.timelineBar}>
-                            <View style={[styles.timelineUyku, { width: Math.min(barWidth, toplamUykuOran * barWidth) }]} />
+                          <View style={[styles.timelineBar, { height: 40 }]}>
+                            {sleepW > 0 && (
+                              <View style={{ position: 'absolute', left: sleepLeft, width: sleepW, height: 40, backgroundColor: '#7F77DD', borderRadius: 8 }}>
+                                {dotCount > 0 && Array.from({ length: dotCount }).map((_, i) => (
+                                  <View key={i} style={{ position: 'absolute', left: sleepW * (i + 1) / (dotCount + 1) - 4, top: 14, width: 8, height: 8, borderRadius: 4, backgroundColor: '#f87171', opacity: 0.9 }} />
+                                ))}
+                              </View>
+                            )}
                           </View>
                           <View style={styles.timelineEtiketler}>
-                            <Text style={styles.timelineEtiket}>{saatBaslangic.toString().padStart(2, '0') + ':00'}</Text>
-                            <Text style={styles.timelineEtiket}>{saatBitis.toString().padStart(2, '0') + ':00'}</Text>
+                            <Text style={styles.timelineEtiket}>{fmtLabel(windowStart)}</Text>
+                            <Text style={styles.timelineEtiket}>{fmtLabel(windowStart + windowDur / 2)}</Text>
+                            <Text style={styles.timelineEtiket}>{fmtLabel(windowEnd)}</Text>
                           </View>
                           <View style={styles.timelineLegend}>
-                            <View style={styles.timelineLegendRow}><View style={[styles.timelineDot, { backgroundColor: '#9d8cef' }]} /><Text style={styles.timelineLegendYazi}>{t.timelineUyku}</Text></View>
+                            <View style={styles.timelineLegendRow}><View style={[styles.timelineDot, { backgroundColor: '#7F77DD' }]} /><Text style={styles.timelineLegendYazi}>{t.timelineUyku}</Text></View>
+                            {sonRapor.aglamaSayisi > 0 && (
+                              <View style={styles.timelineLegendRow}><View style={[styles.timelineDot, { backgroundColor: '#f87171' }]} /><Text style={styles.timelineLegendYazi}>{t.timelineAglama}</Text></View>
+                            )}
                           </View>
                         </View>
                       );
@@ -1813,8 +1866,8 @@ const styles = StyleSheet.create({
   // Timeline (rapor modal içi)
   timelineKutu:           { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 14, marginTop: 10, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', gap: 8 },
   timelineBaslik:         { color: '#b8a8f8', fontSize: 14, fontWeight: 'bold' },
-  timelineBar:            { height: 16, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' },
-  timelineUyku:           { height: 16, backgroundColor: '#9d8cef', borderRadius: 8 },
+  timelineBar:            { height: 40, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' },
+  timelineUyku:           { height: 40, backgroundColor: '#7F77DD', borderRadius: 8 },
   timelineEtiketler:      { flexDirection: 'row', justifyContent: 'space-between' },
   timelineEtiket:         { color: 'rgba(255,255,255,0.35)', fontSize: 10 },
   timelineLegend:         { flexDirection: 'row', gap: 12, marginTop: 4 },
