@@ -4,6 +4,7 @@ import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import { showInterstitialIfReady } from '@/services/adMob';
 import * as audioManager from '@/services/audioManager';
+import { CONFIDENCE_THRESHOLD, CryDetectionEngine, type SensitivityLevel } from '@/services/cryDetectionEngine';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
@@ -59,9 +60,8 @@ type GeceRaporu = {
   uykuKalitesi: number; puanDetay: { baslik: string; puan: number; pozitif: boolean }[];
 };
 
-const BAR_MAX_HEIGHT    = 80;
-const AGLAMA_ESIGI_DB   = -20;
-const AGLAMA_COUNT_ESIGI = 5;
+const BAR_MAX_HEIGHT = 80;
+const HASSASIYET_KEY = 'lumibaby_hassasiyet';
 type DedektorTip = 'aglama' | 'kolik';
 
 function kaliteRenk(puan: number): string {
@@ -188,6 +188,9 @@ export default function Analiz() {
   const [dinleniyor, setDinleniyor]         = useState(false);
   const [kalibrasyon, setKalibrasyon]       = useState(false);
   const [caliniyor, setCaliniyor]           = useState(false);
+  const [confidenceScore, setConfidenceScore] = useState(0);
+  const [cooldownKalan, setCooldownKalan]   = useState(0);
+  const [hassasiyet, setHassasiyet]         = useState<SensitivityLevel>('balanced');
   const [aglamaSayisi, setAglamaSayisi]     = useState(0);
   const [raporModal, setRaporModal]         = useState(false);
   const [sonRapor, setSonRapor]             = useState<GeceRaporu | null>(null);
@@ -215,7 +218,6 @@ export default function Analiz() {
   const gecmisOffsetRef     = useRef<number>(0);
   const grafikOffsetRef     = useRef<number>(0);
   const bildirimIdRef       = useRef<string | null>(null);
-  const aglamaEsigiRef      = useRef<number>(AGLAMA_ESIGI_DB);
   const { height: screenHeight } = useWindowDimensions();
 
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -229,10 +231,12 @@ export default function Analiz() {
   const aktifDedektorRef   = useRef<DedektorTip | null>(null);
   const ilkAglamaZamaniRef = useRef<number | null>(null);
   const aktifKayitRef      = useRef<UykuKaydi | null>(null);
-  const aglamaCountRef     = useRef(0);
   const recordingRef       = useRef<Audio.Recording | null>(null);
   const probeTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cooldownTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hassasiyetRef      = useRef<SensitivityLevel>('balanced');
+  const cryEngineRef       = useRef(new CryDetectionEngine());
 
   useEffect(() => { return () => { herSeyiDurdur(); }; }, []);
 
@@ -273,6 +277,12 @@ export default function Analiz() {
     AsyncStorage.getItem(CRY_HELPER_KEY).then(v => {
       if (v) { try { setCryGecmis(JSON.parse(v)); } catch {} }
     });
+    AsyncStorage.getItem(HASSASIYET_KEY).then(v => {
+      if (v === 'high' || v === 'balanced' || v === 'strict') {
+        setHassasiyet(v); hassasiyetRef.current = v;
+      }
+    });
+    cryEngineRef.current.loadPatterns().catch(() => {});
   }, []);
 
   const bebekIsmi = bebekAdi.trim() || null;
@@ -506,12 +516,16 @@ export default function Analiz() {
   };
   const probeTimerTemizle = () => { if (probeTimerRef.current) { clearTimeout(probeTimerRef.current); probeTimerRef.current = null; } };
   const herSeyiDurdur = async () => {
-    dinlemeRef.current = false; caliyorRef.current = false; aglamaCountRef.current = 0;
+    dinlemeRef.current = false; caliyorRef.current = false;
     if (timerRef.current) clearInterval(timerRef.current);
     if (detektorTimerRef.current) clearInterval(detektorTimerRef.current);
+    if (cooldownTimerRef.current) { clearInterval(cooldownTimerRef.current); cooldownTimerRef.current = null; }
     probeTimerTemizle();
     await kaydiDurdur();
     if (audioManager.getState().tab === 'analiz') await audioManager.stop();
+    cryEngineRef.current.reset();
+    setConfidenceScore(0);
+    setCooldownKalan(0);
   };
 
   // ── AĞLAMA YARDIMCISI ────────────────────────────────────────────────────────
@@ -622,7 +636,7 @@ export default function Analiz() {
     const tip = modalTipRef.current!;
     setSesListeModal(false);
     if (tip === 'aglama') setSeciliNinni(ses); else setSeciliKolik(ses);
-    setSeciliDetektor(tip); aktifSesRef.current = ses; aktifDedektorRef.current = tip; aglamaCountRef.current = 0;
+    setSeciliDetektor(tip); aktifSesRef.current = ses; aktifDedektorRef.current = tip;
     if (dinlemeRef.current) {
       dinlemeRef.current = false; caliyorRef.current = false; probeTimerTemizle(); await kaydiDurdur();
       if (audioManager.getState().tab === 'analiz') await audioManager.stop();
@@ -631,11 +645,8 @@ export default function Analiz() {
     setTimeout(() => dinlemeBaslat(ses), 400);
   };
 
-  const kalibrasyonYap = async (): Promise<number> => {
+  const kalibrasyonYap = async (): Promise<void> => {
     const KALIBRASYON_SURE_MS = 3000;
-    const OFFSET_DB = 15;
-    const MIN_ESIK = -35;
-    const MAX_ESIK = -10;
     setKalibrasyon(true);
     let kalRec: Audio.Recording | null = null;
     try {
@@ -650,14 +661,10 @@ export default function Analiz() {
       clearInterval(interval);
       await kalRec.stopAndUnloadAsync();
       kalRec = null;
-      if (ornekler.length === 0) throw new Error('no samples');
-      const ort = ornekler.reduce((a, b) => a + b, 0) / ornekler.length;
-      const esik = Math.min(MAX_ESIK, Math.max(MIN_ESIK, ort + OFFSET_DB));
-      await AsyncStorage.setItem('lumibaby_noise_threshold', String(esik));
-      return esik;
+      cryEngineRef.current.calibrate(ornekler);
     } catch (_) {
       if (kalRec) { try { await kalRec.stopAndUnloadAsync(); } catch (__) {} }
-      return AGLAMA_ESIGI_DB;
+      cryEngineRef.current.calibrate([-50]); // fallback
     } finally {
       setKalibrasyon(false);
     }
@@ -665,26 +672,41 @@ export default function Analiz() {
 
   const dinlemeBaslat = async (ses: SesTip) => {
     if (dinlemeRef.current) return;
-    dinlemeRef.current = true; setDinleniyor(true); aglamaCountRef.current = 0;
-    aglamaEsigiRef.current = await kalibrasyonYap();
+    dinlemeRef.current = true; setDinleniyor(true);
+    cryEngineRef.current.reset();
+    await kalibrasyonYap();
     try {
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
       const { recording } = await Audio.Recording.createAsync({ ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true });
       recordingRef.current = recording;
+      const engine    = cryEngineRef.current;
+      const dedTip    = aktifDedektorRef.current ?? 'aglama';
       pollIntervalRef.current = setInterval(async () => {
-        if (!dinlemeRef.current || caliyorRef.current) { if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; } return; }
+        if (!dinlemeRef.current || caliyorRef.current) {
+          if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+          return;
+        }
+        // Cooldown devam ediyorsa sayacı güncelle
+        if (engine.isCoolingDown()) {
+          const kalan = Math.ceil(engine.cooldownRemaining() / 1000);
+          setCooldownKalan(kalan);
+          setConfidenceScore(0);
+          return;
+        }
+        setCooldownKalan(0);
         try {
           const status = await recording.getStatusAsync();
-          const db = (status as any).metering ?? -160;
-          if (db > aglamaEsigiRef.current) {
-            aglamaCountRef.current += 1;
-            if (aglamaCountRef.current >= AGLAMA_COUNT_ESIGI) {
-              aglamaCountRef.current = 0;
-              if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
-              const g = aktifSesRef.current;
-              if (g) sesCaldir(g);
-            }
-          } else { aglamaCountRef.current = 0; }
+          const db     = (status as any).metering ?? -160;
+          const confidence = engine.analyze(db, dedTip);
+          setConfidenceScore(confidence);
+          const threshold = CONFIDENCE_THRESHOLD[hassasiyetRef.current];
+          if (confidence >= threshold) {
+            engine.triggerDetected();
+            setConfidenceScore(0);
+            if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+            const g = aktifSesRef.current;
+            if (g) sesCaldir(g);
+          }
         } catch (_) {}
       }, 500);
     } catch (e) { dinlemeRef.current = false; setDinleniyor(false); }
@@ -710,15 +732,16 @@ export default function Analiz() {
       if (!dinlemeRef.current) return;
       const ortDb = dbOrnekleri.length > 0 ? dbOrnekleri.reduce((a, b) => a + b, 0) / dbOrnekleri.length : -160;
       if (ortDb < -30) {
-        // Bebek sakinleşti — ses öğrenme kaydı
+        // Bebek sakinleşti — ses öğrenme kaydı + pattern kaydet
         if (sesCalmaBaslangicRef.current > 0) {
           const kalisSn = Math.round((Date.now() - sesCalmaBaslangicRef.current) / 1000);
           sesCalmaBaslangicRef.current = 0;
           sesOgrenmeKaydet(ses.id, ses.name, kalisSn);
         }
+        cryEngineRef.current.saveCurrentPattern().catch(() => {});
         sendAlertToAll('silence').catch(() => {});
         if (audioManager.getState().tab === 'analiz') await audioManager.stop();
-        caliyorRef.current = false; setCaliniyor(false); aglamaCountRef.current = 0;
+        caliyorRef.current = false; setCaliniyor(false);
         dinlemeRef.current = false; setDinleniyor(false);
         setTimeout(() => dinlemeBaslat(ses), 300);
       } else {
@@ -858,6 +881,25 @@ export default function Analiz() {
               {seciliDetektor === 'kolik'  && seciliKolik  && <Text style={styles.aktifSesText}>{seciliKolik.icon + ' '  + seciliKolik.name}</Text>}
               {aglamaSayisi > 0 && <Text style={styles.aglamaSayisiText}>{t.agladiSayisi(aglamaSayisi)}</Text>}
               {free && <Text style={styles.sureBilgi}>{t.kalanSure(formatSayac(3600 - detektorSure))}</Text>}
+              {/* Güven skoru çubuğu */}
+              {dinleniyor && !caliniyor && cooldownKalan === 0 && (
+                <View style={styles.confidenceRow}>
+                  <View style={styles.confidenceBarBg}>
+                    <View style={[styles.confidenceBarFill, {
+                      width: `${confidenceScore}%` as any,
+                      backgroundColor: confidenceScore >= CONFIDENCE_THRESHOLD[hassasiyet]
+                        ? '#f87171'
+                        : confidenceScore >= CONFIDENCE_THRESHOLD[hassasiyet] * 0.6
+                          ? '#facc15'
+                          : '#4ade80',
+                    }]} />
+                  </View>
+                  <Text style={styles.confidenceText}>{t.guvenSkoru(confidenceScore)}</Text>
+                </View>
+              )}
+              {cooldownKalan > 0 && (
+                <Text style={styles.cooldownText}>{t.cooldownGostergesi(cooldownKalan)}</Text>
+              )}
             </View>
           )}
           <TouchableOpacity style={[styles.sleepBtn, uyuyorMu && styles.sleepBtnUyaniyor]} onPress={uyuyorMu ? bebekUyandi : bebekUyudu}>
@@ -1553,6 +1595,11 @@ const styles = StyleSheet.create({
   aktifSesText:           { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
   aglamaSayisiText:       { color: '#f59e0b', fontSize: 12 },
   sureBilgi:              { color: '#fb923c', fontSize: 12, fontWeight: '600' },
+  confidenceRow:          { alignItems: 'center', gap: 4, width: '100%', paddingHorizontal: 8, marginTop: 4 },
+  confidenceBarBg:        { width: '100%', height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' },
+  confidenceBarFill:      { height: '100%', borderRadius: 3 },
+  confidenceText:         { color: 'rgba(255,255,255,0.45)', fontSize: 11 },
+  cooldownText:           { color: 'rgba(251,146,60,0.8)', fontSize: 12 },
   sleepBtn:               { backgroundColor: 'rgba(157,140,239,0.25)', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(157,140,239,0.4)', width: '100%', alignItems: 'center' },
   sleepBtnUyaniyor:       { backgroundColor: 'rgba(74,222,128,0.2)', borderColor: 'rgba(74,222,128,0.4)' },
   sleepBtnText:           { color: 'white', fontSize: 16, fontWeight: 'bold' },

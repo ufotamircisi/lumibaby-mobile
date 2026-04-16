@@ -485,6 +485,21 @@ const tr = {
   // ── PREMİUM KİLİT GENEL ─────────────────────────────────────────────────────
   premiumKilitGenelYazi:  '🔒 Bu özellik Premium\'da açılır',
   premiumKilitGenelBtn:   '👑 Premium\'a Geç →',
+
+  // ── HASSASİYET AYARLARI ──────────────────────────────────────────────────────
+  hassasiyetBaslik:       '🎙 Algılama Hassasiyeti',
+  hassasiyetYuksek:       'Yüksek Hassasiyet',
+  hassasiyetYuksekAlt:    'Daha hızlı algılar, daha fazla yanlış tetikleme',
+  hassasiyetDengeli:      'Dengeli (Önerilen)',
+  hassasiyetDengaliAlt:   'Ses ve doğruluk dengesi',
+  hassasiyetKati:         'Yalnızca Belirgin',
+  hassasiyetKatiAlt:      'Yalnızca net ağlamayı algılar',
+
+  // ── DEDEKTÖR UI ──────────────────────────────────────────────────────────────
+  guvenSkoru:             (n: number) => `Güven: %${n}`,
+  cooldownGostergesi:     (s: number) => `⏳ ${s} sn bekleniyor`,
+  aglamaAlgilandi:        '🔔 Ağlama Algılandı!',
+  dinleniyorDetay:        (esik: number) => `👂 Dinleniyor — Eşik: %${esik}`,
 };
 
 const en = {
@@ -970,6 +985,21 @@ const en = {
   // ── PREMIUM LOCK GENERAL ────────────────────────────────────────────────────
   premiumKilitGenelYazi:  '🔒 This feature unlocks in Premium',
   premiumKilitGenelBtn:   '👑 Go Premium →',
+
+  // ── SENSITIVITY SETTINGS ─────────────────────────────────────────────────────
+  hassasiyetBaslik:       '🎙 Detection Sensitivity',
+  hassasiyetYuksek:       'High Sensitivity',
+  hassasiyetYuksekAlt:    'Faster detection, more false triggers',
+  hassasiyetDengeli:      'Balanced (Recommended)',
+  hassasiyetDengaliAlt:   'Balance between speed and accuracy',
+  hassasiyetKati:         'Clear Cries Only',
+  hassasiyetKatiAlt:      'Only detects obvious crying',
+
+  // ── DETECTOR UI ──────────────────────────────────────────────────────────────
+  guvenSkoru:             (n: number) => `Confidence: ${n}%`,
+  cooldownGostergesi:     (s: number) => `⏳ Waiting ${s}s`,
+  aglamaAlgilandi:        '🔔 Crying Detected!',
+  dinleniyorDetay:        (esik: number) => `👂 Listening — Threshold: ${esik}%`,
 };
 
 export const translations = { tr, en };

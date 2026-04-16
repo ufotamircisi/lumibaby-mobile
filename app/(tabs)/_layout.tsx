@@ -1,5 +1,6 @@
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
+import { type SensitivityLevel } from '@/services/cryDetectionEngine';
 import { Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaskedView from '@react-native-masked-view/masked-view';
@@ -386,10 +387,14 @@ export default function TabLayout() {
   const [trial6Popup, setTrial6Popup]     = useState(false);
   const [gizliTapSayisi, setGizliTapSayisi] = useState(0);
   const [devMenuVisible, setDevMenuVisible] = useState(false);
+  const [hassasiyet, setHassasiyetState]    = useState<SensitivityLevel>('balanced');
 
   useEffect(() => {
     AsyncStorage.getItem('bebek_adi').then(v => { if (v) setBebekAdi(v); });
     AsyncStorage.getItem('bebek_dogum_tarihi').then(v => { if (v) setDogumTarihi(v); });
+    AsyncStorage.getItem('lumibaby_hassasiyet').then(v => {
+      if (v === 'high' || v === 'balanced' || v === 'strict') setHassasiyetState(v);
+    });
 
     // Android notification channel
     if (Platform.OS === 'android') {
@@ -633,6 +638,32 @@ export default function TabLayout() {
                   <Text style={s.bildirimUyariYazi}>{t.bildirimIzniUyari}</Text>
                 </TouchableOpacity>
               )}
+
+              <Text style={s.bolumBaslik}>{t.hassasiyetBaslik}</Text>
+              <View style={s.grup}>
+                {(['high', 'balanced', 'strict'] as SensitivityLevel[]).map((level, i) => {
+                  const labels: Record<SensitivityLevel, { baslik: string; alt: string }> = {
+                    high:     { baslik: t.hassasiyetYuksek,  alt: t.hassasiyetYuksekAlt  },
+                    balanced: { baslik: t.hassasiyetDengeli, alt: t.hassasiyetDengaliAlt },
+                    strict:   { baslik: t.hassasiyetKati,    alt: t.hassasiyetKatiAlt    },
+                  };
+                  return (
+                    <View key={level}>
+                      {i > 0 && <View style={s.ayrac} />}
+                      <TouchableOpacity style={s.satir} onPress={async () => {
+                        setHassasiyetState(level);
+                        await AsyncStorage.setItem('lumibaby_hassasiyet', level);
+                      }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.satirYazi}>{labels[level].baslik}</Text>
+                          <Text style={s.satirAlt}>{labels[level].alt}</Text>
+                        </View>
+                        {hassasiyet === level && <Text style={s.tik}>✓</Text>}
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
 
               <Text style={s.bolumBaslik}>{t.ayarlarDilBolum}</Text>
               <View style={s.grup}>
