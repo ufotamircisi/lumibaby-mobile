@@ -2,9 +2,12 @@
 // Native modül — EAS Build'de çalışır, Expo Go'da null döner
 import { getBannerAdUnitId } from '@/services/adMob';
 import React from 'react';
-import { View } from 'react-native';
+import { NativeModules, View } from 'react-native';
+
+const isAdMobAvailable = !!NativeModules.RNGoogleMobileAdsModule;
 
 export default function AdBanner() {
+  if (!isAdMobAvailable) return null;
   try {
     const { BannerAd, BannerAdSize } =
       require('react-native-google-mobile-ads') as typeof import('react-native-google-mobile-ads');

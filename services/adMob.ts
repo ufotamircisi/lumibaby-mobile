@@ -1,7 +1,10 @@
 // services/adMob.ts
 // AdMob native module — EAS Build only (not available in Expo Go)
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
+
+// Gerçek native modül bağlı mı? Expo Go'da bu undefined olur.
+const isAdMobAvailable = !!NativeModules.RNGoogleMobileAdsModule;
 
 const KEY_OPEN_COUNT  = 'lumibaby_interstitial_open_count';
 const KEY_THRESHOLD   = 'lumibaby_interstitial_threshold';
@@ -30,9 +33,9 @@ function getAdIds() {
 }
 
 function getAds() {
+  if (!isAdMobAvailable) return null;
   try {
     const mod = require('react-native-google-mobile-ads');
-    // Native module gerçekten yüklenmiş mi kontrol et
     if (!mod?.MobileAds) return null;
     return mod;
   } catch {
