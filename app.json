@@ -10,6 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.lumibaby",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Bebeğinizin ağlamasını analiz etmek için mikrofon gereklidir.",
         "UIBackgroundModes": [
@@ -19,6 +20,7 @@
       }
     },
     "android": {
+      "package": "com.lumibaby",
       "permissions": [
         "RECORD_AUDIO",
         "FOREGROUND_SERVICE",
