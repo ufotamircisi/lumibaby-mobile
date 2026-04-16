@@ -3,13 +3,26 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeModules, Platform } from 'react-native';
 
-// Gerçek native modül bağlı mı? Expo Go'da bu undefined olur.
-const isAdMobAvailable = !!NativeModules.RNGoogleMobileAdsModule;
+// ── Expo Go tespiti ───────────────────────────────────────────────────────────
+// NativeModules kontrolü yeterli değil: Expo Go'da modül kısmen kayıtlı
+// olabilir ama metodları çağrıldığında crash yapar.
+// expo-constants.executionEnvironment === 'storeClient' → kesinlikle Expo Go.
+const IS_AVAILABLE: boolean = (() => {
+  try {
+    // Önce Expo Go mu kontrol et (en güvenilir yöntem)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Constants = require('expo-constants').default;
+    if (Constants?.executionEnvironment === 'storeClient') return false;
+    // Sonra native modülün gerçekten bağlı olup olmadığını kontrol et
+    return !!NativeModules.RNGoogleMobileAdsModule;
+  } catch {
+    return false;
+  }
+})();
 
 const KEY_OPEN_COUNT  = 'lumibaby_interstitial_open_count';
 const KEY_THRESHOLD   = 'lumibaby_interstitial_threshold';
 
-// Google'ın resmi test ID'leri — __DEV__ modunda kullanılır
 const TEST_IDS = {
   banner:       'ca-app-pub-3940256099942544/6300978111',
   interstitial: 'ca-app-pub-3940256099942544/1033173712',
@@ -32,9 +45,11 @@ function getAdIds() {
   };
 }
 
-function getAds() {
-  if (!isAdMobAvailable) return null;
+// IS_AVAILABLE false ise require hiç çağrılmaz — modülün kendi init kodu çalışmaz
+function getAds(): any {
+  if (!IS_AVAILABLE) return null;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require('react-native-google-mobile-ads');
     if (!mod?.MobileAds) return null;
     return mod;
@@ -49,8 +64,8 @@ export function getBannerAdUnitId(): string {
 }
 
 // ── Rewarded Ad ───────────────────────────────────────────────────────────────
-let rewardedAd: any      = null;
-let rewardedLoaded       = false;
+let rewardedAd: any   = null;
+let rewardedLoaded    = false;
 
 function loadRewarded() {
   const ads = getAds();
@@ -103,8 +118,8 @@ export function showRewarded(): Promise<RewardResult> {
 }
 
 // ── Interstitial Ad ───────────────────────────────────────────────────────────
-let interstitialAd: any  = null;
-let interstitialLoaded   = false;
+let interstitialAd: any   = null;
+let interstitialLoaded    = false;
 
 function loadInterstitial() {
   const ads = getAds();
@@ -114,9 +129,9 @@ function loadInterstitial() {
     interstitialAd = InterstitialAd.createForAdRequest(getAdIds().interstitial, {
       requestNonPersonalizedAdsOnly: true,
     });
-    interstitialAd.addAdEventListener(AdEventType.LOADED, () => { interstitialLoaded = true; });
-    interstitialAd.addAdEventListener(AdEventType.CLOSED, () => { interstitialLoaded = false; loadInterstitial(); });
-    interstitialAd.addAdEventListener(AdEventType.ERROR,  () => { interstitialLoaded = false; });
+    interstitialAd.addAdEventListener(AdEventType.LOADED,  () => { interstitialLoaded = true; });
+    interstitialAd.addAdEventListener(AdEventType.CLOSED,  () => { interstitialLoaded = false; loadInterstitial(); });
+    interstitialAd.addAdEventListener(AdEventType.ERROR,   () => { interstitialLoaded = false; });
     interstitialAd.load();
   } catch {
     interstitialAd    = null;
@@ -125,7 +140,6 @@ function loadInterstitial() {
 }
 
 async function nextThreshold(): Promise<number> {
-  // 3 veya 4 — rastgele
   const t = Math.floor(Math.random() * 2) + 3;
   await AsyncStorage.setItem(KEY_THRESHOLD, String(t));
   return t;
@@ -142,7 +156,6 @@ export async function showInterstitialIfReady(detectorActive: boolean): Promise<
 
   if (count < threshold) return;
 
-  // Eşiğe ulaşıldı — sayacı sıfırla, yeni eşik belirle
   await AsyncStorage.setItem(KEY_OPEN_COUNT, '0');
   await nextThreshold();
 
@@ -151,9 +164,8 @@ export async function showInterstitialIfReady(detectorActive: boolean): Promise<
 
 // ── Başlatma (app/_layout.tsx'te bir kez çağrılır) ───────────────────────────
 export async function initAdMob(): Promise<void> {
-  // Expo Go'da native modül yok — sessizce atla
   const ads = getAds();
-  if (!ads) return;
+  if (!ads) return; // IS_AVAILABLE false → sessizce çık
 
   try {
     const { MaxAdContentRating } = ads;
@@ -163,20 +175,16 @@ export async function initAdMob(): Promise<void> {
       tagForUnderAgeOfConsent:      false,
     });
     await ads.MobileAds().initialize();
-
     loadRewarded();
     loadInterstitial();
   } catch {
-    // Native modül var ama başlatma başarısız — crash etme, reklamları atla
     return;
   }
 
-  // Uygulama açılış sayacını artır (reklam bağımsız, AsyncStorage güvenli)
   try {
     const val   = await AsyncStorage.getItem(KEY_OPEN_COUNT);
     const count = parseInt(val ?? '0') + 1;
     await AsyncStorage.setItem(KEY_OPEN_COUNT, String(count));
-
     const existing = await AsyncStorage.getItem(KEY_THRESHOLD);
     if (!existing) await nextThreshold();
   } catch {}

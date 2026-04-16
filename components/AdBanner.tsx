@@ -4,13 +4,23 @@ import { getBannerAdUnitId } from '@/services/adMob';
 import React from 'react';
 import { NativeModules, View } from 'react-native';
 
-const isAdMobAvailable = !!NativeModules.RNGoogleMobileAdsModule;
+// Expo Go tespiti — adMob.ts ile aynı mantık
+const IS_AVAILABLE: boolean = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Constants = require('expo-constants').default;
+    if (Constants?.executionEnvironment === 'storeClient') return false;
+    return !!NativeModules.RNGoogleMobileAdsModule;
+  } catch {
+    return false;
+  }
+})();
 
 export default function AdBanner() {
-  if (!isAdMobAvailable) return null;
+  if (!IS_AVAILABLE) return null;
   try {
-    const { BannerAd, BannerAdSize } =
-      require('react-native-google-mobile-ads') as typeof import('react-native-google-mobile-ads');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { BannerAd, BannerAdSize } = require('react-native-google-mobile-ads');
     return (
       <View style={{ alignItems: 'center', width: '100%' }}>
         <BannerAd

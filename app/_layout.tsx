@@ -7,8 +7,8 @@ const RC_API_KEY = 'test_NEQGTCZprAVYcQdZUYZcAHvMdEd';
 
 export default function RootLayout() {
   useEffect(() => {
-    // AdMob — EAS Build only; getAds() returns null in Expo Go → no-op
-    try { initAdMob().catch(() => {}); } catch {}
+    // AdMob — IS_AVAILABLE false ise initAdMob hiçbir şey yapmaz (Expo Go güvenli)
+    try { initAdMob().catch(() => {}); } catch (_) {}
 
     // RevenueCat — EAS Build only; native module absent in Expo Go → skip
     try {
