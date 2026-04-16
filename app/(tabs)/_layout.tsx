@@ -384,6 +384,8 @@ export default function TabLayout() {
   const [bildirimIzni, setBildirimIzni]   = useState<boolean | null>(null);
   const [trial5Popup, setTrial5Popup]     = useState(false);
   const [trial6Popup, setTrial6Popup]     = useState(false);
+  const [gizliTapSayisi, setGizliTapSayisi] = useState(0);
+  const [devMenuVisible, setDevMenuVisible] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('bebek_adi').then(v => { if (v) setBebekAdi(v); });
@@ -669,7 +671,18 @@ export default function TabLayout() {
 
               <Text style={s.bolumBaslik}>{t.ayarlarHakkinda}</Text>
               <View style={s.grup}>
-                <View style={s.satir}><Text style={s.satirYazi}>{t.ayarlarVersiyon}</Text><Text style={s.deger}>1.0.0</Text></View>
+                {__DEV__ ? (
+                  <TouchableOpacity style={s.satir} onPress={() => {
+                    const yeni = gizliTapSayisi + 1;
+                    if (yeni >= 5) { setGizliTapSayisi(0); setDevMenuVisible(true); }
+                    else setGizliTapSayisi(yeni);
+                  }}>
+                    <Text style={s.satirYazi}>{t.ayarlarVersiyon}</Text>
+                    <Text style={s.deger}>1.0.0</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={s.satir}><Text style={s.satirYazi}>{t.ayarlarVersiyon}</Text><Text style={s.deger}>1.0.0</Text></View>
+                )}
                 <View style={s.ayrac} />
                 <View style={s.satir}><Text style={s.satirYazi}>{t.ayarlarGelistirici}</Text><Text style={s.deger}>Lumisoft Studio</Text></View>
               </View>
@@ -734,6 +747,46 @@ export default function TabLayout() {
           </View>
         </View>
       </Modal>
+
+      {/* DEV MENU — sadece __DEV__ modunda, production'da hiç render edilmez */}
+      {__DEV__ && (
+        <Modal visible={devMenuVisible} transparent animationType="fade" onRequestClose={() => setDevMenuVisible(false)}>
+          <View style={s.devMenuBackdrop}>
+            <View style={s.devMenuKutu}>
+              <Text style={s.devMenuBaslik}>🛠️ Dev Menu</Text>
+
+              <TouchableOpacity style={[s.devMenuBtn, s.devMenuBtnTrial]} onPress={async () => {
+                await AsyncStorage.setItem('lumibaby_trial_start', String(Date.now()));
+                await AsyncStorage.removeItem('partner_premium');
+                setDevMenuVisible(false);
+                require('react-native').DevSettings.reload();
+              }}>
+                <Text style={s.devMenuBtnYazi}>▶️  Trial Başlat</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[s.devMenuBtn, s.devMenuBtnPremium]} onPress={async () => {
+                await AsyncStorage.setItem('partner_premium', 'true');
+                setDevMenuVisible(false);
+                require('react-native').DevSettings.reload();
+              }}>
+                <Text style={s.devMenuBtnYazi}>👑  Premium Yap</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[s.devMenuBtn, s.devMenuBtnFree]} onPress={async () => {
+                await AsyncStorage.multiRemove(['partner_premium', 'lumibaby_trial_start']);
+                setDevMenuVisible(false);
+                require('react-native').DevSettings.reload();
+              }}>
+                <Text style={s.devMenuBtnYazi}>🆓  Ücretsize Dön</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={s.devMenuKapatBtn} onPress={() => setDevMenuVisible(false)}>
+                <Text style={s.devMenuKapatYazi}>Kapat</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
 
     </View>
   );
@@ -826,4 +879,15 @@ const s = StyleSheet.create({
   popupPrimaryBtnYazi: { color: 'white', fontSize: 15, fontWeight: 'bold' },
   popupSecondaryBtn:   { paddingVertical: 10, width: '100%', alignItems: 'center' },
   popupSecondaryBtnYazi: { color: 'rgba(255,255,255,0.4)', fontSize: 14 },
+  // Dev menu
+  devMenuBackdrop:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  devMenuKutu:         { backgroundColor: '#1a1a2e', borderRadius: 20, padding: 24, width: '100%', gap: 12, borderWidth: 2, borderColor: '#9d8cef' },
+  devMenuBaslik:       { color: '#9d8cef', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 },
+  devMenuBtn:          { borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1 },
+  devMenuBtnTrial:     { backgroundColor: 'rgba(157,140,239,0.15)', borderColor: 'rgba(157,140,239,0.4)' },
+  devMenuBtnPremium:   { backgroundColor: 'rgba(245,166,35,0.15)', borderColor: 'rgba(245,166,35,0.4)' },
+  devMenuBtnFree:      { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)' },
+  devMenuBtnYazi:      { color: 'white', fontSize: 15, fontWeight: '600' },
+  devMenuKapatBtn:     { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 12, alignItems: 'center', marginTop: 4 },
+  devMenuKapatYazi:    { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
 });
