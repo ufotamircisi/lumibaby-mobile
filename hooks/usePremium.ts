@@ -215,6 +215,10 @@ export function usePremium() {
     isPremium:         durum === 'premium',
     isTrial:           durum === 'trial',
     isFree:            durum === 'free',
+    // Helper: trial users treated as premium everywhere
+    canAccessPremium:  durum === 'premium' || durum === 'trial',
+    showTeaserOnly:    durum === 'free',
+    isLockedFeature:   durum === 'free',
     trialKalanGun,
     detektorHak,
     analizHak,

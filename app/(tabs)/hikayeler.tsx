@@ -8,6 +8,9 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+const HIKAYE_SINIR_KEY = 'lumibaby_hikaye_sinir_ts'; // timestamp when free limit started
+const HIKAYE_SINIR_SURE = 60; // saniye
+
 type MasalTip = { id: number; name: string; desc: string; duration: string; file: any };
 
 const masallarTR: MasalTip[] = [
@@ -36,9 +39,9 @@ const masallarEN: MasalTip[] = [
 ];
 
 export default function Hikayeler() {
-  const { isPremium, isTrial, premiumAktifEt } = usePremium();
+  const { canAccessPremium, premiumAktifEt } = usePremium();
   const { lang, t } = useLang();
-  const free = !isPremium && !isTrial;
+  const free = !canAccessPremium;
 
   const sabitMasallar = lang === 'en' ? masallarEN : masallarTR;
 
@@ -103,26 +106,65 @@ export default function Hikayeler() {
     } catch (_) {}
   };
 
+  // ── Sinir timer: timestamp tabanlı — sekme değişse bile devam eder ──────────
+  const sinirTimerTick = useCallback(() => {
+    AsyncStorage.getItem(HIKAYE_SINIR_KEY).then(v => {
+      if (!v) return;
+      const baslangic = parseInt(v);
+      const gecen = Math.floor((Date.now() - baslangic) / 1000);
+      const kalan = HIKAYE_SINIR_SURE - gecen;
+      if (kalan <= 0) {
+        if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
+        sinirSayacRef.current = 0; setKalanSure(null);
+        AsyncStorage.removeItem(HIKAYE_SINIR_KEY).catch(() => {});
+        if (audioManager.getState().tab === 'hikayeler') {
+          audioManager.stop();
+          setPaywallSinirMi(true); setPaywallVisible(true);
+        }
+      } else {
+        sinirSayacRef.current = kalan; setKalanSure(kalan);
+      }
+    }).catch(() => {});
+  }, []);
+
   useFocusEffect(useCallback(() => {
     anneHikayesiYukle();
     scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+
+    // Sekmeye dönünce: timestamp'ten kalan süreyi hesapla
+    if (audioManager.getState().tab === 'hikayeler' && freeRef.current) {
+      AsyncStorage.getItem(HIKAYE_SINIR_KEY).then(v => {
+        if (!v) return;
+        const baslangic = parseInt(v);
+        const gecen = Math.floor((Date.now() - baslangic) / 1000);
+        const kalan = HIKAYE_SINIR_SURE - gecen;
+        if (kalan <= 0) {
+          AsyncStorage.removeItem(HIKAYE_SINIR_KEY).catch(() => {});
+          audioManager.stop();
+          setPaywallSinirMi(true); setPaywallVisible(true);
+        } else {
+          sinirSayacRef.current = kalan; setKalanSure(kalan);
+          if (sinirTimerRef.current) clearInterval(sinirTimerRef.current);
+          sinirTimerRef.current = setInterval(sinirTimerTick, 1000);
+        }
+      }).catch(() => {});
+    }
+
     return () => {
-      // Don't stop global audio on tab blur — just clear local sinir timer
+      // Tab blur: interval'ı durdur ama AsyncStorage timestamp'ini KORU
       if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
       sinirSayacRef.current = 0; setKalanSure(null);
     };
-  }, []));
+  }, [sinirTimerTick]));
 
   // Sync calananId with global audio state
   useEffect(() => {
     return audioManager.subscribe((id, tab) => {
       setCalananId(tab === 'hikayeler' ? id : null);
-      // If audio switches away from hikayeler, cancel the free-user limit timer
-      if (tab !== 'hikayeler' && sinirTimerRef.current) {
-        clearInterval(sinirTimerRef.current);
-        sinirTimerRef.current = null;
-        sinirSayacRef.current = 0;
-        setKalanSure(null);
+      if (tab !== 'hikayeler') {
+        if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
+        sinirSayacRef.current = 0; setKalanSure(null);
+        AsyncStorage.removeItem(HIKAYE_SINIR_KEY).catch(() => {});
       }
     });
   }, []);
@@ -137,21 +179,23 @@ export default function Hikayeler() {
 
   useEffect(() => {
     const appStateSub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active' && timerBitisTarihiRef.current) {
+      if (nextState !== 'active') return;
+      if (timerBitisTarihiRef.current) {
         const kalan = Math.round((timerBitisTarihiRef.current - Date.now()) / 1000);
         if (kalan <= 0) {
           timerIptal();
-          if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
-          sinirSayacRef.current = 0; setKalanSure(null);
           if (audioManager.getState().tab === 'hikayeler') audioManager.stop();
         } else setTimerSaniye(kalan);
+      }
+      if (freeRef.current && audioManager.getState().tab === 'hikayeler') {
+        sinirTimerTick();
       }
     });
     return () => {
       appStateSub.remove();
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [timerIptal]);
+  }, [timerIptal, sinirTimerTick]);
 
   const timerBaslat = (dk: number) => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -161,14 +205,10 @@ export default function Hikayeler() {
       const kalan = Math.round((timerBitisTarihiRef.current! - Date.now()) / 1000);
       if (kalan <= 0) {
         clearInterval(timerRef.current!);
-        timerRef.current = null;
-        timerBitisTarihiRef.current = null;
-        setTimerSaniye(null);
-        setSecilenDk(null);
-        // Also stop free-user limit timer
+        timerRef.current = null; timerBitisTarihiRef.current = null;
+        setTimerSaniye(null); setSecilenDk(null);
         if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
         sinirSayacRef.current = 0; setKalanSure(null);
-        // Only stop audio from this tab
         if (audioManager.getState().tab === 'hikayeler') audioManager.stop();
       } else setTimerSaniye(kalan);
     };
@@ -180,24 +220,17 @@ export default function Hikayeler() {
     Math.floor(saniye / 60) + ':' + (saniye % 60).toString().padStart(2, '0');
 
   const sinirBaslat = useCallback(() => {
-    sinirSayacRef.current = 60; setKalanSure(60);
+    AsyncStorage.setItem(HIKAYE_SINIR_KEY, Date.now().toString()).catch(() => {});
+    sinirSayacRef.current = HIKAYE_SINIR_SURE; setKalanSure(HIKAYE_SINIR_SURE);
     if (sinirTimerRef.current) clearInterval(sinirTimerRef.current);
-    sinirTimerRef.current = setInterval(() => {
-      sinirSayacRef.current -= 1; setKalanSure(sinirSayacRef.current);
-      if (sinirSayacRef.current <= 0) {
-        clearInterval(sinirTimerRef.current!); sinirTimerRef.current = null;
-        if (audioManager.getState().tab === 'hikayeler') {
-          audioManager.stop();
-          setPaywallSinirMi(true); setPaywallVisible(true);
-        }
-      }
-    }, 1000);
-  }, []);
+    sinirTimerRef.current = setInterval(sinirTimerTick, 1000);
+  }, [sinirTimerTick]);
 
-  const clearSinirTimer = () => {
+  const clearSinirTimer = useCallback(() => {
     if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
     sinirSayacRef.current = 0; setKalanSure(null);
-  };
+    AsyncStorage.removeItem(HIKAYE_SINIR_KEY).catch(() => {});
+  }, []);
 
   const playMasal = async (id: number) => {
     const masallar = sabitMasallarRef.current;

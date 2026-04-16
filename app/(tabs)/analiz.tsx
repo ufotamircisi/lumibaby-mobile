@@ -4,20 +4,55 @@ import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import { showInterstitialIfReady } from '@/services/adMob';
 import * as audioManager from '@/services/audioManager';
-import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
-import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { sendAlertToAll } from './_layout';
 
-const CLAUDE_API_KEY = process.env.EXPO_PUBLIC_CLAUDE_API_KEY;
+// ── SES ÖĞRENME STORAGE KEY ──────────────────────────────────────────────────
+const SES_OGRENME_KEY = 'lumibaby_ses_ogrenme';
+const WAKE_WINDOW_BILDIRIM_KEY = 'lumibaby_wake_window_bildirim';
+type SesOgrenmeKayit = { sesId: number; sesAdi: string; kalisSaniye: number; ts: number };
+// Wonder Weeks: hafta numaraları
+const WONDER_WEEKS = [5, 8, 12, 19, 26, 37, 46, 55];
+
+// ── AĞLAMA YARDIMCISI ────────────────────────────────────────────────────────
+const CRY_HELPER_KEY = 'lumibaby_cry_helper_gecmis';
+type CryKategori = 'aclik' | 'uykusuzluk' | 'gaz' | 'bez' | 'genel';
+type CryHelperGecmis = { tarih: number; sonuc1: CryKategori; sonuc2: CryKategori | null; };
+const CRY_SCORES: Record<number, Record<number, Record<CryKategori, number>>> = {
+  0: {
+    0: { aclik: -1, uykusuzluk: 0, gaz: 1, bez: 0, genel: 0 },
+    1: { aclik: 1,  uykusuzluk: 0, gaz: 0, bez: 0, genel: 0 },
+    2: { aclik: 3,  uykusuzluk: 0, gaz: 0, bez: 0, genel: 0 },
+  },
+  1: {
+    0: { aclik: 0, uykusuzluk: 3,  gaz: 0, bez: 0, genel: 0 },
+    1: { aclik: 1, uykusuzluk: -1, gaz: 0, bez: 0, genel: 0 },
+    2: { aclik: 0, uykusuzluk: 0,  gaz: 0, bez: 0, genel: 0 },
+  },
+  2: {
+    0: { aclik: 0, uykusuzluk: 0, gaz: 0, bez: -2, genel: 0 },
+    1: { aclik: 0, uykusuzluk: 0, gaz: 0, bez: 1,  genel: 0 },
+    2: { aclik: 0, uykusuzluk: 0, gaz: 0, bez: 3,  genel: 0 },
+  },
+  3: {
+    0: { aclik: 0, uykusuzluk: 0, gaz: 3, bez: 0, genel: 0 },
+    1: { aclik: 0, uykusuzluk: 0, gaz: 1, bez: 0, genel: 2 },
+    2: { aclik: 1, uykusuzluk: 1, gaz: 0, bez: 0, genel: 0 },
+  },
+  4: {
+    0: { aclik: 0, uykusuzluk: 1, gaz: 0, bez: 0, genel: 2 },
+    1: { aclik: 0, uykusuzluk: 0, gaz: 0, bez: 0, genel: 0 },
+    2: { aclik: 0, uykusuzluk: 0, gaz: 0, bez: 0, genel: 3 },
+  },
+};
 
 type SesTip   = { id: number; name: string; icon: string; file: any; };
 type UykuKaydi = { id: number; baslangic: number; bitis: number | null; };
-type AnalizSonuc = { aclik: number; gaz: number; uyku: number; bez: number; diger: number; };
 type GeceRaporu = {
   id: number; tarih: string; toplamUyku: number; aglamaSayisi: number;
   baslangic: number; bitis: number; uykulaDalma: number; enUzunUyku: number;
@@ -133,9 +168,10 @@ const sabitKolikListesiEN: SesTip[] = [
 ];
 
 export default function Analiz() {
-  const { isPremium, isTrial, detektorHak, analizHak, detektorKullan, analizKullan, reklamIzleDetektor, reklamIzleAnaliz, premiumAktifEt } = usePremium();
+  const { isTrial, canAccessPremium, detektorHak, analizHak, detektorKullan, analizKullan, reklamIzleDetektor, reklamIzleAnaliz, premiumAktifEt } = usePremium();
+  const router = useRouter();
   const { lang, t } = useLang();
-  const free = !isPremium && !isTrial;
+  const free = !canAccessPremium;
 
   const [paywallVisible, setPaywallVisible] = useState(false);
   const [paywallTip, setPaywallTip]         = useState<'detektor' | 'analiz' | 'premium'>('premium');
@@ -162,15 +198,19 @@ export default function Analiz() {
   const [acikHafta, setAcikHafta]           = useState<string | null>(null);
   const [anneNinniUri, setAnneNinniUri]     = useState<string | null>(null);
   const [annePisPisUri, setAnnePisPisUri]   = useState<string | null>(null);
-  const [analizYapiliyor, setAnalizYapiliyor] = useState(false);
-  const [analizSonuc, setAnalizSonuc]       = useState<AnalizSonuc | null>(null);
-  const [analizHata, setAnalizHata]         = useState<string | null>(null);
-  const [kayitYapiliyor, setKayitYapiliyor] = useState(false);
-  const [geriSayim, setGeriSayim]           = useState<number | null>(null);
   const [detektorSure, setDetektorSure]     = useState(0);
+  // Ağlama yardımcısı
+  const [cryHelperAdim, setCryHelperAdim]   = useState<'giris' | 'soru' | 'sonuc'>('giris');
+  const [cryCevaplar, setCryCevaplar]       = useState<number[]>([]);
+  const [crySonuc, setCrySonuc]             = useState<CryKategori[]>([]);
+  const [cryGecmis, setCryGecmis]           = useState<CryHelperGecmis[]>([]);
+  const [cryGecmisGoster, setCryGecmisGoster] = useState(false);
   const [dogumTarihi, setDogumTarihi]       = useState<string>('');
   const [rehberModal, setRehberModal]       = useState(false);
   const [nasılCalisirModal, setNasılCalisirModal] = useState(false);
+  // Yeni özellikler
+  const [sesOgrenmeKayitlar, setSesOgrenmeKayitlar] = useState<SesOgrenmeKayit[]>([]);
+  const sesCalmaBaslangicRef = useRef<number>(0);
   const scrollRef           = useRef<ScrollView>(null);
   const gecmisOffsetRef     = useRef<number>(0);
   const grafikOffsetRef     = useRef<number>(0);
@@ -189,14 +229,23 @@ export default function Analiz() {
   const aktifDedektorRef   = useRef<DedektorTip | null>(null);
   const ilkAglamaZamaniRef = useRef<number | null>(null);
   const aktifKayitRef      = useRef<UykuKaydi | null>(null);
-  const geriSayimRef       = useRef<ReturnType<typeof setInterval> | null>(null);
   const aglamaCountRef     = useRef(0);
   const recordingRef       = useRef<Audio.Recording | null>(null);
-  const analizRecordingRef = useRef<Audio.Recording | null>(null);
   const probeTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { return () => { herSeyiDurdur(); }; }, []);
+
+  // Bildirim aksiyon kategorilerini kur
+  useEffect(() => {
+    Notifications.setNotificationCategoryAsync('crying', [
+      { identifier: 'play_lullaby', buttonTitle: t.notifAglamaBtnCaldir, options: { opensAppToForeground: true } },
+      { identifier: 'dismiss',      buttonTitle: t.notifAglamaBtnKapat,  options: { opensAppToForeground: false, isDestructive: false, isAuthenticationRequired: false } },
+    ]).catch(() => {});
+    Notifications.setNotificationCategoryAsync('wake_window', [
+      { identifier: 'ok', buttonTitle: t.notifWakeWinBtnKapat, options: { opensAppToForeground: false } },
+    ]).catch(() => {});
+  }, []);
 
   // Başka bir tab sesi devraldığında dedektör çalma durumunu sıfırla
   useEffect(() => {
@@ -218,6 +267,12 @@ export default function Analiz() {
     AsyncStorage.getItem('anne_pispis_kayit').then(v => { if (v) setAnnePisPisUri(JSON.parse(v).uri); });
     AsyncStorage.getItem('bebek_adi').then(v => { if (v) setBebekAdi(v); });
     AsyncStorage.getItem('bebek_dogum_tarihi').then(v => { if (v) setDogumTarihi(v); });
+    AsyncStorage.getItem(SES_OGRENME_KEY).then(v => {
+      if (v) { try { setSesOgrenmeKayitlar(JSON.parse(v)); } catch {} }
+    });
+    AsyncStorage.getItem(CRY_HELPER_KEY).then(v => {
+      if (v) { try { setCryGecmis(JSON.parse(v)); } catch {} }
+    });
   }, []);
 
   const bebekIsmi = bebekAdi.trim() || null;
@@ -302,6 +357,149 @@ export default function Analiz() {
     return t.kaliteEtiketler[3];
   };
 
+  // ── GÜNDÜZ / GECE AYRIMI ──────────────────────────────────────────────────
+  const raporGunduMu = useCallback((baslangic: number) => {
+    const saat = new Date(baslangic).getHours();
+    return saat >= 6 && saat < 20;
+  }, []);
+
+  // ── DOĞUM TARİHİ → HAFTA ─────────────────────────────────────────────────
+  const bebekHaftasiHesapla = useCallback((): number | null => {
+    if (!dogumTarihi) return null;
+    const p = dogumTarihi.split('.');
+    if (p.length !== 3) return null;
+    const dogum = new Date(+p[2], +p[1] - 1, +p[0]);
+    if (isNaN(dogum.getTime())) return null;
+    return Math.floor((Date.now() - dogum.getTime()) / (7 * 24 * 3600 * 1000));
+  }, [dogumTarihi]);
+
+  // ── WONDER WEEKS KONTROLÜ ─────────────────────────────────────────────────
+  const gelisimSicramasiVarMi = useMemo(() => {
+    const haftalar = bebekHaftasiHesapla();
+    if (haftalar === null) return false;
+    return WONDER_WEEKS.some(w => Math.abs(haftalar - w) <= 1);
+  }, [bebekHaftasiHesapla]);
+
+  // ── YAŞA GÖRE ÖNERİLEN UYKU ─────────────────────────────────────────────
+  const yasaGoreOnerilen = useMemo((): { saatSn: number; etiket: string } | null => {
+    const haftalar = bebekHaftasiHesapla();
+    if (haftalar === null) return null;
+    const aylar = Math.floor(haftalar / 4.33);
+    // Önerilen toplam uyku (saat * 3600 saniye)
+    if (aylar < 3)       return { saatSn: 16 * 3600, etiket: '0-3 ay' };
+    if (aylar < 6)       return { saatSn: 15 * 3600, etiket: '3-6 ay' };
+    if (aylar < 12)      return { saatSn: 14 * 3600, etiket: '6-12 ay' };
+    return               { saatSn: 13 * 3600, etiket: '1+ yıl' };
+  }, [bebekHaftasiHesapla]);
+
+  // ── SON 7 GÜN ORT. UYKU ─────────────────────────────────────────────────
+  const son7GunOrtUyku = useMemo((): number => {
+    if (geceRaporlari.length === 0) return 0;
+    const bugun = Date.now();
+    const son7 = geceRaporlari.filter(r => bugun - r.baslangic <= 7 * 24 * 3600 * 1000);
+    if (son7.length === 0) return 0;
+    return son7.reduce((acc, r) => acc + r.toplamUyku, 0) / son7.length;
+  }, [geceRaporlari]);
+
+  // ── HAFTALIK TREND ───────────────────────────────────────────────────────
+  const haftalikTrend = useMemo(() => {
+    const bugun = Date.now();
+    const buHaftaRaporlar = geceRaporlari.filter(r => bugun - r.baslangic <= 7 * 24 * 3600 * 1000);
+    const gecenHaftaRaporlar = geceRaporlari.filter(r => {
+      const fark = bugun - r.baslangic;
+      return fark > 7 * 24 * 3600 * 1000 && fark <= 14 * 24 * 3600 * 1000;
+    });
+    const avg = (arr: GeceRaporu[]) => arr.length ? arr.reduce((a, r) => a + r.toplamUyku, 0) / arr.length : 0;
+    const aglamaAvg = (arr: GeceRaporu[]) => arr.length ? arr.reduce((a, r) => a + r.aglamaSayisi, 0) / arr.length : 0;
+    return {
+      buHaftaSayisi:   buHaftaRaporlar.length,
+      gecenHaftaSayisi: gecenHaftaRaporlar.length,
+      buHaftaOrt:      avg(buHaftaRaporlar),
+      gecenHaftaOrt:   avg(gecenHaftaRaporlar),
+      buHaftaAglama:   aglamaAvg(buHaftaRaporlar),
+      gecenHaftaAglama: aglamaAvg(gecenHaftaRaporlar),
+    };
+  }, [geceRaporlari]);
+
+  // ── DÜZEN ANALİZİ ────────────────────────────────────────────────────────
+  const duzenAnalizi = useMemo((): 'dengeli' | 'hafifKaymis' | 'yetersiz' => {
+    if (geceRaporlari.length < 4) return 'yetersiz';
+    const son5 = geceRaporlari.slice(0, 5);
+    const baslangicSaatler = son5.map(r => new Date(r.baslangic).getHours());
+    const ort = baslangicSaatler.reduce((a, b) => a + b, 0) / baslangicSaatler.length;
+    const sapma = Math.sqrt(baslangicSaatler.reduce((a, b) => a + Math.pow(b - ort, 2), 0) / baslangicSaatler.length);
+    if (sapma <= 0.75) return 'dengeli';
+    if (sapma <= 1.5)  return 'hafifKaymis';
+    return 'hafifKaymis';
+  }, [geceRaporlari]);
+
+  // ── UYKU HAFIZASI (geçen hafta bu gün) ──────────────────────────────────
+  const uykuHafizasi = useMemo((): GeceRaporu | null => {
+    const bugun = new Date();
+    const gecenHaftaBugun = new Date(bugun);
+    gecenHaftaBugun.setDate(bugun.getDate() - 7);
+    const gunBaslangic = new Date(gecenHaftaBugun.getFullYear(), gecenHaftaBugun.getMonth(), gecenHaftaBugun.getDate()).getTime();
+    const gunBitis = gunBaslangic + 86400000;
+    return geceRaporlari.find(r => r.baslangic >= gunBaslangic && r.baslangic < gunBitis) ?? null;
+  }, [geceRaporlari]);
+
+  // ── EBEVEYN NOTU MESAJI ──────────────────────────────────────────────────
+  const buGeceIcinMesaj = useCallback((puan: number): string => {
+    const msgs = t.buGeceIcinMesajlar as string[];
+    if (puan >= 85) return msgs[0];
+    if (puan >= 70) return msgs[1];
+    if (puan >= 50) return msgs[2];
+    return msgs[3];
+  }, [t]);
+
+  // ── SES ÖĞRENME: en iyi ses ───────────────────────────────────────────────
+  const sesOnerisi = useMemo((): SesOgrenmeKayit | null => {
+    if (sesOgrenmeKayitlar.length < 3) return null;
+    const sayac: Record<number, { sesAdi: string; toplamKalis: number; count: number }> = {};
+    sesOgrenmeKayitlar.forEach(k => {
+      if (!sayac[k.sesId]) sayac[k.sesId] = { sesAdi: k.sesAdi, toplamKalis: 0, count: 0 };
+      sayac[k.sesId].toplamKalis += k.kalisSaniye;
+      sayac[k.sesId].count++;
+    });
+    const enIyiId = Object.keys(sayac).sort((a, b) => {
+      const ortA = sayac[+a].toplamKalis / sayac[+a].count;
+      const ortB = sayac[+b].toplamKalis / sayac[+b].count;
+      return ortA - ortB; // daha kısa kaliş = daha hızlı sakinleşme = daha iyi
+    })[0];
+    if (!enIyiId) return null;
+    const en = sayac[+enIyiId];
+    return { sesId: +enIyiId, sesAdi: en.sesAdi, kalisSaniye: en.toplamKalis / en.count, ts: 0 };
+  }, [sesOgrenmeKayitlar]);
+
+  // ── SES ÖĞRENME: kaydet ──────────────────────────────────────────────────
+  const sesOgrenmeKaydet = useCallback(async (sesId: number, sesAdi: string, kalisSaniye: number) => {
+    const yeni: SesOgrenmeKayit = { sesId, sesAdi, kalisSaniye, ts: Date.now() };
+    setSesOgrenmeKayitlar(prev => {
+      const guncellendi = [yeni, ...prev].slice(0, 50);
+      AsyncStorage.setItem(SES_OGRENME_KEY, JSON.stringify(guncellendi)).catch(() => {});
+      return guncellendi;
+    });
+  }, []);
+
+  // ── WAKE WINDOW: bildirim gönder (günde max 3) ───────────────────────────
+  const wakeWindowBildirimGonder = useCallback(async (mesaj: string) => {
+    try {
+      const bugun = new Date().toDateString();
+      const data = await AsyncStorage.getItem(WAKE_WINDOW_BILDIRIM_KEY);
+      const obj = data ? JSON.parse(data) : {};
+      const bugunSayisi = obj[bugun] || 0;
+      if (bugunSayisi >= 3) return;
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') return;
+      await Notifications.scheduleNotificationAsync({
+        content: { title: 'LumiBaby ⏰', body: mesaj, sound: true },
+        trigger: null,
+      });
+      obj[bugun] = bugunSayisi + 1;
+      await AsyncStorage.setItem(WAKE_WINDOW_BILDIRIM_KEY, JSON.stringify(obj));
+    } catch {}
+  }, []);
+
   const kaydiDurdur = async () => {
     if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
     if (recordingRef.current) { try { await recordingRef.current.stopAndUnloadAsync(); } catch (_) {} recordingRef.current = null; }
@@ -316,137 +514,46 @@ export default function Analiz() {
     if (audioManager.getState().tab === 'analiz') await audioManager.stop();
   };
 
-  const analizBaslat = async () => {
-    if (!isPremium && !isTrial) {
+  // ── AĞLAMA YARDIMCISI ────────────────────────────────────────────────────────
+  const crySonucHesapla = useCallback((cevaplar: number[]): CryKategori[] => {
+    const puanlar: Record<CryKategori, number> = { aclik: 0, uykusuzluk: 0, gaz: 0, bez: 0, genel: 0 };
+    cevaplar.forEach((secenek, soru) => {
+      const skorlar = CRY_SCORES[soru]?.[secenek];
+      if (skorlar) { (Object.keys(puanlar) as CryKategori[]).forEach(k => { puanlar[k] += skorlar[k] ?? 0; }); }
+    });
+    return (Object.keys(puanlar) as CryKategori[]).sort((a, b) => puanlar[b] - puanlar[a]);
+  }, []);
+
+  const crySonucuKaydet = useCallback(async (s1: CryKategori, s2: CryKategori | null) => {
+    const kayit: CryHelperGecmis = { tarih: Date.now(), sonuc1: s1, sonuc2: s2 };
+    setCryGecmis(prev => {
+      const yeni = [kayit, ...prev].slice(0, 5);
+      AsyncStorage.setItem(CRY_HELPER_KEY, JSON.stringify(yeni)).catch(() => {});
+      return yeni;
+    });
+  }, []);
+
+  const cryHelperBaslat = useCallback(async () => {
+    if (free) {
       if (analizHak <= 0) { setPaywallTip('analiz'); setPaywallVisible(true); return; }
-    }
-    if (!isPremium && !isTrial) {
       const hakKullanildi = await analizKullan();
       if (!hakKullanildi) { setPaywallTip('analiz'); setPaywallVisible(true); return; }
     }
-    if (!CLAUDE_API_KEY) {
-      setAnalizHata(lang === 'en' ? 'API key not configured. Check your .env.local file.' : 'API anahtarı bulunamadı. .env.local dosyasını kontrol edin.');
-      return;
+    setCryCevaplar([]); setCrySonuc([]); setCryHelperAdim('soru');
+  }, [free, analizHak, analizKullan]);
+
+  const cryCevapSec = useCallback(async (secenekIdx: number) => {
+    const yeniCevaplar = [...cryCevaplar, secenekIdx];
+    if (yeniCevaplar.length < 5) {
+      setCryCevaplar(yeniCevaplar);
+    } else {
+      setCryCevaplar(yeniCevaplar);
+      const siralananlar = crySonucHesapla(yeniCevaplar);
+      setCrySonuc(siralananlar);
+      await crySonucuKaydet(siralananlar[0], siralananlar[1] ?? null);
+      setCryHelperAdim('sonuc');
     }
-    try {
-      const izin = await Audio.requestPermissionsAsync();
-      if (!izin.granted) { alert(t.mikrofonIzni); return; }
-      setAnalizSonuc(null); setAnalizHata(null); setKayitYapiliyor(true); setGeriSayim(10);
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      analizRecordingRef.current = recording;
-      let kalan = 10;
-      geriSayimRef.current = setInterval(() => {
-        kalan -= 1; setGeriSayim(kalan);
-        if (kalan <= 0) { if (geriSayimRef.current) clearInterval(geriSayimRef.current); geriSayimRef.current = null; }
-      }, 1000);
-      setTimeout(async () => {
-        if (geriSayimRef.current) clearInterval(geriSayimRef.current);
-        geriSayimRef.current = null; setGeriSayim(null);
-        try {
-          setKayitYapiliyor(false); setAnalizYapiliyor(true);
-
-          // URI'yi durdur öncesi al — dosya silinmez, native kaynak serbest bırakılır
-          const recordingUri = analizRecordingRef.current?.getURI() ?? null;
-          if (analizRecordingRef.current) {
-            await analizRecordingRef.current.stopAndUnloadAsync();
-            analizRecordingRef.current = null;
-          }
-          if (!recordingUri) throw new Error('Kayıt URI bulunamadı');
-
-          // Ses dosyasını base64'e çevir
-          const base64Audio = await FileSystem.readAsStringAsync(recordingUri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          // Geçici dosyayı temizle
-          FileSystem.deleteAsync(recordingUri, { idempotent: true }).catch(() => {});
-
-          const promptText = lang === 'en'
-            ? 'Analyze this baby cry audio. Estimate percentages for each cause (must total 100). Reply ONLY with JSON: {"aclik": 0, "gaz": 0, "uyku": 0, "bez": 0, "diger": 0}'
-            : 'Bu bebek ağlama sesini analiz et. Her neden için yüzde tahmin et (toplam 100 olmalı). Sadece JSON döndür: {"aclik": 0, "gaz": 0, "uyku": 0, "bez": 0, "diger": 0}';
-
-          const claudeFetch = async (): Promise<AnalizSonuc> => {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 20000);
-            try {
-              const response = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-api-key': CLAUDE_API_KEY || '',
-                  'anthropic-version': '2023-06-01',
-                  'anthropic-beta': 'audio-1',
-                },
-                body: JSON.stringify({
-                  model: 'claude-haiku-4-5-20251001',
-                  max_tokens: 200,
-                  messages: [{
-                    role: 'user',
-                    content: [
-                      {
-                        type: 'document',
-                        source: {
-                          type: 'base64',
-                          media_type: 'audio/mp4',
-                          data: base64Audio,
-                        },
-                      },
-                      {
-                        type: 'text',
-                        text: promptText,
-                      },
-                    ],
-                  }],
-                }),
-                signal: controller.signal,
-              });
-              clearTimeout(timeoutId);
-              if (!response.ok) {
-                if (response.status === 401) throw new Error('API key invalid (401)');
-                throw new Error(`HTTP ${response.status}`);
-              }
-              const data = await response.json();
-              const rawText = data.content?.[0]?.text ?? '';
-              const match = rawText.match(/\{[\s\S]*\}/);
-              if (!match) throw new Error('No JSON in response');
-              return JSON.parse(match[0]) as AnalizSonuc;
-            } catch (err: any) {
-              clearTimeout(timeoutId);
-              throw err;
-            }
-          };
-
-          const isNetworkError = (err: any) =>
-            err instanceof TypeError || err?.message?.includes('Network') || err?.message?.includes('Failed to fetch');
-
-          let sonuc: AnalizSonuc | null = null;
-          let lastErr: any = null;
-          const MAX_RETRY = 2;
-          for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
-            try {
-              sonuc = await claudeFetch();
-              break;
-            } catch (err: any) {
-              lastErr = err;
-              if (attempt < MAX_RETRY) await new Promise(res => setTimeout(res, 2000));
-            }
-          }
-
-          if (sonuc) {
-            setAnalizSonuc(sonuc);
-          } else {
-            setAnalizHata(isNetworkError(lastErr) ? t.analizInternetHata : t.analizHataMesaji);
-          }
-        } catch (e) {
-          setAnalizHata(t.analizHataMesaji);
-        } finally { setAnalizYapiliyor(false); }
-      }, 10000);
-    } catch (e) {
-      setKayitYapiliyor(false); setGeriSayim(null);
-      if (geriSayimRef.current) clearInterval(geriSayimRef.current);
-      setAnalizHata(t.analizHataMesaji);
-    }
-  };
+  }, [cryCevaplar, crySonucHesapla, crySonucuKaydet]);
 
   const bebekUyudu = () => {
     const yeniKayit: UykuKaydi = { id: Date.now(), baslangic: Date.now(), bitis: null };
@@ -493,7 +600,7 @@ export default function Analiz() {
   };
 
   const dedektoraBasildi = async (tip: DedektorTip) => {
-    if (!isPremium && !isTrial) {
+    if (free) {
       if (detektorHak <= 0) { setPaywallTip('detektor'); setPaywallVisible(true); return; }
       const hakKullanildi = await detektorKullan();
       if (!hakKullanildi) { setPaywallTip('detektor'); setPaywallVisible(true); return; }
@@ -603,6 +710,12 @@ export default function Analiz() {
       if (!dinlemeRef.current) return;
       const ortDb = dbOrnekleri.length > 0 ? dbOrnekleri.reduce((a, b) => a + b, 0) / dbOrnekleri.length : -160;
       if (ortDb < -30) {
+        // Bebek sakinleşti — ses öğrenme kaydı
+        if (sesCalmaBaslangicRef.current > 0) {
+          const kalisSn = Math.round((Date.now() - sesCalmaBaslangicRef.current) / 1000);
+          sesCalmaBaslangicRef.current = 0;
+          sesOgrenmeKaydet(ses.id, ses.name, kalisSn);
+        }
         sendAlertToAll('silence').catch(() => {});
         if (audioManager.getState().tab === 'analiz') await audioManager.stop();
         caliyorRef.current = false; setCaliniyor(false); aglamaCountRef.current = 0;
@@ -619,6 +732,7 @@ export default function Analiz() {
   const sesCaldir = async (ses: SesTip) => {
     if (caliyorRef.current) return;
     caliyorRef.current = true; setCaliniyor(true);
+    sesCalmaBaslangicRef.current = Date.now();
     aglamaSayisiRef.current += 1; setAglamaSayisi(aglamaSayisiRef.current);
     if (!ilkAglamaZamaniRef.current) ilkAglamaZamaniRef.current = Date.now();
     const bildirimTip = aktifDedektorRef.current === 'kolik' ? 'colic' : 'crying';
@@ -636,6 +750,22 @@ export default function Analiz() {
       bildirimIdRef.current = null;
     }
     await herSeyiDurdur();
+    // Wake Window bildirimini planla
+    try {
+      const haftalar = bebekHaftasiHesapla();
+      if (haftalar !== null) {
+        let wakeWindowDk = 90;
+        if (haftalar < 6)       wakeWindowDk = 45;
+        else if (haftalar < 12) wakeWindowDk = 60;
+        else if (haftalar < 16) wakeWindowDk = 75;
+        else if (haftalar < 24) wakeWindowDk = 120;
+        else if (haftalar < 36) wakeWindowDk = 150;
+        else                    wakeWindowDk = 180;
+        const msg = t.wakeWindowAcik(wakeWindowDk);
+        setTimeout(() => wakeWindowBildirimGonder(msg), wakeWindowDk * 60 * 1000);
+      }
+    } catch {}
+
     const bitis = Date.now(), baslangic = geceBaslangicRef.current;
     const toplamUyku  = Math.floor((bitis - baslangic) / 1000);
     const uykulaDalma = ilkAglamaZamaniRef.current ? Math.max(120, Math.floor((ilkAglamaZamaniRef.current - baslangic) / 1000)) : Math.max(120, Math.floor(toplamUyku * 0.05));
@@ -672,10 +802,24 @@ export default function Analiz() {
     ? [...(anneNinniUri  ? [{ id: 999, name: lang === 'en' ? "Mom's Lullaby 👑" : 'Anne Sesi Ninnisi 👑', icon: '💜', file: { uri: anneNinniUri  } }] : []), ...sabitNinniler]
     : [...(annePisPisUri ? [{ id: 998, name: lang === 'en' ? "Mom's Shush 👑"    : 'Anne Sesi Pış Pış 👑',  icon: '💜', file: { uri: annePisPisUri } }] : []), ...sabitKolik];
 
-  const oneriGetir = (sonuc: AnalizSonuc) => {
-    const en = (['aclik', 'gaz', 'uyku', 'bez', 'diger'] as const).reduce((a, b) => sonuc[a] >= sonuc[b] ? a : b);
-    return t.oneriGetir(en);
-  };
+  const cryKategoriLabel = useCallback((k: CryKategori): string => ({
+    aclik: t.cryHelperAclik, uykusuzluk: t.cryHelperUykusuzluk,
+    gaz: t.cryHelperGaz, bez: t.cryHelperBez, genel: t.cryHelperGenel,
+  }[k]), [t]);
+
+  const cryKategoriOneri = useCallback((k: CryKategori): string => ({
+    aclik: t.cryHelperAclikOneri, uykusuzluk: t.cryHelperUykuOneri,
+    gaz: t.cryHelperGazOneri, bez: t.cryHelperBezOneri, genel: t.cryHelperGenelOneri,
+  }[k]), [t]);
+
+  const crySoruMetinleri = [t.cryHelperS1, t.cryHelperS2, t.cryHelperS3, t.cryHelperS4, t.cryHelperS5];
+  const crySecenekMetinleri = [
+    [t.cryHelperS1A, t.cryHelperS1B, t.cryHelperS1C],
+    [t.cryHelperS2A, t.cryHelperS2B, t.cryHelperS2C],
+    [t.cryHelperS3A, t.cryHelperS3B, t.cryHelperS3C],
+    [t.cryHelperS4A, t.cryHelperS4B, t.cryHelperS4C],
+    [t.cryHelperS5A, t.cryHelperS5B, t.cryHelperS5C],
+  ];
 
   return (
     <View style={styles.container}>
@@ -853,64 +997,127 @@ export default function Analiz() {
         )}
         </View>
 
-        {/* AĞLAMA ANALİZİ */}
-        <View style={styles.aglamaAnalizKart}>
-          <View style={styles.aglamaAnalizUst}>
-            <Text style={styles.aglamaAnalizBaslik}>{t.aglamaAnalizBaslik}</Text>
-            {free && <View style={styles.premiumMiniRozet}><Text style={styles.premiumMiniRozetYazi}>{t.premiumKilit}</Text></View>}
+        {/* GELİŞİM SIÇRAMASI — Wonder Weeks — herkese görünür */}
+        {gelisimSicramasiVarMi && (
+          <View style={styles.gelisimKart}>
+            <Text style={styles.gelisimBaslik}>{t.gelisimSicramasiBaslik}</Text>
+            <Text style={styles.gelisimAcik}>{t.gelisimSicramasiAcik}</Text>
+            <Text style={styles.gelisimAlt}>{t.gelisimSicramasiAlt}</Text>
           </View>
-          <Text style={styles.aglamaAnalizAcik}>{t.aglamaAnalizAcik}</Text>
-          {!isPremium && !isTrial && (
-            <View style={styles.hakBilgi}>
-              <Text style={styles.hakBilgiYazi}>{t.bugunAnalizHak(analizHak)}</Text>
-            </View>
-          )}
-          <TouchableOpacity
-            style={[styles.aglamaAnalizBtn, (kayitYapiliyor || analizYapiliyor) && styles.aglamaAnalizBtnDisabled]}
-            onPress={analizBaslat}
-            disabled={kayitYapiliyor || analizYapiliyor}
-          >
-            {kayitYapiliyor ? (
-              <View style={styles.aglamaAnalizRow}>
-                <Text style={styles.aglamaAnalizBtnYazi}>{t.analizDinleniyor}</Text>
-                <View style={styles.geriSayimDaire}><Text style={styles.geriSayimYazi}>{geriSayim}</Text></View>
-              </View>
-            ) : analizYapiliyor ? (
-              <View style={styles.aglamaAnalizRow}><ActivityIndicator color="white" size="small" /><Text style={styles.aglamaAnalizBtnYazi}>{t.analizEdiliyor}</Text></View>
+        )}
+
+        {/* SES ÖNERİSİ */}
+        {sesOnerisi && (
+          <View style={styles.sesOgrenmeKart}>
+            <Text style={styles.sesOgrenmeBaslik}>{t.sesOgrenmeBaslik}</Text>
+            <Text style={styles.sesOgrenmeOneri}>{t.sesOgrenmeOneri(sesOnerisi.sesAdi)}</Text>
+          </View>
+        )}
+
+        {/* YAŞA GÖRE KARŞILAŞTIRMA */}
+        {yasaGoreOnerilen && (
+          <View style={styles.yasaGoreKart}>
+            <Text style={styles.yasaGoreBaslik}>{t.yasaGoreBaslik}</Text>
+            {free ? (
+              <TouchableOpacity onPress={() => { setPaywallTip('premium'); setPaywallVisible(true); }}>
+                <Text style={styles.premiumKilitGenelYazi}>{t.yasaGorePremium}</Text>
+                <Text style={styles.premiumKilitGenelBtn}>{t.premiumKilitGenelBtn}</Text>
+              </TouchableOpacity>
             ) : (
-              <Text style={styles.aglamaAnalizBtnYazi}>{t.analizBtn}</Text>
+              <>
+                {(() => {
+                  const onerSaat = Math.floor(yasaGoreOnerilen.saatSn / 3600);
+                  const onerDk   = Math.floor((yasaGoreOnerilen.saatSn % 3600) / 60);
+                  const ortSaat  = Math.floor(son7GunOrtUyku / 3600);
+                  const ortDk    = Math.floor((son7GunOrtUyku % 3600) / 60);
+                  const fark     = son7GunOrtUyku - yasaGoreOnerilen.saatSn;
+                  const mesaj    = Math.abs(fark) < 3600 ? t.yasaGoreIyi : fark < 0 ? t.yasaGoreAz : t.yasaGoreFazla;
+                  return (
+                    <>
+                      <Text style={styles.yasaGoreSatir}>{t.yasaGoreOnerilen(onerSaat, onerDk)}</Text>
+                      <Text style={styles.yasaGoreSatir}>{t.yasaGoreOrtalama(ortSaat, ortDk)}</Text>
+                      <Text style={styles.yasaGoreMesaj}>{mesaj}</Text>
+                    </>
+                  );
+                })()}
+              </>
             )}
-          </TouchableOpacity>
-          {analizHata && (
-            <View style={styles.analizHataBox}>
-              <Text style={styles.analizHataYazi}>⚠️ {analizHata}</Text>
-            </View>
+          </View>
+        )}
+
+        {/* AĞLAMA YARDIMCISI */}
+        <View style={styles.cryHelperKart}>
+          {cryHelperAdim === 'giris' && (
+            <>
+              <Text style={styles.cryHelperBaslik}>{t.cryHelperBaslik}</Text>
+              <Text style={styles.cryHelperAcik}>{t.cryHelperAcik}</Text>
+              {free && analizHak > 0 && (
+                <View style={styles.hakBilgi}><Text style={styles.hakBilgiYazi}>{t.cryHelperHak(analizHak)}</Text></View>
+              )}
+              <TouchableOpacity style={styles.cryHelperBaslatBtn} onPress={cryHelperBaslat}>
+                <Text style={styles.cryHelperBaslatBtnYazi}>{t.cryHelperBaslat}</Text>
+              </TouchableOpacity>
+              {cryGecmis.length > 0 && (
+                <>
+                  <TouchableOpacity style={styles.cryHelperGecmisToggle} onPress={() => setCryGecmisGoster(!cryGecmisGoster)}>
+                    <Text style={styles.cryHelperGecmisToggleYazi}>{t.cryHelperGecmis}</Text>
+                    <Text style={styles.cryHelperGecmisToggleIkon}>{cryGecmisGoster ? '▲' : '▼'}</Text>
+                  </TouchableOpacity>
+                  {cryGecmisGoster && cryGecmis.map((g, i) => (
+                    <View key={i} style={styles.cryHelperGecmisItem}>
+                      <Text style={styles.cryHelperGecmisItemYazi}>
+                        {cryKategoriLabel(g.sonuc1)}{g.sonuc2 ? ' · ' + cryKategoriLabel(g.sonuc2) : ''}
+                      </Text>
+                      <Text style={styles.cryHelperGecmisTarih}>{formatSaat(g.tarih)} · {formatTarih(g.tarih)}</Text>
+                    </View>
+                  ))}
+                </>
+              )}
+            </>
           )}
-          {analizSonuc && (
-            <View style={styles.sonucBox}>
-              {t.analizSonuclar.map((item, i) => {
-                const keys = ['aclik', 'gaz', 'uyku', 'bez', 'diger'] as const;
-                const value = analizSonuc[keys[i]];
-                return (
-                  <View key={item.label} style={styles.sonucRow}>
-                    <Text style={styles.sonucLabel}>{item.label}</Text>
-                    <View style={styles.barBg}><View style={[styles.barFill, { width: (value + '%') as any, backgroundColor: item.color }]} /></View>
-                    <Text style={styles.sonucYuzde}>{'%' + value}</Text>
-                  </View>
-                );
-              })}
-              {(() => { const o = oneriGetir(analizSonuc); return (
-                <View style={styles.oneriKart}>
-                  <Text style={styles.oneriIkon}>{o.ikon}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.oneriBaslik}>{o.baslik}</Text>
-                    {o.kucuk ? <Text style={styles.oneriKucuk}>{o.kucuk}</Text> : null}
-                  </View>
+
+          {cryHelperAdim === 'soru' && (
+            <>
+              <View style={styles.cryHelperProgressRow}>
+                {[0,1,2,3,4].map(i => (
+                  <View key={i} style={[styles.cryHelperProgressDot, i < cryCevaplar.length && styles.cryHelperProgressDotTamamlandi, i === cryCevaplar.length && styles.cryHelperProgressDotAktif]} />
+                ))}
+              </View>
+              <Text style={styles.cryHelperSoruNo}>{t.cryHelperSoru(cryCevaplar.length + 1)}</Text>
+              <Text style={styles.cryHelperSoruMetin}>{crySoruMetinleri[cryCevaplar.length]}</Text>
+              {crySecenekMetinleri[cryCevaplar.length].map((secenek, secIdx) => (
+                <TouchableOpacity key={secIdx} style={styles.cryHelperSecenekBtn} onPress={() => cryCevapSec(secIdx)}>
+                  <Text style={styles.cryHelperSecenekYazi}>{secenek}</Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+
+          {cryHelperAdim === 'sonuc' && crySonuc.length > 0 && (
+            <>
+              <Text style={styles.cryHelperSonucBaslik}>{t.cryHelperSonucBaslik}</Text>
+              {crySonuc.slice(0, 2).map((k, i) => (
+                <View key={k} style={[styles.cryHelperSonucItem, i === 0 && styles.cryHelperSonucItem1]}>
+                  <Text style={[styles.cryHelperSonucKategori, i === 0 && styles.cryHelperSonucKategori1]}>{cryKategoriLabel(k)}</Text>
+                  <Text style={styles.cryHelperSonucOneri}>{cryKategoriOneri(k)}</Text>
                 </View>
-              ); })()}
-            </View>
+              ))}
+              {/* Ses kısayolları */}
+              {(crySonuc[0] === 'uykusuzluk' || crySonuc[1] === 'uykusuzluk') && (
+                <TouchableOpacity style={styles.cryHelperSesBtn} onPress={() => { setCryHelperAdim('giris'); router.push('/'); }}>
+                  <Text style={styles.cryHelperSesBtnYazi}>{t.cryHelperNinniGit}</Text>
+                </TouchableOpacity>
+              )}
+              {(crySonuc[0] === 'gaz' || crySonuc[1] === 'gaz') && (
+                <TouchableOpacity style={[styles.cryHelperSesBtn, styles.cryHelperSesBtnKolik]} onPress={() => { setCryHelperAdim('giris'); router.push('/kolik'); }}>
+                  <Text style={styles.cryHelperSesBtnYazi}>{t.cryHelperKolikGit}</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.cryHelperTekrarBtn} onPress={() => { setCryHelperAdim('giris'); }}>
+                <Text style={styles.cryHelperTekrarBtnYazi}>{t.cryHelperTekrar}</Text>
+              </TouchableOpacity>
+            </>
           )}
-          <Text style={styles.disclaimer}>{t.disclaimer}</Text>
         </View>
 
         {/* UZMAN ÖNERİLERİ */}
@@ -965,7 +1172,9 @@ export default function Analiz() {
           <ScrollView contentContainerStyle={{ padding: 20 }}>
             {sonRapor && (
               <View style={styles.raporModalKutu}>
-                <Text style={styles.raporModalBaslik}>{t.geceRaporuBaslik}</Text>
+                <Text style={styles.raporModalBaslik}>
+                  {raporGunduMu(sonRapor.baslangic) ? t.gunduzRaporuBaslik : t.geceRaporuTamBaslik}
+                </Text>
                 <Text style={styles.raporModalTarih}>{formatTarihGuzel(sonRapor.baslangic)}</Text>
 
                 {free ? (
@@ -1060,6 +1269,103 @@ export default function Analiz() {
                         </View>
                       );
                     })()}
+
+                    {/* TİMELINE */}
+                    {(() => {
+                      const baslangic = sonRapor.baslangic;
+                      const bitis = sonRapor.bitis;
+                      const toplamMs = bitis - baslangic;
+                      const saatBaslangic = new Date(baslangic).getHours();
+                      const saatBitis    = new Date(bitis).getHours();
+                      const barWidth = 280;
+                      const toplamUykuOran = sonRapor.toplamUyku / (toplamMs / 1000);
+                      return (
+                        <View style={styles.timelineKutu}>
+                          <Text style={styles.timelineBaslik}>{t.timelineBaslik}</Text>
+                          <View style={styles.timelineBar}>
+                            <View style={[styles.timelineUyku, { width: Math.min(barWidth, toplamUykuOran * barWidth) }]} />
+                          </View>
+                          <View style={styles.timelineEtiketler}>
+                            <Text style={styles.timelineEtiket}>{saatBaslangic.toString().padStart(2, '0') + ':00'}</Text>
+                            <Text style={styles.timelineEtiket}>{saatBitis.toString().padStart(2, '0') + ':00'}</Text>
+                          </View>
+                          <View style={styles.timelineLegend}>
+                            <View style={styles.timelineLegendRow}><View style={[styles.timelineDot, { backgroundColor: '#9d8cef' }]} /><Text style={styles.timelineLegendYazi}>{t.timelineUyku}</Text></View>
+                          </View>
+                        </View>
+                      );
+                    })()}
+
+                    {/* HAFTALIK TREND */}
+                    {haftalikTrend.buHaftaSayisi > 0 && haftalikTrend.gecenHaftaSayisi > 0 && (
+                      <View style={styles.haftalikTrendKutu}>
+                        <Text style={styles.haftalikTrendBaslik}>{t.haftalikTrendBaslik}</Text>
+                        {[
+                          {
+                            etiket: t.haftalikOrtUyku,
+                            buHafta: haftalikTrend.buHaftaOrt,
+                            gecenHafta: haftalikTrend.gecenHaftaOrt,
+                            formatFn: (s: number) => formatSure(Math.round(s)),
+                            pozitifArtti: true,
+                          },
+                          {
+                            etiket: t.haftalikAglama,
+                            buHafta: haftalikTrend.buHaftaAglama,
+                            gecenHafta: haftalikTrend.gecenHaftaAglama,
+                            formatFn: (s: number) => Math.round(s).toString(),
+                            pozitifArtti: false, // ağlama azalırsa iyi
+                          },
+                        ].map(item => {
+                          const fark = item.buHafta - item.gecenHafta;
+                          const iyiMi = item.pozitifArtti ? fark > 0 : fark < 0;
+                          const renk = fark === 0 ? 'rgba(255,255,255,0.5)' : iyiMi ? '#4ade80' : '#f87171';
+                          const metin = fark === 0 ? t.trendAyni : fark > 0 ? t.trendArtti(item.formatFn(Math.abs(fark))) : t.trendAzaldi(item.formatFn(Math.abs(fark)));
+                          return (
+                            <View key={item.etiket} style={styles.karsilastirmaSatir}>
+                              <Text style={styles.karsilastirmaEtiket}>{item.etiket}</Text>
+                              <Text style={[styles.karsilastirmaDeger, { color: renk }]}>{metin}</Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    {/* DÜZEN ANALİZİ */}
+                    {duzenAnalizi !== 'yetersiz' && (
+                      <View style={styles.duzenAnaliziKutu}>
+                        <Text style={styles.duzenAnaliziBaslik}>{t.duzenAnaliziBaslik}</Text>
+                        <Text style={styles.duzenAnaliziMetin}>
+                          {duzenAnalizi === 'dengeli' ? t.duzenDengeli : t.duzenHafifKaymis}
+                        </Text>
+                        <Text style={styles.duzenAnaliziNot}>{t.duzenDuzenliNot}</Text>
+                      </View>
+                    )}
+
+                    {/* UYKU HAFIZASI */}
+                    <View style={styles.uykuHafizasiKutu}>
+                      <Text style={styles.uykuHafizasiBaslik}>{t.uykuHafizasiBaslik}</Text>
+                      {uykuHafizasi ? (() => {
+                        const fark = sonRapor.toplamUyku - uykuHafizasi.toplamUyku;
+                        const metin = Math.abs(fark) < 900
+                          ? t.uykuHafizasiAyni
+                          : fark > 0 ? t.uykuHafizasiIyi : t.uykuHafizasiKotu;
+                        const renk = Math.abs(fark) < 900 ? 'rgba(255,255,255,0.5)' : fark > 0 ? '#4ade80' : '#f87171';
+                        return (
+                          <>
+                            <Text style={styles.uykuHafizasiVardi}>{t.uykuHafizasiVardi(formatSure(uykuHafizasi.toplamUyku))}</Text>
+                            <Text style={[styles.uykuHafizasiKarsi, { color: renk }]}>{metin}</Text>
+                          </>
+                        );
+                      })() : (
+                        <Text style={styles.uykuHafizasiVardi}>{t.uykuHafizasiYoktu}</Text>
+                      )}
+                    </View>
+
+                    {/* EBEVEYN NOTU */}
+                    <View style={styles.buGeceIcinKutu}>
+                      <Text style={styles.buGeceIcinBaslik}>{t.buGeceIcinBaslik}</Text>
+                      <Text style={styles.buGeceIcinMesaj}>{buGeceIcinMesaj(sonRapor.uykuKalitesi)}</Text>
+                    </View>
                   </View>
                 )}
                 <TouchableOpacity style={[styles.raporModalBtn, { marginTop: 20 }]} onPress={closeRaporModal}>
@@ -1079,7 +1385,9 @@ export default function Analiz() {
             <View style={styles.modalKol} />
             {seciliRapor && (
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalBaslik}>{t.geceRaporuBaslik}</Text>
+                <Text style={styles.modalBaslik}>
+                  {raporGunduMu(seciliRapor.baslangic) ? t.gunduzRaporuBaslik : t.geceRaporuTamBaslik}
+                </Text>
                 <Text style={styles.modalAltBaslik}>{formatTarihGuzel(seciliRapor.baslangic)}</Text>
                 <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
                   <View style={styles.skorDaireKutu}>
@@ -1329,29 +1637,37 @@ const styles = StyleSheet.create({
   grafikAciklamaRow:      { flexDirection: 'row', alignItems: 'center', gap: 4 },
   grafikAciklamaNokta:    { width: 8, height: 8, borderRadius: 4 },
   grafikAciklamaYazi:     { color: 'rgba(255,255,255,0.4)', fontSize: 10 },
-  aglamaAnalizKart:       { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  aglamaAnalizUst:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  aglamaAnalizBaslik:     { color: 'white', fontSize: 16, fontWeight: 'bold', flex: 1 },
-  aglamaAnalizAcik:       { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginBottom: 14 },
-  aglamaAnalizBtn:        { backgroundColor: '#9d8cef', borderRadius: 12, padding: 14, alignItems: 'center' },
-  aglamaAnalizBtnDisabled:{ backgroundColor: 'rgba(157,140,239,0.5)' },
-  aglamaAnalizRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  aglamaAnalizBtnYazi:    { color: 'white', fontSize: 15, fontWeight: 'bold' },
-  geriSayimDaire:         { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
-  geriSayimYazi:          { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  analizHataBox:          { marginTop: 12, backgroundColor: 'rgba(229,115,115,0.1)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(229,115,115,0.25)' },
-  analizHataYazi:         { color: '#E57373', fontSize: 13, lineHeight: 18, textAlign: 'center' },
-  sonucBox:               { marginTop: 14, gap: 8 },
-  sonucRow:               { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sonucLabel:             { color: 'white', fontSize: 12, width: 110 },
-  barBg:                  { flex: 1, height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' },
-  barFill:                { height: 8, borderRadius: 4 },
-  sonucYuzde:             { color: 'white', fontSize: 12, width: 35, textAlign: 'right' },
-  oneriKart:              { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(157,140,239,0.15)', borderRadius: 14, padding: 14, marginTop: 14, borderWidth: 1, borderColor: 'rgba(157,140,239,0.3)' },
-  oneriIkon:              { fontSize: 32 },
-  oneriBaslik:            { color: 'white', fontSize: 14, fontWeight: 'bold', lineHeight: 20 },
-  oneriKucuk:             { color: 'rgba(255,255,255,0.45)', fontSize: 11, marginTop: 4 },
-  disclaimer:             { color: 'rgba(255,255,255,0.35)', fontSize: 11, marginTop: 10, lineHeight: 16 },
+  // ── AĞLAMA YARDIMCISI ────────────────────────────────────────────────────────
+  cryHelperKart:              { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', gap: 12 },
+  cryHelperBaslik:            { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  cryHelperAcik:              { color: 'rgba(255,255,255,0.55)', fontSize: 13, lineHeight: 18 },
+  cryHelperBaslatBtn:         { backgroundColor: '#9d8cef', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 4 },
+  cryHelperBaslatBtnYazi:     { color: 'white', fontSize: 15, fontWeight: 'bold' },
+  cryHelperGecmisToggle:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', marginTop: 4 },
+  cryHelperGecmisToggleYazi:  { color: 'rgba(255,255,255,0.45)', fontSize: 12 },
+  cryHelperGecmisToggleIkon:  { color: 'rgba(255,255,255,0.35)', fontSize: 11 },
+  cryHelperGecmisItem:        { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 10, gap: 3 },
+  cryHelperGecmisItemYazi:    { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' },
+  cryHelperGecmisTarih:       { color: 'rgba(255,255,255,0.35)', fontSize: 11 },
+  cryHelperProgressRow:       { flexDirection: 'row', gap: 6, justifyContent: 'center' },
+  cryHelperProgressDot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.12)' },
+  cryHelperProgressDotTamamlandi: { backgroundColor: '#9d8cef' },
+  cryHelperProgressDotAktif:  { backgroundColor: 'white', width: 20 },
+  cryHelperSoruNo:            { color: 'rgba(157,140,239,0.8)', fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  cryHelperSoruMetin:         { color: 'white', fontSize: 16, fontWeight: 'bold', textAlign: 'center', lineHeight: 22 },
+  cryHelperSecenekBtn:        { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'flex-start' },
+  cryHelperSecenekYazi:       { color: 'white', fontSize: 14, lineHeight: 20 },
+  cryHelperSonucBaslik:       { color: '#b8a8f8', fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
+  cryHelperSonucItem:         { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 12, gap: 4 },
+  cryHelperSonucItem1:        { backgroundColor: 'rgba(157,140,239,0.18)', borderColor: 'rgba(157,140,239,0.4)', borderWidth: 1 },
+  cryHelperSonucKategori:     { color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: 'bold' },
+  cryHelperSonucKategori1:    { color: '#b8a8f8', fontSize: 15 },
+  cryHelperSonucOneri:        { color: 'rgba(255,255,255,0.55)', fontSize: 13, lineHeight: 18 },
+  cryHelperSesBtn:            { backgroundColor: 'rgba(157,140,239,0.2)', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(157,140,239,0.35)' },
+  cryHelperSesBtnKolik:       { backgroundColor: 'rgba(74,222,128,0.12)', borderColor: 'rgba(74,222,128,0.3)' },
+  cryHelperSesBtnYazi:        { color: 'white', fontSize: 14, fontWeight: '600' },
+  cryHelperTekrarBtn:         { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  cryHelperTekrarBtnYazi:     { color: 'rgba(255,255,255,0.55)', fontSize: 13 },
   yasSecici:              { flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' },
   yasBtn:                 { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   yasBtnAktif:            { backgroundColor: 'rgba(157,140,239,0.2)', borderColor: '#9d8cef' },
@@ -1413,4 +1729,58 @@ const styles = StyleSheet.create({
   detayModalArkaPlan:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
   detayModalKutu:         { backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, height: '92%' },
   premiumKilit:           { color: '#b8a8f8', fontSize: 10, fontWeight: 'bold' },
+
+  // ── YENİ ÖZELLIK STİLLERİ ───────────────────────────────────────────────────
+
+  // Gelişim sıçraması
+  gelisimKart:            { backgroundColor: 'rgba(245,166,35,0.12)', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(245,166,35,0.4)', gap: 6 },
+  gelisimBaslik:          { color: '#F5A623', fontSize: 16, fontWeight: 'bold' },
+  gelisimAcik:            { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 20 },
+  gelisimAlt:             { color: 'rgba(245,166,35,0.7)', fontSize: 12, fontStyle: 'italic' },
+
+  // Ses öğrenme
+  sesOgrenmeKart:         { backgroundColor: 'rgba(157,140,239,0.1)', borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(157,140,239,0.25)', gap: 4 },
+  sesOgrenmeBaslik:       { color: '#b8a8f8', fontSize: 14, fontWeight: 'bold' },
+  sesOgrenmeOneri:        { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
+
+  // Yaşa göre karşılaştırma
+  yasaGoreKart:           { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', gap: 8 },
+  yasaGoreBaslik:         { color: 'white', fontSize: 15, fontWeight: 'bold' },
+  yasaGoreSatir:          { color: 'rgba(255,255,255,0.6)', fontSize: 13 },
+  yasaGoreMesaj:          { color: '#4ade80', fontSize: 13, fontWeight: '600' },
+  premiumKilitGenelYazi:  { color: 'rgba(255,255,255,0.45)', fontSize: 13 },
+  premiumKilitGenelBtn:   { color: '#9d8cef', fontSize: 13, fontWeight: '700', marginTop: 4 },
+
+  // Timeline (rapor modal içi)
+  timelineKutu:           { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 14, marginTop: 10, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', gap: 8 },
+  timelineBaslik:         { color: '#b8a8f8', fontSize: 14, fontWeight: 'bold' },
+  timelineBar:            { height: 16, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' },
+  timelineUyku:           { height: 16, backgroundColor: '#9d8cef', borderRadius: 8 },
+  timelineEtiketler:      { flexDirection: 'row', justifyContent: 'space-between' },
+  timelineEtiket:         { color: 'rgba(255,255,255,0.35)', fontSize: 10 },
+  timelineLegend:         { flexDirection: 'row', gap: 12, marginTop: 4 },
+  timelineLegendRow:      { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  timelineDot:            { width: 8, height: 8, borderRadius: 4 },
+  timelineLegendYazi:     { color: 'rgba(255,255,255,0.45)', fontSize: 10 },
+
+  // Haftalık trend (rapor modal içi)
+  haftalikTrendKutu:      { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', gap: 10 },
+  haftalikTrendBaslik:    { color: '#b8a8f8', fontSize: 14, fontWeight: 'bold', marginBottom: 4 },
+
+  // Düzen analizi (rapor modal içi)
+  duzenAnaliziKutu:       { backgroundColor: 'rgba(74,222,128,0.06)', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(74,222,128,0.2)', gap: 6 },
+  duzenAnaliziBaslik:     { color: '#4ade80', fontSize: 14, fontWeight: 'bold' },
+  duzenAnaliziMetin:      { color: 'rgba(255,255,255,0.7)', fontSize: 13, lineHeight: 20 },
+  duzenAnaliziNot:        { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontStyle: 'italic' },
+
+  // Uyku hafızası (rapor modal içi)
+  uykuHafizasiKutu:       { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', gap: 6 },
+  uykuHafizasiBaslik:     { color: '#b8a8f8', fontSize: 14, fontWeight: 'bold' },
+  uykuHafizasiVardi:      { color: 'rgba(255,255,255,0.6)', fontSize: 13 },
+  uykuHafizasiKarsi:      { fontSize: 13, fontWeight: '600' },
+
+  // Ebeveyn notu (rapor modal içi)
+  buGeceIcinKutu:         { backgroundColor: 'rgba(157,140,239,0.1)', borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(157,140,239,0.25)', alignItems: 'center', gap: 8 },
+  buGeceIcinBaslik:       { color: '#b8a8f8', fontSize: 14, fontWeight: 'bold' },
+  buGeceIcinMesaj:        { color: 'rgba(255,255,255,0.8)', fontSize: 14, lineHeight: 22, textAlign: 'center' },
 });

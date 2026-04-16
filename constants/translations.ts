@@ -148,15 +148,50 @@ const tr = {
   bosRapor:               'Henüz gece raporu yok',
   yedıGunGrafik:          '7 Günlük Uyku Skoru',
   grafikKilit:            '7 Günlük grafik Premium\'da',
-  aglamaAnalizBaslik:     '🎤 Bebeğin neden ağlıyor?',
-  aglamaAnalizAcik:       '10 saniyede ses analiziyle tahmin eder',
-  bugunAnalizHak:         (n: number) => `🎯 Bugün ${n} analiziniz kaldı`,
-  analizBtn:              '🎙 10 saniyede nedenini öğren',
-  analizDinleniyor:       '🎙 Dinleniyor... ',
-  analizEdiliyor:         ' Analiz ediliyor...',
-  analizHataMesaji:       'Analiz şu an yapılamıyor, lütfen tekrar deneyin',
-  analizInternetHata:     'İnternet bağlantısı gerekli',
-  disclaimer:             'Bu analiz yalnızca tahmine dayalıdır, tıbbi teşhis değildir.',
+  // ── AĞLAMA YARDIMCISI ──────────────────────────────────────────────────────
+  cryHelperBaslik:        '❓ Neden ağlıyor olabilir?',
+  cryHelperAcik:          '5 kısa soruyla olası nedeni bulalım',
+  cryHelperBaslat:        'Başla',
+  cryHelperSoru:          (n: number) => `Soru ${n}/5`,
+  cryHelperIleri:         'İleri →',
+  cryHelperSonucBaslik:   'Olası Neden',
+  cryHelperTekrar:        '🔄 Tekrar Dene',
+  cryHelperGecmis:        '📋 Geçmiş Analizler',
+  cryHelperGecmisYok:     'Henüz analiz yapılmadı',
+  cryHelperS1:            'Ne zaman beslendi?',
+  cryHelperS1A:           '🍼 1 saatten az önce',
+  cryHelperS1B:           '⏰ 1-3 saat önce',
+  cryHelperS1C:           '⏳ 3 saatten fazla önce',
+  cryHelperS2:            'Uyku durumu nasıl?',
+  cryHelperS2A:           '😴 Uzun süredir uyanık, yorgun görünüyor',
+  cryHelperS2B:           '☀️ Az önce uyandı',
+  cryHelperS2C:           '✅ Yeterince uyudu',
+  cryHelperS3:            'Bezi ne zaman değiştirildi?',
+  cryHelperS3A:           '✅ Az önce değiştirildi',
+  cryHelperS3B:           '❓ Bilmiyorum / bakmadım',
+  cryHelperS3C:           '💧 Uzun süredir değiştirilmedi',
+  cryHelperS4:            'Vücut dili nasıl?',
+  cryHelperS4A:           '🤱 Bacaklarını karına çekiyor / kıvranıyor',
+  cryHelperS4B:           '😤 Sakinleşiyor ama yine ağlıyor',
+  cryHelperS4C:           '😭 Sürekli ve kesintisiz ağlıyor',
+  cryHelperS5:            'Ortam ve genel durum?',
+  cryHelperS5A:           '😵 Çok fazla uyarılmış (gürültü, ışık)',
+  cryHelperS5B:           '🌿 Ortam sakin',
+  cryHelperS5C:           '🌡️ Hasta gibi görünüyor / ateşi var',
+  cryHelperAclik:         '🍼 Açlık',
+  cryHelperUykusuzluk:    '😴 Uykusuzluk',
+  cryHelperGaz:           '💨 Gaz / Kolik',
+  cryHelperBez:           '💧 Bez Rahatsızlığı',
+  cryHelperGenel:         '🤗 Genel Huzursuzluk',
+  cryHelperAclikOneri:    'Beslemeyi deneyin',
+  cryHelperUykuOneri:     'Ninni veya beyaz gürültüyle uyutun',
+  cryHelperGazOneri:      'Gaz çıkarmayı veya kolik sesi deneyin',
+  cryHelperBezOneri:      'Bezini kontrol edin ve değiştirin',
+  cryHelperGenelOneri:    'Bebeği sakin ortamda kucağa alın',
+  cryHelperNinniGit:      '🎵 Ninni Çal →',
+  cryHelperKolikGit:      '🌿 Kolik Sesi Çal →',
+  cryHelperHak:           (n: number) => `🎯 Bugün ${n} analiziniz kaldı`,
+  cryHelperSinirAsildi:   'Günlük hakkınızı kullandınız',
   uzmanOnerileriBaslik:   'Uzman Önerileri',
   ninniSec:               '🎵 Ninni Seç',
   kolikSesSec:            '🌿 Kolik Sesi Seç',
@@ -200,27 +235,11 @@ const tr = {
   yasGruplari:            ['0-3 ay', '3-6 ay', '6-12 ay', '1+ yaş'],
   // Paywall
   paywallDetektorBaslik:  '⏱ Dedektör Süresi Doldu',
-  paywallAnalizBaslik:    '🎤 Günlük Hakkınız Bitti',
+  paywallAnalizBaslik:    '❓ Günlük Hakkınız Bitti',
   paywallPremiumBaslik:   '👑 Premium Özellik',
   paywallDetektorAcik:    'Günlük 60 dakika hakkınızı kullandınız. Premium\'a geçin veya reklam izleyerek +1 hak kazanın.',
-  paywallAnalizAcik:      'Günlük analiz hakkınızı kullandınız. Premium\'a geçin veya reklam izleyerek +1 hak kazanın.',
+  paywallAnalizAcik:      'Günlük ağlama analizi hakkınızı kullandınız. Premium\'a geçin veya reklam izleyerek +1 hak kazanın.',
   paywallPremiumAcik:     'Bu özellik Premium\'a özeldir.',
-  // Analiz sonuçları
-  analizSonuclar: [
-    { label: '🍼 Açlık',        color: '#f59e0b' },
-    { label: '💨 Gaz',          color: '#8b5cf6' },
-    { label: '😴 Uyku',         color: '#3b82f6' },
-    { label: '💧 Bez Islaklığı',color: '#10b981' },
-    { label: '❓ Diğer',         color: '#6b7280' },
-  ],
-  oneriGetir: (en: 'aclik' | 'gaz' | 'uyku' | 'bez' | 'diger') => ({
-    aclik: { ikon: '🍼', baslik: 'Büyük ihtimalle aç. Beslemeyi deneyin.',   kucuk: '' },
-    gaz:   { ikon: '🤱', baslik: 'Gaz olabilir. Gaz çıkarmayı deneyin.',     kucuk: 'Kolik sesi önerilir.' },
-    uyku:  { ikon: '🎵', baslik: 'Uykusu gelmiş. Uyutmayı deneyin.',         kucuk: 'Hafif bir ninni önerilir.' },
-    bez:   { ikon: '🧷', baslik: 'Altı ıslak olabilir. Bezini kontrol edin.', kucuk: '' },
-    diger: { ikon: '🤗', baslik: 'Sebep net değil. Sakince kontrol edin.',    kucuk: 'Farklı bir rahatsızlık olabilir.' },
-  }[en]),
-
   // ── NİNNİLER ───────────────────────────────────────────────────────────────
   anneSesiNinni:      'Anne Sesiyle Ninni',
   premiumBadge:       '👑 Premium',
@@ -382,6 +401,90 @@ const tr = {
   partnerIzinVer:         'İzin Ver',
   partnerGeriDon:         'Geri Dön',
   partnerQRYon:           'Diğer cihazdaki LumiBaby QR kodunu çerçeveye getirin',
+
+  // ── GÜNDÜZ / GECE AYRIMI ───────────────────────────────────────────────────
+  gunduzRaporuBaslik:     '☀️ Gündüz Uykusu Raporu',
+  geceRaporuTamBaslik:    '🌙 Gece Uykusu Raporu',
+  gunduzSimge:            '☀️',
+  geceSimge:              '🌙',
+
+  // ── TİMELINE ────────────────────────────────────────────────────────────────
+  timelineBaslik:         '📊 Uyku Zaman Çizelgesi',
+  timelinePremiumTeaser:  '🔒 Zaman çizelgesi Premium\'da açılır',
+  timelineUyku:           '🟣 Uyku',
+  timelineAglama:         '🔴 Ağlama',
+
+  // ── HAFTALIK TREND ──────────────────────────────────────────────────────────
+  haftalikTrendBaslik:    '📈 Haftalık Trend',
+  haftalikTrendPremium:   '🔒 Haftalık trend analizi Premium\'da',
+  buHafta:                'Bu Hafta',
+  gecenHafta:             'Geçen Hafta',
+  haftalikToplamUyku:     'Toplam Uyku',
+  haftalikOrtUyku:        'Ort. Uyku',
+  haftalikAglama:         'Ağlama',
+  trendArtti:             (s: string) => `🔼 ${s} arttı`,
+  trendAzaldi:            (s: string) => `🔽 ${s} azaldı`,
+  trendAyni:              '➡️ Değişmedi',
+
+  // ── YAŞA GÖRE KARŞILAŞTIRMA ────────────────────────────────────────────────
+  yasaGoreBaslik:         '👶 Yaşına Göre Uyku',
+  yasaGorePremium:        '🔒 Yaş karşılaştırması Premium\'da',
+  yasaGoreOnerilen:       (saat: number, dk: number) => `Önerilen: ~${saat}s ${dk > 0 ? dk + 'dk' : ''}`,
+  yasaGoreOrtalama:       (saat: number, dk: number) => `Son 7 gün ortalamanız: ${saat}s ${dk > 0 ? dk + 'dk' : ''}`,
+  yasaGoreIyi:            '✅ Yaşına göre uyku süreniz iyi görünüyor.',
+  yasaGoreAz:             '⚠️ Biraz daha fazla uyku faydalı olabilir.',
+  yasaGoreFazla:          'ℹ️ Uyku süresi biraz fazla — gün içi kısa uyanık tutmayı deneyin.',
+
+  // ── DÜZEN ANALİZİ ──────────────────────────────────────────────────────────
+  duzenAnaliziBaslik:     '📋 Düzen Analizi',
+  duzenAnaliziPremium:    '🔒 Düzen analizi Premium\'da',
+  duzenDengeli:           '✨ Uyku saatleri oldukça tutarlı, harika iş!',
+  duzenHafifKaymis:       '⚠️ Uyku saatleri biraz değişken — tutarlı bir rutin oluşturmak yardımcı olabilir.',
+  duzenDuzenliNot:        'Düzenli uyku saatleri bebeğin iç saatini güçlendirir.',
+
+  // ── WAKE WINDOW ─────────────────────────────────────────────────────────────
+  wakeWindowBaslik:       '⏰ Uyanıklık Uyarısı',
+  wakeWindowAcik:         (dk: number) => `Bebeğiniz yaklaşık ${dk} dakika uyanık olabilir — yorgunluk işaretlerini izleyin.`,
+  wakeWindowKisa:         'Kısa bir uyku fırsatı yaklaşıyor olabilir.',
+  wakeWindowSerbest:      '✅ Temel uyarı (ücretsiz)',
+
+  // ── GELİŞİM SIÇRAMASI (Wonder Weeks) ────────────────────────────────────────
+  gelisimSicramasiBaslik: '🌟 Gelişim Sıçraması Dönemi!',
+  gelisimSicramasiAcik:   'Bebeğiniz şu sıralar bir gelişim sıçraması yaşıyor olabilir. Bu dönemde uykusuzluk ve huzursuzluk tamamen normaldir.',
+  gelisimSicramasiAlt:    'Bu dönem geçecek — sabırlı olun 🤍',
+
+  // ── UYKU HAFIZASI ───────────────────────────────────────────────────────────
+  uykuHafizasiBaslik:     '📅 Geçen Hafta Bu Gün',
+  uykuHafizasiPremium:    '🔒 Uyku hafızası Premium\'da',
+  uykuHafizasiVardi:      (sure: string) => `Geçen hafta bu gün ${sure} uyumuş`,
+  uykuHafizasiYoktu:      'Geçen hafta bu gün kayıt yok',
+  uykuHafizasiIyi:        '🔼 Bu gece daha iyi uyudu',
+  uykuHafizasiKotu:       '🔽 Bu gece daha az uyudu',
+  uykuHafizasiAyni:       '➡️ Geçen haftayla benzer',
+
+  // ── EBEVEYN NOTU ────────────────────────────────────────────────────────────
+  buGeceIcinBaslik:       'Bu Gece Sizin İçin 🤍',
+  buGeceIcinPremium:      '🔒 Ebeveyn notu Premium\'da',
+  buGeceIcinMesajlar: [
+    'Harika bir gece geçirdiniz! Bebeğiniz çok iyi uyudu 🌟',
+    'İyi bir gece oldu. Küçük adımlar, büyük başarılar 💜',
+    'Zorlu bir gece olmuş olabilir ama siz hep oradadınız 🤍',
+    'Yorucu bir gece geçtiyse de kendinize iyi bakın 🌙',
+  ],
+
+  // ── SES ÖĞRENME SİSTEMİ ─────────────────────────────────────────────────────
+  sesOgrenmeBaslik:       '🎵 Akıllı Ses Önerisi',
+  sesOgrenmeOneri:        (sesAdi: string) => `"${sesAdi}" daha önce iyi sonuç vermişti`,
+  sesOgrenmeYeniKayit:    'Daha iyi öneriler için birkaç kullanım daha gerekiyor',
+
+  // ── BİLDİRİM AKSİYON BUTONLARI ─────────────────────────────────────────────
+  notifAglamaBtnCaldir:   'Ninni Çal',
+  notifAglamaBtnKapat:    'Tamam',
+  notifWakeWinBtnKapat:   'Anladım',
+
+  // ── PREMİUM KİLİT GENEL ─────────────────────────────────────────────────────
+  premiumKilitGenelYazi:  '🔒 Bu özellik Premium\'da açılır',
+  premiumKilitGenelBtn:   '👑 Premium\'a Geç →',
 };
 
 const en = {
@@ -530,15 +633,50 @@ const en = {
   bosRapor:               'No sleep reports yet',
   yedıGunGrafik:          '7-Day Sleep Score',
   grafikKilit:            '7-Day graph available in Premium',
-  aglamaAnalizBaslik:     '🎤 Why is baby crying?',
-  aglamaAnalizAcik:       'Analyzes sound in 10 seconds',
-  bugunAnalizHak:         (n: number) => `🎯 ${n} analysis left today`,
-  analizBtn:              '🎙 Find out in 10 seconds',
-  analizDinleniyor:       '🎙 Listening... ',
-  analizEdiliyor:         ' Analyzing...',
-  analizHataMesaji:       'Analysis unavailable, please try again',
-  analizInternetHata:     'Internet connection required',
-  disclaimer:             'This analysis is estimate only, not a medical diagnosis.',
+  // ── CRY HELPER ─────────────────────────────────────────────────────────────
+  cryHelperBaslik:        '❓ Why might baby be crying?',
+  cryHelperAcik:          '5 quick questions to find the likely cause',
+  cryHelperBaslat:        'Start',
+  cryHelperSoru:          (n: number) => `Question ${n}/5`,
+  cryHelperIleri:         'Next →',
+  cryHelperSonucBaslik:   'Likely Cause',
+  cryHelperTekrar:        '🔄 Try Again',
+  cryHelperGecmis:        '📋 Past Analyses',
+  cryHelperGecmisYok:     'No analyses yet',
+  cryHelperS1:            'When was baby last fed?',
+  cryHelperS1A:           '🍼 Less than 1 hour ago',
+  cryHelperS1B:           '⏰ 1-3 hours ago',
+  cryHelperS1C:           '⏳ More than 3 hours ago',
+  cryHelperS2:            'How is baby\'s sleep status?',
+  cryHelperS2A:           '😴 Awake a long time, looks tired',
+  cryHelperS2B:           '☀️ Just woke up',
+  cryHelperS2C:           '✅ Had enough sleep',
+  cryHelperS3:            'When was the diaper last changed?',
+  cryHelperS3A:           '✅ Just changed',
+  cryHelperS3B:           '❓ Not sure / haven\'t checked',
+  cryHelperS3C:           '💧 Not changed in a while',
+  cryHelperS4:            'What is baby\'s body language?',
+  cryHelperS4A:           '🤱 Pulling legs up / squirming',
+  cryHelperS4B:           '😤 Calms then cries again',
+  cryHelperS4C:           '😭 Crying continuously',
+  cryHelperS5:            'Environment and general status?',
+  cryHelperS5A:           '😵 Overstimulated (noise, lights)',
+  cryHelperS5B:           '🌿 Calm environment',
+  cryHelperS5C:           '🌡️ Looks sick / may have a fever',
+  cryHelperAclik:         '🍼 Hunger',
+  cryHelperUykusuzluk:    '😴 Sleepiness',
+  cryHelperGaz:           '💨 Gas / Colic',
+  cryHelperBez:           '💧 Wet Diaper',
+  cryHelperGenel:         '🤗 General Discomfort',
+  cryHelperAclikOneri:    'Try feeding baby',
+  cryHelperUykuOneri:     'Try a lullaby or white noise to sleep',
+  cryHelperGazOneri:      'Try burping or play colic sound',
+  cryHelperBezOneri:      'Check and change the diaper',
+  cryHelperGenelOneri:    'Hold baby in a calm, quiet setting',
+  cryHelperNinniGit:      '🎵 Play Lullaby →',
+  cryHelperKolikGit:      '🌿 Play Colic Sound →',
+  cryHelperHak:           (n: number) => `🎯 ${n} analysis left today`,
+  cryHelperSinirAsildi:   'You\'ve used your daily limit',
   uzmanOnerileriBaslik:   'Expert Tips',
   ninniSec:               '🎵 Choose a Lullaby',
   kolikSesSec:            '🌿 Choose a Colic Sound',
@@ -582,27 +720,11 @@ const en = {
   yasGruplari:            ['0-3 mo', '3-6 mo', '6-12 mo', '1+ yr'],
   // Paywall
   paywallDetektorBaslik:  '⏱ Detector Time Expired',
-  paywallAnalizBaslik:    '🎤 Daily Limit Reached',
+  paywallAnalizBaslik:    '❓ Daily Limit Reached',
   paywallPremiumBaslik:   '👑 Premium Feature',
   paywallDetektorAcik:    'You\'ve used your 60-minute daily limit. Go Premium or watch an ad for +1 session.',
-  paywallAnalizAcik:      'You\'ve used your daily analysis. Go Premium or watch an ad for +1 use.',
+  paywallAnalizAcik:      'You\'ve used your daily cry analysis. Go Premium or watch an ad for +1 use.',
   paywallPremiumAcik:     'This feature is available with Premium.',
-  // Analysis results
-  analizSonuclar: [
-    { label: '🍼 Hunger',    color: '#f59e0b' },
-    { label: '💨 Gas',       color: '#8b5cf6' },
-    { label: '😴 Sleepy',    color: '#3b82f6' },
-    { label: '💧 Wet Diaper',color: '#10b981' },
-    { label: '❓ Other',      color: '#6b7280' },
-  ],
-  oneriGetir: (en: 'aclik' | 'gaz' | 'uyku' | 'bez' | 'diger') => ({
-    aclik: { ikon: '🍼', baslik: 'Probably hungry. Try feeding.',         kucuk: '' },
-    gaz:   { ikon: '🤱', baslik: 'May have gas. Try burping.',             kucuk: 'Colic sound recommended.' },
-    uyku:  { ikon: '🎵', baslik: 'Seems sleepy. Try putting to sleep.',    kucuk: 'A gentle lullaby is recommended.' },
-    bez:   { ikon: '🧷', baslik: 'Diaper may be wet. Check the diaper.',   kucuk: '' },
-    diger: { ikon: '🤗', baslik: 'Reason unclear. Calmly check baby.',     kucuk: 'There may be another discomfort.' },
-  }[en]),
-
   // ── LULLABIES ──────────────────────────────────────────────────────────────
   anneSesiNinni:      "Mom's Lullaby",
   premiumBadge:       '👑 Premium',
@@ -764,6 +886,90 @@ const en = {
   partnerIzinVer:         'Allow',
   partnerGeriDon:         'Go Back',
   partnerQRYon:           "Point the other phone's LumiBaby QR code at the frame",
+
+  // ── DAY / NIGHT DISTINCTION ─────────────────────────────────────────────────
+  gunduzRaporuBaslik:     '☀️ Daytime Sleep Report',
+  geceRaporuTamBaslik:    '🌙 Nighttime Sleep Report',
+  gunduzSimge:            '☀️',
+  geceSimge:              '🌙',
+
+  // ── TIMELINE ────────────────────────────────────────────────────────────────
+  timelineBaslik:         '📊 Sleep Timeline',
+  timelinePremiumTeaser:  '🔒 Timeline unlocks in Premium',
+  timelineUyku:           '🟣 Sleep',
+  timelineAglama:         '🔴 Crying',
+
+  // ── WEEKLY TREND ────────────────────────────────────────────────────────────
+  haftalikTrendBaslik:    '📈 Weekly Trend',
+  haftalikTrendPremium:   '🔒 Weekly trend analysis in Premium',
+  buHafta:                'This Week',
+  gecenHafta:             'Last Week',
+  haftalikToplamUyku:     'Total Sleep',
+  haftalikOrtUyku:        'Avg. Sleep',
+  haftalikAglama:         'Crying',
+  trendArtti:             (s: string) => `🔼 ${s} more`,
+  trendAzaldi:            (s: string) => `🔽 ${s} less`,
+  trendAyni:              '➡️ No change',
+
+  // ── AGE COMPARISON ──────────────────────────────────────────────────────────
+  yasaGoreBaslik:         '👶 Sleep by Age',
+  yasaGorePremium:        '🔒 Age comparison in Premium',
+  yasaGoreOnerilen:       (saat: number, dk: number) => `Recommended: ~${saat}h ${dk > 0 ? dk + 'm' : ''}`,
+  yasaGoreOrtalama:       (saat: number, dk: number) => `Your last 7-day avg: ${saat}h ${dk > 0 ? dk + 'm' : ''}`,
+  yasaGoreIyi:            '✅ Sleep duration looks good for their age.',
+  yasaGoreAz:             '⚠️ A little more sleep could be beneficial.',
+  yasaGoreFazla:          'ℹ️ Sleep duration is slightly long — try shorter awake windows during the day.',
+
+  // ── SLEEP PATTERN ───────────────────────────────────────────────────────────
+  duzenAnaliziBaslik:     '📋 Pattern Analysis',
+  duzenAnaliziPremium:    '🔒 Pattern analysis in Premium',
+  duzenDengeli:           '✨ Sleep times are quite consistent — great job!',
+  duzenHafifKaymis:       '⚠️ Sleep times vary a bit — a consistent routine could help.',
+  duzenDuzenliNot:        'Consistent sleep times strengthen your baby\'s internal clock.',
+
+  // ── WAKE WINDOW ─────────────────────────────────────────────────────────────
+  wakeWindowBaslik:       '⏰ Wake Window Alert',
+  wakeWindowAcik:         (dk: number) => `Baby may have been awake for about ${dk} min — watch for tiredness cues.`,
+  wakeWindowKisa:         'A short sleep opportunity may be approaching.',
+  wakeWindowSerbest:      '✅ Basic alert (free)',
+
+  // ── DEVELOPMENTAL LEAP (Wonder Weeks) ───────────────────────────────────────
+  gelisimSicramasiBaslik: '🌟 Developmental Leap!',
+  gelisimSicramasiAcik:   'Your baby may be going through a developmental leap right now. Sleep disruptions and fussiness are completely normal during this time.',
+  gelisimSicramasiAlt:    'This phase will pass — hang in there 🤍',
+
+  // ── SLEEP MEMORY ────────────────────────────────────────────────────────────
+  uykuHafizasiBaslik:     '📅 Same Day Last Week',
+  uykuHafizasiPremium:    '🔒 Sleep memory in Premium',
+  uykuHafizasiVardi:      (sure: string) => `Last week on this day: slept ${sure}`,
+  uykuHafizasiYoktu:      'No record from last week on this day',
+  uykuHafizasiIyi:        '🔼 Slept better tonight',
+  uykuHafizasiKotu:       '🔽 Less sleep tonight',
+  uykuHafizasiAyni:       '➡️ Similar to last week',
+
+  // ── TONIGHT FOR YOU ─────────────────────────────────────────────────────────
+  buGeceIcinBaslik:       'Tonight for You 🤍',
+  buGeceIcinPremium:      '🔒 Parent note in Premium',
+  buGeceIcinMesajlar: [
+    "Wonderful night! Your baby slept really well 🌟",
+    "Good night overall. Small steps, big wins 💜",
+    "It may have been a tough night, but you were there through it all 🤍",
+    "If it was an exhausting night, please take care of yourself too 🌙",
+  ],
+
+  // ── SOUND LEARNING SYSTEM ────────────────────────────────────────────────────
+  sesOgrenmeBaslik:       '🎵 Smart Sound Suggestion',
+  sesOgrenmeOneri:        (sesAdi: string) => `"${sesAdi}" worked well last time`,
+  sesOgrenmeYeniKayit:    'A few more uses needed for better recommendations',
+
+  // ── NOTIFICATION ACTION BUTTONS ─────────────────────────────────────────────
+  notifAglamaBtnCaldir:   'Play Lullaby',
+  notifAglamaBtnKapat:    'OK',
+  notifWakeWinBtnKapat:   'Got it',
+
+  // ── PREMIUM LOCK GENERAL ────────────────────────────────────────────────────
+  premiumKilitGenelYazi:  '🔒 This feature unlocks in Premium',
+  premiumKilitGenelBtn:   '👑 Go Premium →',
 };
 
 export const translations = { tr, en };
