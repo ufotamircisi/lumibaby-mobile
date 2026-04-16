@@ -1,6 +1,7 @@
 import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
+import * as audioManager from '@/services/audioManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AudioModule, RecordingPresets, useAudioRecorder } from 'expo-audio';
 import { useFocusEffect } from 'expo-router';
@@ -116,6 +117,10 @@ export default function Sesim() {
       soundRef.current = null;
     }
     try {
+      // Diğer sesler çalıyorsa durdur (ninni, kolik vb.)
+      if (audioManager.getState().tab !== null) {
+        await audioManager.stop();
+      }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
       const { sound } = await Audio.Sound.createAsync({ uri: kayit.uri }, { shouldPlay: true });
       soundRef.current = sound; setCalananTip(tip);

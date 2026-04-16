@@ -13,8 +13,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { sendAlertToAll } from './_layout';
 
-// ── SES ÖĞRENME STORAGE KEY ──────────────────────────────────────────────────
-const SES_OGRENME_KEY = 'lumibaby_ses_ogrenme';
+// ── STORAGE KEYS ─────────────────────────────────────────────────────────────
+const SES_OGRENME_KEY     = 'lumibaby_ses_ogrenme';
+const GECE_RAPORLARI_KEY  = 'lumibaby_gece_raporlari';
 const WAKE_WINDOW_BILDIRIM_KEY = 'lumibaby_wake_window_bildirim';
 type SesOgrenmeKayit = { sesId: number; sesAdi: string; kalisSaniye: number; ts: number };
 // Wonder Weeks: hafta numaraları
@@ -238,6 +239,9 @@ export default function Analiz() {
   const hassasiyetRef      = useRef<SensitivityLevel>('balanced');
   const cryEngineRef       = useRef(new CryDetectionEngine());
 
+  // hassasiyet state değişince ref'i güncelle (polling closure içinde güncel değer okunur)
+  useEffect(() => { hassasiyetRef.current = hassasiyet; }, [hassasiyet]);
+
   useEffect(() => { return () => { herSeyiDurdur(); }; }, []);
 
   // Bildirim aksiyon kategorilerini kur
@@ -283,6 +287,9 @@ export default function Analiz() {
       }
     });
     cryEngineRef.current.loadPatterns().catch(() => {});
+    AsyncStorage.getItem(GECE_RAPORLARI_KEY).then(v => {
+      if (v) { try { setGeceRaporlari(JSON.parse(v)); } catch {} }
+    });
   }, []);
 
   const bebekIsmi = bebekAdi.trim() || null;
@@ -796,7 +803,12 @@ export default function Analiz() {
     const skorSonuc   = uykuSkoruHesapla(toplamUyku, aglamaSayisiRef.current, baslangic, t);
     const tarihStr    = formatTarih(baslangic);
     const rapor: GeceRaporu = { id: Date.now(), tarih: tarihStr, toplamUyku, aglamaSayisi: aglamaSayisiRef.current, baslangic, bitis, uykulaDalma, enUzunUyku, uykuKalitesi: skorSonuc.toplam, puanDetay: skorSonuc.detaylar };
-    setGeceRaporlari(prev => { const yeni = [rapor, ...prev]; setSonRapor(rapor); return yeni; });
+    setGeceRaporlari(prev => {
+      const yeni = [rapor, ...prev];
+      AsyncStorage.setItem(GECE_RAPORLARI_KEY, JSON.stringify(yeni)).catch(() => {});
+      setSonRapor(rapor);
+      return yeni;
+    });
     setRaporModal(true);
     aktifKayitRef.current = null; setAktifKayit(null); setUyuyorMu(false); setSure(0);
     setSeciliDetektor(null); setSeciliNinni(null); setSeciliKolik(null);
@@ -1118,7 +1130,7 @@ export default function Analiz() {
             </>
           )}
 
-          {cryHelperAdim === 'soru' && (
+          {cryHelperAdim === 'soru' && cryCevaplar.length < 5 && (
             <>
               <View style={styles.cryHelperProgressRow}>
                 {[0,1,2,3,4].map(i => (
@@ -1126,8 +1138,8 @@ export default function Analiz() {
                 ))}
               </View>
               <Text style={styles.cryHelperSoruNo}>{t.cryHelperSoru(cryCevaplar.length + 1)}</Text>
-              <Text style={styles.cryHelperSoruMetin}>{crySoruMetinleri[cryCevaplar.length]}</Text>
-              {crySecenekMetinleri[cryCevaplar.length].map((secenek, secIdx) => (
+              <Text style={styles.cryHelperSoruMetin}>{crySoruMetinleri[cryCevaplar.length] ?? ''}</Text>
+              {(crySecenekMetinleri[cryCevaplar.length] ?? []).map((secenek, secIdx) => (
                 <TouchableOpacity key={secIdx} style={styles.cryHelperSecenekBtn} onPress={() => cryCevapSec(secIdx)}>
                   <Text style={styles.cryHelperSecenekYazi}>{secenek}</Text>
                 </TouchableOpacity>

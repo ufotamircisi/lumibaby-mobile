@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initAdMob } from '@/services/adMob';
 import { router, Stack } from 'expo-router';
 import { useEffect } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const RC_API_KEY = 'test_NEQGTCZprAVYcQdZUYZcAHvMdEd';
 
@@ -25,9 +26,11 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="onboarding" />
-    </Stack>
+    <SafeAreaProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="onboarding" />
+      </Stack>
+    </SafeAreaProvider>
   );
 }

@@ -1,6 +1,7 @@
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import { type SensitivityLevel } from '@/services/cryDetectionEngine';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaskedView from '@react-native-masked-view/masked-view';
@@ -373,6 +374,7 @@ export default function TabLayout() {
   const { isTrial, isPremium, trialKalanGun, presentPaywall, restorePurchases, yuklendi } = usePremium();
   const { lang, setLang, t } = useLang();
   const free = !isPremium && !isTrial;
+  const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ Nunito_800ExtraBold });
 
   const [premiumModal, setPremiumModal]   = useState(false);
@@ -470,9 +472,15 @@ export default function TabLayout() {
         )}
       </SafeAreaView>
 
-      <Tabs screenOptions={{
+      <Tabs initialRouteName="analiz" screenOptions={{
         headerShown: false,
-        tabBarStyle: { backgroundColor: '#07101e', borderTopColor: 'rgba(255,255,255,0.1)', height: 85, paddingBottom: 30 },
+        tabBarStyle: {
+          backgroundColor: '#07101e',
+          borderTopColor: 'rgba(255,255,255,0.1)',
+          height: 56 + Math.max(insets.bottom, 8),
+          paddingBottom: Math.max(insets.bottom, 8),
+          paddingTop: 6,
+        },
         tabBarActiveTintColor: '#9d8cef',
         tabBarInactiveTintColor: 'rgba(255,255,255,0.4)',
       }}>

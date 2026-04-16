@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const WINDOW_SIZE_MS    = 500;
 export const DETECTION_WINDOWS = 6;    // 3 saniyelik analiz penceresi
 export const COOLDOWN_MS       = 8000; // tetiklemeden sonra bekleme süresi
-export const MIN_CRY_WINDOWS   = 4;    // 6 pencereden en az 4'ü yüksek olmalı
+export const MIN_CRY_WINDOWS   = 3;    // 6 pencereden en az 3'ü yüksek olmalı
 
 export const CONFIDENCE_THRESHOLD = {
   high:     60,  // Yüksek Hassasiyet — daha az kaçırır, daha fazla yanlış pozitif
@@ -139,30 +139,30 @@ export class CryDetectionEngine {
     // ── KATMAN 1: Genlik (Amplitude) ─────────────────────────────────────────
     const highCount = win.filter(v => v >= YUKSEK_ESIK).length;
     if (highCount >= MIN_CRY_WINDOWS) {
-      score += 20; // yeterli süre yüksek
+      score += 25; // yeterli süre yüksek
     }
     // Sürekli yükselen trend
     let rising = 0;
     for (let i = 1; i < win.length; i++) { if (win[i] > win[i - 1]) rising++; }
-    if (rising >= 4) score += 10;
+    if (rising >= 3) score += 10;
     // Tek tepe (spike) filtresi — yalnız bir pencere yüksek: muhtemelen gürültü
-    if (highCount === 1) score -= 30;
+    if (highCount === 1) score -= 25;
 
     // ── KATMAN 2: Frekans yaklaşımı (dB varyansı) ──────────────────────────
-    const mean    = win.reduce((a, b) => a + b, 0) / win.length;
+    const mean     = win.reduce((a, b) => a + b, 0) / win.length;
     const variance = win.reduce((acc, v) => acc + (v - mean) ** 2, 0) / win.length;
-    // Orta varyans: bebek ağlaması (8-25 dB²)
-    if (variance >= 8 && variance <= 25) score += 25;
+    // Orta varyans: bebek ağlaması (4-30 dB²) — aralığı genişlet
+    if (variance >= 4 && variance <= 30) score += 25;
     // Çok düşük varyans: düz fan / ambient sesi — false positive filtresi
-    if (variance < 3) score -= 30;
+    if (variance < 2) score -= 25;
     // Çok düzgün: monoton arka plan sesi
-    if (variance < 6) score -= 20;
+    if (variance < 4) score -= 15;
 
     // ── KATMAN 3: Ritim analizi ───────────────────────────────────────────────
-    // 4-5/6 yüksek pencere varsa iyi ritim
-    if (highCount === 4 || highCount === 5) score += 20;
-    // Tüm 6 pencere yüksek: adult speech / TV / ambient gürültü olabilir
-    if (highCount === 6) score -= 35;
+    // 3-5/6 yüksek pencere varsa iyi ritim
+    if (highCount >= 3 && highCount <= 5) score += 20;
+    // Tüm 6 pencere yüksek: TV/hoparlör üzerinden ses normal olabilir, hafif ceza
+    if (highCount === 6) score -= 15;
     // Periyodik geçişler: yüksek-düşük-yüksek benzeri patern
     let transitions = 0;
     for (let i = 1; i < win.length; i++) {
@@ -170,9 +170,9 @@ export class CryDetectionEngine {
       const curr = win[i]     >= YUKSEK_ESIK;
       if (prev !== curr) transitions++;
     }
-    if (transitions >= 2 && transitions <= 4) score += 15; // doğal ritim
-    // Horlama filtresi: çok yavaş varyasyon
-    if (transitions <= 1 && variance < 10) score -= 20;
+    if (transitions >= 1 && transitions <= 4) score += 15; // doğal ritim
+    // Horlama filtresi: çok yavaş varyasyon + sabit ses
+    if (transitions === 0 && variance < 8) score -= 20;
 
     // ── KATMAN 4: Öğrenilmiş örüntü benzerliği ────────────────────────────────
     if (this.patterns.length > 0) {
