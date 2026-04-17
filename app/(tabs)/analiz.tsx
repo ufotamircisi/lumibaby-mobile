@@ -1014,7 +1014,12 @@ export default function Analiz() {
         <TouchableOpacity activeOpacity={0.85} onPress={() => { free ? (setPaywallTip('premium'), setPaywallVisible(true)) : setRehberModal(true); }} style={styles.rehberKart}>
           <View style={styles.rehberBaslikRow}>
             <Text style={styles.rehberBaslik}>{t.uykuRehberiBaslik}</Text>
-            <Text style={styles.rehberOk}>›</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity onPress={() => setRehberModal(true)}>
+                <Text style={styles.nasılCalisirLink}>{t.uykuRehberiNasılIsler}</Text>
+              </TouchableOpacity>
+              <Text style={styles.rehberOk}>›</Text>
+            </View>
           </View>
           {rehberSonuc.tip === 'profilEksik' ? (
             <Text style={styles.rehberUyari}>{t.uykuRehberiProfilEksik}</Text>
@@ -1031,9 +1036,6 @@ export default function Analiz() {
                 <Text style={[styles.rehberDeger, rehberSonuc.ritim === 'dengeli' ? styles.rehberYesil : rehberSonuc.ritim === 'yorgunluk' ? styles.rehberKirmizi : styles.rehberSari]}>
                   {t.uykuRehberiRitimler[rehberSonuc.ritim]}
                 </Text>
-              </View>
-              <View style={styles.rehberNotKutu}>
-                <Text style={styles.rehberNotYazi}>💡 {t.uykuRehberiNotlar[rehberSonuc.ritim]}</Text>
               </View>
             </>
           )}

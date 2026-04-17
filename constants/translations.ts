@@ -109,6 +109,7 @@ const tr = {
   // ── ANALİZ ─────────────────────────────────────────────────────────────────
   geceModu:               '🌙 Uyku Modu',
   nasılCalisirLink:       'Nasıl Çalışır?',
+  uykuRehberiNasılIsler:  'Nasıl işler?',
   nasılCalisirBaslik:     'Uyku Modu Nasıl Çalışır?',
   nasılCalisirB1Baslik:   '🌙 Uyku Modunu Başlat',
   nasılCalisirB1Metin:    "Bebeğiniz uyumaya başlayınca 'Bebek Uyudu' butonuna basın. Süre sayacı başlar.",
@@ -609,6 +610,7 @@ const en = {
   // ── ASSISTANT (ANALİZ) ─────────────────────────────────────────────────────
   geceModu:               '🌙 Sleep Mode',
   nasılCalisirLink:       'How does it work?',
+  uykuRehberiNasılIsler:  'How it works?',
   nasılCalisirBaslik:     'How does Sleep Mode work?',
   nasılCalisirB1Baslik:   '🌙 Start Sleep Mode',
   nasılCalisirB1Metin:    "Tap 'Baby Asleep' when your baby falls asleep. The sleep timer starts.",
