@@ -17,6 +17,8 @@ const KAYIT_KEYS: Record<KayitTip, string> = {
   hikaye: 'anne_hikaye_kayit',
   pispis: 'anne_pispis_kayit',
 };
+const SESIM_IDS: Record<KayitTip, number> = { ninni: 2001, hikaye: 2002, pispis: 2003 };
+const ID_TO_TIP: Record<number, KayitTip> = { 2001: 'ninni', 2002: 'hikaye', 2003: 'pispis' };
 
 export default function Sesim() {
   const { isPremium, isTrial, premiumAktifEt } = usePremium();
@@ -31,7 +33,6 @@ export default function Sesim() {
 
   const scrollViewRef = useRef<ScrollView>(null);
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const soundRef      = useRef<Audio.Sound | null>(null);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   useFocusEffect(useCallback(() => {
@@ -42,8 +43,16 @@ export default function Sesim() {
     kayitlariYukle();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      soundRef.current?.unloadAsync();
+      if (audioManager.getState().tab === 'sesim') audioManager.stop();
     };
+  }, []);
+
+  // audioManager'dan calananTip'i takip et
+  useEffect(() => {
+    return audioManager.subscribe((id, tab) => {
+      if (tab === 'sesim' && id !== null) setCalananTip(ID_TO_TIP[id] ?? null);
+      else setCalananTip(null);
+    });
   }, []);
 
   const kayitlariYukle = async () => {
@@ -74,10 +83,7 @@ export default function Sesim() {
     if (free) { setPaywallVisible(true); return; }
     const izin = await AudioModule.requestRecordingPermissionsAsync();
     if (!izin.granted) { Alert.alert(t.mikrofonIzniBaslik, t.mikrofonIzni); return; }
-    if (soundRef.current) {
-      try { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); } catch (_) {}
-      soundRef.current = null; setCalananTip(null);
-    }
+    if (audioManager.getState().tab !== null) await audioManager.stop();
     try {
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       await audioRecorder.prepareToRecordAsync();
@@ -109,25 +115,12 @@ export default function Sesim() {
     const kayit = kayitlar[tip];
     if (!kayit) return;
     if (calananTip === tip) {
-      try { await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync(); } catch (_) {}
-      soundRef.current = null; setCalananTip(null); return;
-    }
-    if (soundRef.current) {
-      try { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); } catch (_) {}
-      soundRef.current = null;
+      await audioManager.stop();
+      return;
     }
     try {
-      // Diğer sesler çalıyorsa durdur (ninni, kolik vb.)
-      if (audioManager.getState().tab !== null) {
-        await audioManager.stop();
-      }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
-      const { sound } = await Audio.Sound.createAsync({ uri: kayit.uri }, { shouldPlay: true });
-      soundRef.current = sound; setCalananTip(tip);
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) { soundRef.current = null; setCalananTip(null); }
-      });
-    } catch (e) { Alert.alert(t.sesCalHata); setCalananTip(null); }
+      await audioManager.play({ uri: kayit.uri }, SESIM_IDS[tip], 'sesim', { loop: false });
+    } catch (_) { Alert.alert(t.sesCalHata); }
   };
 
   const kayitSil = (tip: KayitTip) => {
@@ -136,7 +129,7 @@ export default function Sesim() {
       { text: t.sil, style: 'destructive', onPress: async () => {
         await AsyncStorage.removeItem(KAYIT_KEYS[tip]);
         setKayitlar(prev => { const yeni = { ...prev }; delete yeni[tip]; return yeni; });
-        if (calananTip === tip) { try { await soundRef.current?.stopAsync(); } catch (_) {} soundRef.current = null; setCalananTip(null); }
+        if (calananTip === tip) await audioManager.stop();
       }},
     ]);
   };

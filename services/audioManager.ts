@@ -2,7 +2,7 @@
 // Global singleton — one active audio across all tabs
 import { Audio } from 'expo-av';
 
-export type AudioTab = 'ninniler' | 'kolik' | 'hikayeler' | 'analiz';
+export type AudioTab = 'ninniler' | 'kolik' | 'hikayeler' | 'analiz' | 'sesim';
 export type PlayOptions = { loop?: boolean; onFinish?: () => void };
 type Listener = (id: number | null, tab: AudioTab | null) => void;
 
