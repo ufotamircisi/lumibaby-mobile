@@ -10,13 +10,14 @@ import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { AppState, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { sendAlertToAll } from './_layout';
 
 // ── STORAGE KEYS ─────────────────────────────────────────────────────────────
 const SES_OGRENME_KEY     = 'lumibaby_ses_ogrenme';
 const GECE_RAPORLARI_KEY  = 'lumibaby_gece_raporlari';
 const WAKE_WINDOW_BILDIRIM_KEY = 'lumibaby_wake_window_bildirim';
+const SLEEP_START_KEY     = 'lumibaby_sleep_start';
 type SesOgrenmeKayit = { sesId: number; sesAdi: string; kalisSaniye: number; ts: number };
 // Wonder Weeks: hafta numaraları
 const WONDER_WEEKS = [5, 8, 12, 19, 26, 37, 46, 55];
@@ -291,6 +292,26 @@ export default function Analiz() {
     AsyncStorage.getItem(GECE_RAPORLARI_KEY).then(v => {
       if (v) { try { setGeceRaporlari(JSON.parse(v)); } catch {} }
     });
+    // Uygulama öldürülüp yeniden açılırsa devam eden uykuyu geri yükle
+    AsyncStorage.getItem(SLEEP_START_KEY).then(v => {
+      if (!v) return;
+      const savedStart = parseInt(v, 10);
+      if (isNaN(savedStart) || savedStart <= 0) return;
+      geceBaslangicRef.current = savedStart;
+      setUyuyorMu(true);
+      setSure(Math.floor((Date.now() - savedStart) / 1000));
+      timerRef.current = setInterval(() => setSure(Math.floor((Date.now() - geceBaslangicRef.current) / 1000)), 1000);
+    });
+  }, []);
+
+  // AppState: arka plandan geri dönünce sayacı hemen güncelle
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && geceBaslangicRef.current > 0) {
+        setSure(Math.floor((Date.now() - geceBaslangicRef.current) / 1000));
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const bebekIsmi = bebekAdi.trim() || null;
@@ -534,6 +555,7 @@ export default function Analiz() {
     cryEngineRef.current.reset();
     setConfidenceScore(0);
     setCooldownKalan(0);
+    AsyncStorage.removeItem(SLEEP_START_KEY).catch(() => {});
   };
 
   // ── AĞLAMA YARDIMCISI ────────────────────────────────────────────────────────
@@ -582,7 +604,8 @@ export default function Analiz() {
     setAktifKayit(yeniKayit); aktifKayitRef.current = yeniKayit;
     setUyuyorMu(true); setSure(0); setDetektorSure(0);
     geceBaslangicRef.current = Date.now(); aglamaSayisiRef.current = 0; ilkAglamaZamaniRef.current = null; setAglamaSayisi(0);
-    timerRef.current = setInterval(() => setSure(s => s + 1), 1000);
+    AsyncStorage.setItem(SLEEP_START_KEY, String(geceBaslangicRef.current)).catch(() => {});
+    timerRef.current = setInterval(() => setSure(Math.floor((Date.now() - geceBaslangicRef.current) / 1000)), 1000);
 
     // Zamanlı uyku bildirimi planla
     (async () => {
@@ -812,6 +835,7 @@ export default function Analiz() {
     });
     setRaporModal(true);
     aktifKayitRef.current = null; setAktifKayit(null); setUyuyorMu(false); setSure(0);
+    geceBaslangicRef.current = 0;
     setSeciliDetektor(null); setSeciliNinni(null); setSeciliKolik(null);
     setDinleniyor(false); setCaliniyor(false); setAglamaSayisi(0);
     aktifSesRef.current = null; aktifDedektorRef.current = null;
