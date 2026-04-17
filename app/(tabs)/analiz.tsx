@@ -1011,15 +1011,12 @@ export default function Analiz() {
         </View>
 
         {/* UYKU REHBERİ */}
-        <TouchableOpacity activeOpacity={0.85} onPress={() => { free ? (setPaywallTip('premium'), setPaywallVisible(true)) : setRehberModal(true); }} style={styles.rehberKart}>
+        <View style={styles.rehberKart}>
           <View style={styles.rehberBaslikRow}>
             <Text style={styles.rehberBaslik}>{t.uykuRehberiBaslik}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <TouchableOpacity onPress={() => setRehberModal(true)}>
-                <Text style={styles.nasılCalisirLink}>{t.uykuRehberiNasılIsler}</Text>
-              </TouchableOpacity>
-              <Text style={styles.rehberOk}>›</Text>
-            </View>
+            <TouchableOpacity onPress={() => setRehberModal(true)}>
+              <Text style={styles.nasılCalisirLink}>{t.uykuRehberiNasılIsler}</Text>
+            </TouchableOpacity>
           </View>
           {rehberSonuc.tip === 'profilEksik' ? (
             <Text style={styles.rehberUyari}>{t.uykuRehberiProfilEksik}</Text>
@@ -1037,9 +1034,18 @@ export default function Analiz() {
                   {t.uykuRehberiRitimler[rehberSonuc.ritim]}
                 </Text>
               </View>
+              <View style={styles.rehberAltSatir}>
+                <Text style={styles.rehberKisaIpucu} numberOfLines={1}>{t.uykuRehberiNotlar[rehberSonuc.ritim]}</Text>
+                <TouchableOpacity onPress={() => {
+                  if (free) { setPaywallTip('premium'); setPaywallVisible(true); }
+                  else scrollRef.current?.scrollTo({ y: gecmisOffsetRef.current, animated: true });
+                }}>
+                  <Text style={styles.rehberOk}>›</Text>
+                </TouchableOpacity>
+              </View>
             </>
           )}
-        </TouchableOpacity>
+        </View>
 
         {/* 7 GÜNLÜK GRAFİK */}
         <View onLayout={e => { grafikOffsetRef.current = e.nativeEvent.layout.y; }}>
@@ -1750,6 +1756,8 @@ const styles = StyleSheet.create({
   rehberYesil:            { color: '#4ade80' },
   rehberSari:             { color: '#facc15' },
   rehberKirmizi:          { color: '#f87171' },
+  rehberAltSatir:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
+  rehberKisaIpucu:        { color: 'rgba(255,255,255,0.38)', fontSize: 11, flex: 1, lineHeight: 16 },
   rehberNotKutu:          { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 10 },
   rehberNotYazi:          { color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 18 },
   rehberOverlay:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
