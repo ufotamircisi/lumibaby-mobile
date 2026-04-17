@@ -11,6 +11,7 @@ import * as Notifications from 'expo-notifications';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendAlertToAll } from './_layout';
 
 // ── STORAGE KEYS ─────────────────────────────────────────────────────────────
@@ -221,6 +222,7 @@ export default function Analiz() {
   const grafikOffsetRef     = useRef<number>(0);
   const bildirimIdRef       = useRef<string | null>(null);
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const tlBarW = screenWidth - 116; // ScrollView pad 40 + modal pad 48 + kutu pad 28
 
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1218,7 +1220,7 @@ export default function Analiz() {
       <Modal visible={sesListeModal} transparent animationType="slide" onRequestClose={() => setSesListeModal(false)}>
         <View style={styles.modalArkaPlan}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setSesListeModal(false)} />
-          <View style={styles.modalKutu}>
+          <View style={[styles.modalKutu, { paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
             <View style={styles.modalKol} />
             <Text style={styles.modalBaslik}>{modalTip === 'aglama' ? t.ninniSec : t.kolikSesSec}</Text>
             <Text style={styles.modalAltBaslik}>{modalTip === 'aglama' ? t.ninniSecAlt : t.kolikSecAlt}</Text>
@@ -1248,7 +1250,7 @@ export default function Analiz() {
       {/* GECE RAPORU MODAL */}
       <Modal visible={raporModal} transparent animationType="fade" onRequestClose={closeRaporModal}>
         <View style={styles.raporModalArkaPlan}>
-          <ScrollView contentContainerStyle={{ padding: 20 }}>
+          <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: Math.max(insets.bottom + 20, 20) }}>
             {sonRapor && (
               <View style={styles.raporModalKutu}>
                 <Text style={styles.raporModalBaslik}>
@@ -1512,7 +1514,7 @@ export default function Analiz() {
       <Modal visible={detayModal} transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={() => setDetayModal(false)}>
         <View style={styles.detayModalArkaPlan}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setDetayModal(false)} />
-          <View style={styles.detayModalKutu}>
+          <View style={[styles.detayModalKutu, { paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
             <View style={styles.modalKol} />
             {seciliRapor && (
               <View style={{ flex: 1 }}>
@@ -1568,7 +1570,7 @@ export default function Analiz() {
       {/* NASIL ÇALIŞIR BOTTOM SHEET */}
       <Modal visible={nasılCalisirModal} transparent animationType="slide" onRequestClose={() => setNasılCalisirModal(false)}>
         <TouchableOpacity style={styles.rehberOverlay} activeOpacity={1} onPress={() => setNasılCalisirModal(false)} />
-        <View style={[styles.rehberSheet, { maxHeight: screenHeight * 0.82 }]}>
+        <View style={[styles.rehberSheet, { maxHeight: screenHeight * 0.82, paddingBottom: Math.max(insets.bottom + 16, 40) }]}>
           <View style={styles.rehberSheetHandle} />
           <Text style={styles.rehberSheetBaslik}>{t.nasılCalisirBaslik}</Text>
           <ScrollView showsVerticalScrollIndicator={false}>
@@ -1604,7 +1606,7 @@ export default function Analiz() {
       {/* UYKU REHBERİ BOTTOM SHEET */}
       <Modal visible={rehberModal} transparent animationType="slide" onRequestClose={() => setRehberModal(false)}>
         <TouchableOpacity style={styles.rehberOverlay} activeOpacity={1} onPress={() => setRehberModal(false)} />
-        <View style={[styles.rehberSheet, { maxHeight: screenHeight * 0.75 }]}>
+        <View style={[styles.rehberSheet, { maxHeight: screenHeight * 0.75, paddingBottom: Math.max(insets.bottom + 16, 40) }]}>
           <View style={styles.rehberSheetHandle} />
           <Text style={styles.rehberSheetBaslik}>{t.uykuRehberiModalBaslik}</Text>
           <ScrollView showsVerticalScrollIndicator={false}>

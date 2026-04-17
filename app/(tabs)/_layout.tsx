@@ -125,6 +125,7 @@ type PartnerEkran = 'menu' | 'qr_goster' | 'qr_tara';
 function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { t } = useLang();
   const { isPremium, yukle } = usePremium();
+  const insets = useSafeAreaInsets();
   const [ekran, setEkran]                 = useState<PartnerEkran>('menu');
   const [myToken, setMyToken]             = useState<string | null>(null);
   const [bagliCihazlar, setBagliCihazlar] = useState<string[]>([]);
@@ -215,7 +216,7 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
       <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setEkran('menu')}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setEkran('menu')} />
-          <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: Math.max(insets.bottom + 16, 40), alignItems: 'center' }}>
             <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, marginBottom: 16 }} />
             <Text style={pm.baslik}>{t.partnerQRBuCihaz}</Text>
             <Text style={pm.alt}>{t.partnerQRTaraIle}</Text>
@@ -246,7 +247,7 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
-        <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, height: '85%' }}>
+        <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: Math.max(insets.bottom + 8, 16), height: '85%' }}>
           <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
           <Text style={pm.baslik}>{t.partnerBaslik}</Text>
           <Text style={pm.alt}>{t.partnerAlt}</Text>
@@ -494,7 +495,7 @@ export default function TabLayout() {
       {/* BEBEK MODAL */}
       <Modal visible={bebekModal} transparent animationType="slide" onRequestClose={() => setBebekModal(false)}>
         <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={() => setBebekModal(false)}>
-          <TouchableOpacity activeOpacity={1} style={s.modalSheet}>
+          <TouchableOpacity activeOpacity={1} style={[s.modalSheet, { paddingBottom: Math.max(insets.bottom + 16, 40) }]}>
             <View style={s.modalHandle} />
             <Text style={s.modalTitle}>{t.bebekBaslik}</Text>
             <Text style={s.modalSubtitle}>{t.bebekAlt}</Text>
@@ -520,7 +521,7 @@ export default function TabLayout() {
       <Modal visible={premiumModal} transparent animationType="slide" onRequestClose={() => setPremiumModal(false)}>
         <View style={s.modalBackdrop}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setPremiumModal(false)} />
-          <View style={s.premiumSheet}>
+          <View style={[s.premiumSheet, { paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
             <View style={s.modalHandle} />
             <Text style={s.premiumIcon}>👑</Text>
             <Text style={s.premiumTitle}>{t.premiumBaslik}</Text>
@@ -600,7 +601,7 @@ export default function TabLayout() {
       {/* AYARLAR MODAL */}
       <Modal visible={ayarlarModal} transparent animationType="slide" onRequestClose={() => setAyarlarModal(false)}>
         <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={() => setAyarlarModal(false)}>
-          <TouchableOpacity activeOpacity={1} style={s.ayarlarSheet}>
+          <TouchableOpacity activeOpacity={1} style={[s.ayarlarSheet, { paddingBottom: Math.max(insets.bottom + 16, 16) }]}>
             <View style={s.modalHandle} />
             <Text style={s.ayarlarBaslik}>{t.ayarlarBaslik}</Text>
             <ScrollView
