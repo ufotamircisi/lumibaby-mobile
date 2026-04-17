@@ -1037,7 +1037,9 @@ export default function Analiz() {
               </View>
               <View style={styles.rehberAltSatir}>
                 <Text style={styles.rehberKisaIpucu} numberOfLines={1}>{t.uykuRehberiNotlar[rehberSonuc.ritim]}</Text>
-                <Text style={styles.rehberOk}>›</Text>
+                <View style={styles.rehberOkDaire}>
+                  <Text style={styles.rehberOkIkon}>›</Text>
+                </View>
               </View>
             </>
           )}
@@ -1759,6 +1761,8 @@ const styles = StyleSheet.create({
   rehberBaslikRow:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rehberBaslik:           { color: '#b8a8f8', fontSize: 15, fontWeight: 'bold' },
   rehberOk:               { color: 'rgba(157,140,239,0.6)', fontSize: 20, fontWeight: '300' },
+  rehberOkDaire:          { width: 28, height: 28, borderRadius: 14, backgroundColor: '#9d8cef', alignItems: 'center', justifyContent: 'center' },
+  rehberOkIkon:           { color: 'white', fontSize: 18, fontWeight: 'bold', lineHeight: 22, marginTop: -1 },
   rehberUyari:            { color: 'rgba(255,255,255,0.45)', fontSize: 13, lineHeight: 20 },
   rehberSatir:            { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rehberEtiket:           { color: 'rgba(255,255,255,0.5)', fontSize: 13 },
@@ -1768,8 +1772,8 @@ const styles = StyleSheet.create({
   rehberKirmizi:          { color: '#f87171' },
   rehberAltSatir:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
   rehberKisaIpucu:        { color: 'rgba(255,255,255,0.38)', fontSize: 11, flex: 1, lineHeight: 16 },
-  rehberKapatBtn:         { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12 },
-  rehberKapatBtnYazi:     { color: 'rgba(255,255,255,0.6)', fontSize: 15 },
+  rehberKapatBtn:         { backgroundColor: 'rgba(157,140,239,0.15)', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12, borderWidth: 1, borderColor: 'rgba(157,140,239,0.3)' },
+  rehberKapatBtnYazi:     { color: '#b8a8f8', fontSize: 15, fontWeight: '600' },
   rehberNotKutu:          { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 10 },
   rehberNotYazi:          { color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 18 },
   rehberOverlay:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
