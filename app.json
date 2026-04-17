@@ -26,7 +26,9 @@
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#07101e",
@@ -83,10 +85,18 @@
           "tagForUnderAgeOfConsent": false,
           "maxAdContentRating": "PG"
         }
-      ]
+      ],
+      "react-native-fast-tflite"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "21273908-b491-4d39-a884-949992e5b675"
+      }
+    },
+    "owner": "lumisoftstudio"
   }
 }

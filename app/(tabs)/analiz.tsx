@@ -189,7 +189,6 @@ export default function Analiz() {
   const [sesListeModal, setSesListeModal]   = useState(false);
   const [modalTip, setModalTip]             = useState<DedektorTip | null>(null);
   const [dinleniyor, setDinleniyor]         = useState(false);
-  const [kalibrasyon, setKalibrasyon]       = useState(false);
   const [caliniyor, setCaliniyor]           = useState(false);
   const [confidenceScore, setConfidenceScore] = useState(0);
   const [cooldownKalan, setCooldownKalan]   = useState(0);
@@ -237,7 +236,6 @@ export default function Analiz() {
   const aktifDedektorRef   = useRef<DedektorTip | null>(null);
   const ilkAglamaZamaniRef = useRef<number | null>(null);
   const aktifKayitRef      = useRef<UykuKaydi | null>(null);
-  const recordingRef       = useRef<Audio.Recording | null>(null);
   const probeTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const cooldownTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -291,7 +289,7 @@ export default function Analiz() {
         setHassasiyet(v); hassasiyetRef.current = v;
       }
     });
-    cryEngineRef.current.loadPatterns().catch(() => {});
+    cryEngineRef.current.loadModel().catch(() => {});
     AsyncStorage.getItem(GECE_RAPORLARI_KEY).then(v => {
       if (v) { try { setGeceRaporlari(JSON.parse(v)); } catch {} }
     });
@@ -542,9 +540,9 @@ export default function Analiz() {
     } catch {}
   }, []);
 
-  const kaydiDurdur = async () => {
+  const kaydiDurdur = () => {
+    cryEngineRef.current.stopListening();
     if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
-    if (recordingRef.current) { try { await recordingRef.current.stopAndUnloadAsync(); } catch (_) {} recordingRef.current = null; }
   };
   const probeTimerTemizle = () => { if (probeTimerRef.current) { clearTimeout(probeTimerRef.current); probeTimerRef.current = null; } };
   const herSeyiDurdur = async () => {
@@ -553,7 +551,7 @@ export default function Analiz() {
     if (detektorTimerRef.current) clearInterval(detektorTimerRef.current);
     if (cooldownTimerRef.current) { clearInterval(cooldownTimerRef.current); cooldownTimerRef.current = null; }
     probeTimerTemizle();
-    await kaydiDurdur();
+    kaydiDurdur();
     if (audioManager.getState().tab === 'analiz') await audioManager.stop();
     cryEngineRef.current.reset();
     setConfidenceScore(0);
@@ -672,77 +670,41 @@ export default function Analiz() {
     if (tip === 'aglama') setSeciliNinni(ses); else setSeciliKolik(ses);
     setSeciliDetektor(tip); aktifSesRef.current = ses; aktifDedektorRef.current = tip;
     if (dinlemeRef.current) {
-      dinlemeRef.current = false; caliyorRef.current = false; probeTimerTemizle(); await kaydiDurdur();
+      dinlemeRef.current = false; caliyorRef.current = false; probeTimerTemizle(); kaydiDurdur();
       if (audioManager.getState().tab === 'analiz') await audioManager.stop();
       setCaliniyor(false); setDinleniyor(false);
     }
     setTimeout(() => dinlemeBaslat(ses), 400);
   };
 
-  const kalibrasyonYap = async (): Promise<void> => {
-    const KALIBRASYON_SURE_MS = 3000;
-    setKalibrasyon(true);
-    let kalRec: Audio.Recording | null = null;
-    try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
-      const { recording } = await Audio.Recording.createAsync({ ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true });
-      kalRec = recording;
-      const ornekler: number[] = [];
-      const interval = setInterval(async () => {
-        try { const st = await recording.getStatusAsync(); const db = (st as any).metering ?? -160; if (db > -160) ornekler.push(db); } catch (_) {}
-      }, 200);
-      await new Promise(res => setTimeout(res, KALIBRASYON_SURE_MS));
-      clearInterval(interval);
-      await kalRec.stopAndUnloadAsync();
-      kalRec = null;
-      cryEngineRef.current.calibrate(ornekler);
-    } catch (_) {
-      if (kalRec) { try { await kalRec.stopAndUnloadAsync(); } catch (__) {} }
-      cryEngineRef.current.calibrate([-50]); // fallback
-    } finally {
-      setKalibrasyon(false);
-    }
-  };
-
   const dinlemeBaslat = async (ses: SesTip) => {
     if (dinlemeRef.current) return;
     dinlemeRef.current = true; setDinleniyor(true);
-    cryEngineRef.current.reset();
-    await kalibrasyonYap();
+    const engine = cryEngineRef.current;
+    engine.reset();
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
-      const { recording } = await Audio.Recording.createAsync({ ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true });
-      recordingRef.current = recording;
-      const engine    = cryEngineRef.current;
-      const dedTip    = aktifDedektorRef.current ?? 'aglama';
-      pollIntervalRef.current = setInterval(async () => {
-        if (!dinlemeRef.current || caliyorRef.current) {
-          if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
-          return;
-        }
-        // Cooldown devam ediyorsa sayacı güncelle
-        if (engine.isCoolingDown()) {
-          const kalan = Math.ceil(engine.cooldownRemaining() / 1000);
-          setCooldownKalan(kalan);
-          setConfidenceScore(0);
-          return;
-        }
-        setCooldownKalan(0);
-        try {
-          const status = await recording.getStatusAsync();
-          const db     = (status as any).metering ?? -160;
-          const confidence = engine.analyze(db, dedTip);
-          setConfidenceScore(confidence);
-          const threshold = CONFIDENCE_THRESHOLD[hassasiyetRef.current];
-          if (confidence >= threshold) {
-            engine.triggerDetected();
-            setConfidenceScore(0);
-            if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
-            const g = aktifSesRef.current;
-            if (g) sesCaldir(g);
-          }
-        } catch (_) {}
-      }, 500);
+      await engine.startListening(hassasiyetRef.current, {
+        onDetected: (score: number) => {
+          if (!dinlemeRef.current) return;
+          setConfidenceScore(Math.round(score * 100));
+          // Start cooldown display ticker
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = setInterval(() => {
+            if (!engine.isCoolingDown()) {
+              setCooldownKalan(0);
+              setConfidenceScore(0);
+              if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+            } else {
+              setCooldownKalan(Math.ceil(engine.cooldownRemaining() / 1000));
+            }
+          }, 500);
+          const g = aktifSesRef.current;
+          if (g) sesCaldir(g);
+        },
+        onSilenceDetected: () => {
+          // No-op during detection phase (engine ran 62 windows without any cry)
+        },
+      });
     } catch (e) { dinlemeRef.current = false; setDinleniyor(false); }
   };
 
@@ -772,7 +734,6 @@ export default function Analiz() {
           sesCalmaBaslangicRef.current = 0;
           sesOgrenmeKaydet(ses.id, ses.name, kalisSn);
         }
-        cryEngineRef.current.saveCurrentPattern().catch(() => {});
         sendAlertToAll('silence').catch(() => {});
         if (audioManager.getState().tab === 'analiz') await audioManager.stop();
         caliyorRef.current = false; setCaliniyor(false);
@@ -795,7 +756,7 @@ export default function Analiz() {
     const bildirimTip = aktifDedektorRef.current === 'kolik' ? 'colic' : 'crying';
     sendAlertToAll(bildirimTip).catch(() => {});
     try {
-      await kaydiDurdur(); // mikrofon kaydını durdur — playback ile çakışmasın
+      kaydiDurdur(); // engine durdur — playback ile çakışmasın
       await audioManager.play(ses.file, ses.id, 'analiz', { loop: true });
       sessizlikProbeBaslat(ses);
     } catch (e) { caliyorRef.current = false; setCaliniyor(false); }
@@ -907,7 +868,6 @@ export default function Analiz() {
               ? t.bebekUyanik(bebekIsmi)
               : caliniyor
                 ? (seciliDetektor === 'aglama' ? t.ninnlCalıyor : t.beyazGurultuCalıyor)
-                : kalibrasyon ? t.kalibrasyonMesaj
                 : dinleniyor ? t.dinleniyor
                 : t.bebekUyuyor(bebekIsmi)}
           </Text>
@@ -927,9 +887,9 @@ export default function Analiz() {
                   <View style={styles.confidenceBarBg}>
                     <View style={[styles.confidenceBarFill, {
                       width: `${confidenceScore}%` as any,
-                      backgroundColor: confidenceScore >= CONFIDENCE_THRESHOLD[hassasiyet]
+                      backgroundColor: confidenceScore >= CONFIDENCE_THRESHOLD[hassasiyet] * 100
                         ? '#f87171'
-                        : confidenceScore >= CONFIDENCE_THRESHOLD[hassasiyet] * 0.6
+                        : confidenceScore >= CONFIDENCE_THRESHOLD[hassasiyet] * 60
                           ? '#facc15'
                           : '#4ade80',
                     }]} />
