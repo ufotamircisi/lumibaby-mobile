@@ -212,7 +212,8 @@ export default function Analiz() {
   const [cryGecmis, setCryGecmis]           = useState<CryHelperGecmis[]>([]);
   const [cryGecmisGoster, setCryGecmisGoster] = useState(false);
   const [dogumTarihi, setDogumTarihi]       = useState<string>('');
-  const [rehberModal, setRehberModal]       = useState(false);
+  const [nasılIslerModal, setNasılIslerModal]     = useState(false);
+  const [rehberDetayModal, setRehberDetayModal]   = useState(false);
   const [nasılCalisirModal, setNasılCalisirModal] = useState(false);
   // Yeni özellikler
   const [sesOgrenmeKayitlar, setSesOgrenmeKayitlar] = useState<SesOgrenmeKayit[]>([]);
@@ -1011,10 +1012,10 @@ export default function Analiz() {
         </View>
 
         {/* UYKU REHBERİ */}
-        <View style={styles.rehberKart}>
+        <TouchableOpacity activeOpacity={0.85} style={styles.rehberKart} onPress={() => setRehberDetayModal(true)}>
           <View style={styles.rehberBaslikRow}>
             <Text style={styles.rehberBaslik}>{t.uykuRehberiBaslik}</Text>
-            <TouchableOpacity onPress={() => setRehberModal(true)}>
+            <TouchableOpacity onPress={() => setNasılIslerModal(true)}>
               <Text style={styles.nasılCalisirLink}>{t.uykuRehberiNasılIsler}</Text>
             </TouchableOpacity>
           </View>
@@ -1036,16 +1037,11 @@ export default function Analiz() {
               </View>
               <View style={styles.rehberAltSatir}>
                 <Text style={styles.rehberKisaIpucu} numberOfLines={1}>{t.uykuRehberiNotlar[rehberSonuc.ritim]}</Text>
-                <TouchableOpacity onPress={() => {
-                  if (free) { setPaywallTip('premium'); setPaywallVisible(true); }
-                  else scrollRef.current?.scrollTo({ y: gecmisOffsetRef.current, animated: true });
-                }}>
-                  <Text style={styles.rehberOk}>›</Text>
-                </TouchableOpacity>
+                <Text style={styles.rehberOk}>›</Text>
               </View>
             </>
           )}
-        </View>
+        </TouchableOpacity>
 
         {/* 7 GÜNLÜK GRAFİK */}
         <View onLayout={e => { grafikOffsetRef.current = e.nativeEvent.layout.y; }}>
@@ -1611,21 +1607,32 @@ export default function Analiz() {
         </View>
       </Modal>
 
-      {/* UYKU REHBERİ BOTTOM SHEET */}
-      <Modal visible={rehberModal} transparent animationType="slide" onRequestClose={() => setRehberModal(false)}>
-        <TouchableOpacity style={styles.rehberOverlay} activeOpacity={1} onPress={() => setRehberModal(false)} />
+      {/* NASIL İŞLER MODAL — "Bu öneri neye göre hazırlandı?" */}
+      <Modal visible={nasılIslerModal} transparent animationType="slide" onRequestClose={() => setNasılIslerModal(false)}>
+        <TouchableOpacity style={styles.rehberOverlay} activeOpacity={1} onPress={() => setNasılIslerModal(false)} />
+        <View style={[styles.rehberSheet, { maxHeight: screenHeight * 0.65, paddingBottom: Math.max(insets.bottom + 16, 40) }]}>
+          <View style={styles.rehberSheetHandle} />
+          <Text style={styles.rehberSheetBaslik}>{t.uykuRehberiBolum1Baslik}</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.rehberSheetBolum}>
+              <Text style={styles.rehberSheetMetin}>{t.uykuRehberiBolum1Metin(bebekIsmi)}</Text>
+            </View>
+          </ScrollView>
+          <TouchableOpacity style={styles.rehberKapatBtn} onPress={() => setNasılIslerModal(false)}>
+            <Text style={styles.rehberKapatBtnYazi}>{t.kapat}</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* REHBERİ DETAY MODAL — "Bugün için not" + navigasyon */}
+      <Modal visible={rehberDetayModal} transparent animationType="slide" onRequestClose={() => setRehberDetayModal(false)}>
+        <TouchableOpacity style={styles.rehberOverlay} activeOpacity={1} onPress={() => setRehberDetayModal(false)} />
         <View style={[styles.rehberSheet, { maxHeight: screenHeight * 0.75, paddingBottom: Math.max(insets.bottom + 16, 40) }]}>
           <View style={styles.rehberSheetHandle} />
           <Text style={styles.rehberSheetBaslik}>{t.uykuRehberiModalBaslik}</Text>
           <ScrollView showsVerticalScrollIndicator={false}>
 
-            {/* BÖLÜM 1 */}
-            <View style={styles.rehberSheetBolum}>
-              <Text style={styles.rehberSheetBolumBaslik}>{t.uykuRehberiBolum1Baslik}</Text>
-              <Text style={styles.rehberSheetMetin}>{t.uykuRehberiBolum1Metin(bebekIsmi)}</Text>
-            </View>
-
-            {/* BÖLÜM 2 — dinamik not */}
+            {/* Bugün için not */}
             {rehberSonuc.tip === 'sonuc' && (() => {
               const sonRaporR = geceRaporlari[0];
               const notlar: string[] = [];
@@ -1643,17 +1650,17 @@ export default function Analiz() {
               );
             })()}
 
-            {/* BÖLÜM 3 — navigasyon butonlar */}
+            {/* Navigasyon butonlar */}
             <View style={styles.rehberSheetBolum}>
               <Text style={styles.rehberSheetBolumBaslik}>{t.uykuRehberiBolum3Baslik}</Text>
               <TouchableOpacity style={styles.rehberNavBtn} onPress={() => {
-                setRehberModal(false);
+                setRehberDetayModal(false);
                 setTimeout(() => scrollRef.current?.scrollTo({ y: gecmisOffsetRef.current, animated: true }), 150);
               }}>
                 <Text style={styles.rehberNavBtnYazi}>{t.uykuRehberiGecmiseGit}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.rehberNavBtn} onPress={() => {
-                setRehberModal(false);
+                setRehberDetayModal(false);
                 setTimeout(() => scrollRef.current?.scrollTo({ y: grafikOffsetRef.current, animated: true }), 150);
               }}>
                 <Text style={styles.rehberNavBtnYazi}>{t.uykuRehberiGrafigeGit}</Text>
@@ -1661,6 +1668,9 @@ export default function Analiz() {
             </View>
 
           </ScrollView>
+          <TouchableOpacity style={styles.rehberKapatBtn} onPress={() => setRehberDetayModal(false)}>
+            <Text style={styles.rehberKapatBtnYazi}>{t.kapat}</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
 
@@ -1758,6 +1768,8 @@ const styles = StyleSheet.create({
   rehberKirmizi:          { color: '#f87171' },
   rehberAltSatir:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
   rehberKisaIpucu:        { color: 'rgba(255,255,255,0.38)', fontSize: 11, flex: 1, lineHeight: 16 },
+  rehberKapatBtn:         { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12 },
+  rehberKapatBtnYazi:     { color: 'rgba(255,255,255,0.6)', fontSize: 15 },
   rehberNotKutu:          { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 10 },
   rehberNotYazi:          { color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 18 },
   rehberOverlay:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
