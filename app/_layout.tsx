@@ -22,6 +22,7 @@ export default function RootLayout() {
 
     AsyncStorage.getItem('lumibaby_onboarding_done').then(v => {
       if (!v) router.replace('/onboarding');
+      else router.replace('/(tabs)/analiz');
     });
   }, []);
 
