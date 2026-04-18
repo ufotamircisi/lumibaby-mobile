@@ -54,50 +54,64 @@
     <ul>
       <li><strong>Ses kaydı (mikrofon):</strong> Ağlama tespiti ve anne sesi kaydı için mikrofon kullanılır. Kayıtlar yalnızca cihazınızda saklanır, sunucuya gönderilmez.</li>
       <li><strong>Bebek adı ve doğum tarihi:</strong> Yalnızca cihazınızda saklanır, kişiselleştirilmiş deneyim için kullanılır.</li>
-      <li><strong>Uyku kayıtları:</strong> Gece raporları ve uyku skorları cihazınızda yerel olarak tutulur.</li>
+      <li><strong>Uyku kayıtları:</strong> Gece raporları ve uyku skorları yalnızca cihazınızda yerel olarak tutulur; buluta gönderilmez.</li>
       <li><strong>Push bildirim token'ı:</strong> Ebeveyn bildirimleri için Expo bildirim sistemi kullanılır. Token'lar yalnızca bildirim gönderimi amacıyla kullanılır.</li>
-      <li><strong>Abonelik bilgisi:</strong> Premium abonelik ve 7 günlük ücretsiz deneme durumu cihazınızda saklanır. Deneme bittikten sonra otomatik ücret alınmaz; uygulama ücretsiz versiyona döner.</li>
+      <li><strong>Abonelik bilgisi:</strong> Premium abonelik ve 7 günlük ücretsiz deneme durumu RevenueCat üzerinden yönetilir. Deneme bittikten sonra otomatik ücret alınmaz; uygulama ücretsiz versiyona döner.</li>
     </ul>
 
     <h2>2. Mikrofon Kullanımı</h2>
     <div class="card">
       <p>Uygulama mikrofonu yalnızca şu amaçlarla kullanır:</p>
       <ul>
-        <li>Ağlama dedektörü aktifken ses seviyesi ölçümü</li>
+        <li>Ağlama dedektörü aktifken ses seviyesi ölçümü ve ağlama tespiti</li>
         <li>Kolik dedektörü aktifken ses seviyesi ölçümü</li>
         <li>Anne sesi kaydı oluştururken ses kaydı</li>
-        <li>Ağlama analizi için 10 saniyelik ses kaydı</li>
+        <li><strong>YAMNet ses analizi:</strong> Ağlama/kolik tespiti tamamen cihaz üzerinde işlenir; hiçbir ses verisi sunucuya gönderilmez veya dışarı çıkmaz.</li>
+        <li><strong>Ses öğrenme sistemi:</strong> Öğrenilen ağlama örüntüleri yalnızca cihazınızdaki AsyncStorage'da saklanır, paylaşılmaz.</li>
       </ul>
       <p style="margin-top:12px; color: rgba(255,255,255,0.5); font-size:13px;">Arka planda çalışırken yalnızca ses seviyesi algılanır, ses kaydı yapılmaz. Kaydettiğiniz sesler cihazınızın yerel depolama alanında tutulur.</p>
     </div>
 
-    <h2>3. Ebeveyn Bildirimleri</h2>
+    <h2>3. Bildirimler</h2>
     <p>QR kod ile eşleştirilen cihazlar arasında push bildirimleri gönderilir. Bu işlem için Expo Push Notification servisi kullanılır. Bildirim token'larınız yalnızca eşleştirdiğiniz cihaza bildirim göndermek amacıyla kullanılır ve üçüncü taraflarla paylaşılmaz.</p>
+    <p>Uygulama ayrıca şu bildirim türlerini gönderir:</p>
+    <ul>
+      <li><strong>Wake window bildirimleri:</strong> Bebeğinizin tahmini uyku zamanını hatırlatır; yaş ve geçmiş uyku verilerine dayanır.</li>
+      <li><strong>Gelişim sıçraması (Wonder Weeks) bildirimleri:</strong> Bebeğinizin haftalık gelişim dönemlerine dair genel rehber bilgisi içerir.</li>
+    </ul>
 
     <h2>4. Ağlama Analizi</h2>
-    <p>Ağlama analizi özelliği, 10 saniyelik ses kaydını işlemek için Anthropic Claude API'sine gönderir. Bu ses kaydı analiz sonrası saklanmaz. API'ye gönderilen veri yalnızca analiz amacıyla kullanılır.</p>
+    <p>Ağlama analizi yardımcısı kısa sorular aracılığıyla çalışır; ses kaydı veya harici API kullanılmaz. Ağlama ve kolik dedektörü, YAMNet makine öğrenmesi modelini kullanır ve ses analizi <strong>tamamen cihazınız üzerinde</strong> gerçekleşir. Hiçbir ses verisi sunuculara iletilmez.</p>
 
-    <h2>5. Üçüncü Taraf Hizmetler</h2>
+    <h2>5. Aile Paylaşımı</h2>
+    <p>Aile paylaşımı özelliği, QR kod aracılığıyla bir partner cihazla eşleştirme yapmanıza olanak tanır. Bu özellikte:</p>
     <ul>
-      <li><strong>Expo Push Notifications:</strong> Ebeveyn bildirimleri için</li>
-      <li><strong>Anthropic Claude API:</strong> Ağlama analizi için (ileride kaldırılabilir)</li>
-      <li><strong>RevenueCat (planlı):</strong> Abonelik yönetimi için</li>
+      <li>Partner cihazın bildirim token'ı yalnızca ağlama/sessizlik bildirimi göndermek için kullanılır.</li>
+      <li>Eşleştirme bilgileri cihazınızın yerel depolama alanında tutulur; uzak sunuculara gönderilmez.</li>
+      <li>Eşleştirme yalnızca 1 partner cihazla sınırlıdır.</li>
+    </ul>
+
+    <h2>6. Üçüncü Taraf Hizmetler</h2>
+    <ul>
+      <li><strong>Expo Push Notifications:</strong> Ebeveyn ve aile paylaşımı bildirimleri için.</li>
+      <li><strong>RevenueCat:</strong> Abonelik ve satın alma yönetimi için. <a href="https://www.revenuecat.com/privacy" target="_blank">RevenueCat Gizlilik Politikası</a> geçerlidir.</li>
+      <li><strong>Google AdMob:</strong> Ücretsiz kullanıcılara reklam gösterimi için. <a href="https://policies.google.com/privacy" target="_blank">Google Gizlilik Politikası</a> geçerlidir.</li>
     </ul>
     <p>Bu hizmetlerin kendi gizlilik politikaları geçerlidir.</p>
 
-    <h2>6. Veri Güvenliği</h2>
+    <h2>7. Veri Güvenliği</h2>
     <p>Ses kayıtlarınız, bebek adınız ve uyku raporlarınız cihazınızın yerel depolama alanında (AsyncStorage) saklanır. İnternet bağlantısı olmadan da çalışır. Verileriniz şifrelenmemiş olarak yerel depolamada tutulur; cihazınızın güvenliği önemlidir.</p>
 
-    <h2>7. Çocuk Gizliliği</h2>
+    <h2>8. Çocuk Gizliliği</h2>
     <p>LumiBaby, bebekler ve küçük çocuklar için tasarlanmış bir ebeveyn uygulamasıdır. Uygulama, 13 yaş altı çocuklardan doğrudan kişisel veri toplamaz. Tüm veriler ebeveyn tarafından girilir.</p>
 
-    <h2>8. Verilerinizi Silme</h2>
+    <h2>9. Verilerinizi Silme</h2>
     <p>Ses kayıtlarınızı uygulama içinden silebilirsiniz. Bebek adı ve diğer veriler için uygulamayı cihazınızdan kaldırmak yeterlidir; tüm yerel veriler silinir.</p>
 
-    <h2>9. İletişim</h2>
+    <h2>10. İletişim</h2>
     <p>Gizlilik ile ilgili sorularınız için: <a href="mailto:lumisoftstudio@gmail.com">lumisoftstudio@gmail.com</a></p>
 
-    <h2>10. Değişiklikler</h2>
+    <h2>11. Değişiklikler</h2>
     <p>Bu politikayı zaman zaman güncelleyebiliriz. Önemli değişiklikler uygulama içinde bildirilecektir.</p>
 
     <p style="margin-top: 40px; text-align:center; color: rgba(255,255,255,0.3); font-size: 12px;">
@@ -123,50 +137,64 @@
     <ul>
       <li><strong>Audio recording (microphone):</strong> Used for cry detection and mom's voice recording. Recordings are stored only on your device, never sent to servers.</li>
       <li><strong>Baby name and date of birth:</strong> Stored only on your device, used for a personalized experience.</li>
-      <li><strong>Sleep records:</strong> Night reports and sleep scores are stored locally on your device.</li>
+      <li><strong>Sleep records:</strong> Night reports and sleep scores are stored locally on your device only; never sent to the cloud.</li>
       <li><strong>Push notification token:</strong> Expo notification system is used for parent alerts. Tokens are used solely for sending notifications.</li>
-      <li><strong>Subscription status:</strong> Premium subscription and 7-day free trial status is stored on your device. No automatic charges after the trial — the app reverts to the free version.</li>
+      <li><strong>Subscription status:</strong> Premium subscription and 7-day free trial status is managed via RevenueCat. No automatic charges after the trial — the app reverts to the free version.</li>
     </ul>
 
     <h2>2. Microphone Usage</h2>
     <div class="card">
       <p>The app uses the microphone only for:</p>
       <ul>
-        <li>Sound level measurement when the cry detector is active</li>
+        <li>Sound level measurement and cry detection when the cry detector is active</li>
         <li>Sound level measurement when the colic detector is active</li>
         <li>Recording audio when creating a mom's voice recording</li>
-        <li>10-second audio recording for cry analysis</li>
+        <li><strong>YAMNet audio analysis:</strong> Cry/colic detection is processed entirely on-device; no audio data is sent to servers or leaves the device.</li>
+        <li><strong>Sound learning system:</strong> Learned cry patterns are stored only in your device's local AsyncStorage and are never shared.</li>
       </ul>
       <p style="margin-top:12px; color: rgba(255,255,255,0.5); font-size:13px;">When running in the background, only sound level is detected — no audio is recorded. Your recorded sounds are stored in your device's local storage.</p>
     </div>
 
-    <h2>3. Parent Notifications</h2>
+    <h2>3. Notifications</h2>
     <p>Push notifications are sent between devices paired via QR code. This uses the Expo Push Notification service. Your notification tokens are used solely to send alerts to paired devices and are not shared with third parties.</p>
+    <p>The app also sends the following notification types:</p>
+    <ul>
+      <li><strong>Wake window notifications:</strong> Reminds you of your baby's estimated sleep time based on age and past sleep data.</li>
+      <li><strong>Wonder Weeks (developmental leap) notifications:</strong> General guidance about your baby's weekly developmental stages.</li>
+    </ul>
 
     <h2>4. Cry Analysis</h2>
-    <p>The cry analysis feature sends a 10-second audio recording to the Anthropic Claude API for processing. This audio is not stored after analysis. Data sent to the API is used solely for analysis purposes.</p>
+    <p>The cry analysis assistant works through short questions — no audio recording or external API is used. The cry and colic detector uses the YAMNet machine learning model and performs audio analysis <strong>entirely on your device</strong>. No audio data is transmitted to any server.</p>
 
-    <h2>5. Third-Party Services</h2>
+    <h2>5. Family Sharing</h2>
+    <p>The family sharing feature allows you to pair with one partner device via QR code. In this feature:</p>
     <ul>
-      <li><strong>Expo Push Notifications:</strong> For parent alerts</li>
-      <li><strong>Anthropic Claude API:</strong> For cry analysis (may be removed in future)</li>
-      <li><strong>RevenueCat (planned):</strong> For subscription management</li>
+      <li>The partner device's notification token is used only to send crying/silence alerts.</li>
+      <li>Pairing information is stored in your device's local storage; it is not sent to remote servers.</li>
+      <li>Pairing is limited to 1 partner device.</li>
+    </ul>
+
+    <h2>6. Third-Party Services</h2>
+    <ul>
+      <li><strong>Expo Push Notifications:</strong> For parent and family sharing alerts.</li>
+      <li><strong>RevenueCat:</strong> For subscription and purchase management. <a href="https://www.revenuecat.com/privacy" target="_blank">RevenueCat Privacy Policy</a> applies.</li>
+      <li><strong>Google AdMob:</strong> For displaying ads to free users. <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a> applies.</li>
     </ul>
     <p>These services have their own privacy policies.</p>
 
-    <h2>6. Data Security</h2>
+    <h2>7. Data Security</h2>
     <p>Your voice recordings, baby name, and sleep reports are stored in your device's local storage (AsyncStorage). The app works without an internet connection. Data is stored unencrypted in local storage; the security of your device matters.</p>
 
-    <h2>7. Children's Privacy</h2>
+    <h2>8. Children's Privacy</h2>
     <p>LumiBaby is a parental app designed for babies and young children. The app does not directly collect personal data from children under 13. All data is entered by the parent.</p>
 
-    <h2>8. Deleting Your Data</h2>
+    <h2>9. Deleting Your Data</h2>
     <p>You can delete voice recordings from within the app. For baby name and other data, uninstalling the app from your device is sufficient — all local data will be deleted.</p>
 
-    <h2>9. Contact</h2>
+    <h2>10. Contact</h2>
     <p>For privacy-related questions: <a href="mailto:lumisoftstudio@gmail.com">lumisoftstudio@gmail.com</a></p>
 
-    <h2>10. Changes</h2>
+    <h2>11. Changes</h2>
     <p>We may update this policy from time to time. Significant changes will be notified within the app.</p>
 
     <p style="margin-top: 40px; text-align:center; color: rgba(255,255,255,0.3); font-size: 12px;">
