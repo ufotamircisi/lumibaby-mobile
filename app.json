@@ -16,9 +16,13 @@
         "UIBackgroundModes": [
           "audio",
           "remote-notification"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
+    "assetBundlePatterns": [
+      "assets/models/*"
+    ],
     "android": {
       "package": "com.lumibaby",
       "permissions": [
@@ -37,8 +41,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "assetBundlePatterns": ["assets/models/*"]
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "bundler": "metro",
@@ -87,7 +90,12 @@
           "maxAdContentRating": "PG"
         }
       ],
-      ["react-native-fast-tflite", { "enableCoreMLDelegate": true }]
+      [
+        "react-native-fast-tflite",
+        {
+          "enableCoreMLDelegate": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -271,7 +271,7 @@ export class CryDetectionEngine {
       rec = null;
       if (!uri) return;
 
-      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
       const parsed = parseWav(base64);
       if (!parsed) return;
 
