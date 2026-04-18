@@ -16,10 +16,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendAlertToAll } from './_layout';
 
 // ── STORAGE KEYS ─────────────────────────────────────────────────────────────
-const SES_OGRENME_KEY     = 'lumibaby_ses_ogrenme';
-const GECE_RAPORLARI_KEY  = 'lumibaby_gece_raporlari';
+const SES_OGRENME_KEY          = 'lumibaby_ses_ogrenme';
+const GECE_RAPORLARI_KEY       = 'lumibaby_gece_raporlari';
 const WAKE_WINDOW_BILDIRIM_KEY = 'lumibaby_wake_window_bildirim';
-const SLEEP_START_KEY     = 'lumibaby_sleep_start';
+const SLEEP_START_KEY          = 'lumibaby_sleep_start';
+const DETEKTOR_BITIS_KEY       = 'lumibaby_detektor_bitis';
 type SesOgrenmeKayit = { sesId: number; sesAdi: string; kalisSaniye: number; ts: number };
 // Wonder Weeks: hafta numaraları
 const WONDER_WEEKS = [5, 8, 12, 19, 26, 37, 46, 55];
@@ -228,6 +229,7 @@ export default function Analiz() {
 
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
   const detektorTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const detektorBitisRef   = useRef<number>(0); // timestamp: bitiş zamanı (ms)
   const dinlemeRef         = useRef(false);
   const caliyorRef         = useRef(false);
   const geceBaslangicRef   = useRef<number>(0);
@@ -319,13 +321,48 @@ export default function Analiz() {
       setSure(Math.floor((Date.now() - savedStart) / 1000));
       timerRef.current = setInterval(() => setSure(Math.floor((Date.now() - geceBaslangicRef.current) / 1000)), 1000);
     });
+
+    // Arka planda süresi dolmamış dedektör varsa geri yükle
+    AsyncStorage.getItem(DETEKTOR_BITIS_KEY).then(v => {
+      if (!v) return;
+      const bitis = parseInt(v, 10);
+      const kalan = bitis - Date.now();
+      if (kalan <= 0) {
+        // Arka planda süresi doldu — temizle
+        AsyncStorage.removeItem(DETEKTOR_BITIS_KEY).catch(() => {});
+        return;
+      }
+      detektorBitisRef.current = bitis;
+      setDetektorSure(Math.ceil(kalan / 1000));
+      if (detektorTimerRef.current) clearInterval(detektorTimerRef.current);
+      detektorTimerRef.current = setInterval(() => {
+        const kalanMs = detektorBitisRef.current - Date.now();
+        if (kalanMs <= 0) {
+          clearInterval(detektorTimerRef.current!); detektorTimerRef.current = null;
+          setDetektorSure(0); detektorBitisRef.current = 0;
+          AsyncStorage.removeItem(DETEKTOR_BITIS_KEY).catch(() => {});
+          herSeyiDurdur(); setSeciliDetektor(null); setPaywallTip('detektor'); setPaywallVisible(true);
+        } else {
+          setDetektorSure(Math.ceil(kalanMs / 1000));
+        }
+      }, 500);
+    });
   }, []);
 
-  // AppState: arka plandan geri dönünce sayacı hemen güncelle
+  // AppState: arka plandan geri dönünce sayaçları hemen güncelle
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active' && geceBaslangicRef.current > 0) {
+      if (nextState !== 'active') return;
+      if (geceBaslangicRef.current > 0) {
         setSure(Math.floor((Date.now() - geceBaslangicRef.current) / 1000));
+      }
+      if (detektorBitisRef.current > 0) {
+        const kalanMs = detektorBitisRef.current - Date.now();
+        if (kalanMs <= 0) {
+          setDetektorSure(0);
+        } else {
+          setDetektorSure(Math.ceil(kalanMs / 1000));
+        }
       }
     });
     return () => sub.remove();
@@ -573,6 +610,8 @@ export default function Analiz() {
     setConfidenceScore(0);
     setCooldownKalan(0);
     AsyncStorage.removeItem(SLEEP_START_KEY).catch(() => {});
+    AsyncStorage.removeItem(DETEKTOR_BITIS_KEY).catch(() => {});
+    detektorBitisRef.current = 0;
   };
 
   // ── AĞLAMA YARDIMCISI ────────────────────────────────────────────────────────
@@ -667,14 +706,22 @@ export default function Analiz() {
       if (detektorHak <= 0) { setPaywallTip('detektor'); setPaywallVisible(true); return; }
       const hakKullanildi = await detektorKullan();
       if (!hakKullanildi) { setPaywallTip('detektor'); setPaywallVisible(true); return; }
-      setDetektorSure(0);
+      const endTime = Date.now() + 60 * 60 * 1000;
+      detektorBitisRef.current = endTime;
+      setDetektorSure(3600);
+      AsyncStorage.setItem(DETEKTOR_BITIS_KEY, String(endTime)).catch(() => {});
       if (detektorTimerRef.current) clearInterval(detektorTimerRef.current);
       detektorTimerRef.current = setInterval(() => {
-        setDetektorSure(prev => {
-          if (prev >= 3599) { clearInterval(detektorTimerRef.current!); herSeyiDurdur(); setSeciliDetektor(null); setPaywallTip('detektor'); setPaywallVisible(true); return 0; }
-          return prev + 1;
-        });
-      }, 1000);
+        const kalanMs = detektorBitisRef.current - Date.now();
+        if (kalanMs <= 0) {
+          clearInterval(detektorTimerRef.current!); detektorTimerRef.current = null;
+          setDetektorSure(0); detektorBitisRef.current = 0;
+          AsyncStorage.removeItem(DETEKTOR_BITIS_KEY).catch(() => {});
+          herSeyiDurdur(); setSeciliDetektor(null); setPaywallTip('detektor'); setPaywallVisible(true);
+        } else {
+          setDetektorSure(Math.ceil(kalanMs / 1000));
+        }
+      }, 500);
     }
     const izin = await Audio.requestPermissionsAsync();
     if (!izin.granted) { alert(t.mikrofonIzni); return; }
@@ -930,7 +977,7 @@ export default function Analiz() {
               {seciliDetektor === 'aglama' && seciliNinni && <Text style={styles.aktifSesText}>{seciliNinni.icon + ' ' + seciliNinni.name}</Text>}
               {seciliDetektor === 'kolik'  && seciliKolik  && <Text style={styles.aktifSesText}>{seciliKolik.icon + ' '  + seciliKolik.name}</Text>}
               {aglamaSayisi > 0 && <Text style={styles.aglamaSayisiText}>{t.agladiSayisi(aglamaSayisi)}</Text>}
-              {free && <Text style={styles.sureBilgi}>{t.kalanSure(formatSayac(3600 - detektorSure))}</Text>}
+              {free && detektorSure > 0 && <Text style={styles.sureBilgi}>{t.kalanSure(formatSayac(detektorSure))}</Text>}
               {/* Güven skoru çubuğu */}
               {dinleniyor && !caliniyor && cooldownKalan === 0 && (
                 <View style={styles.confidenceRow}>
