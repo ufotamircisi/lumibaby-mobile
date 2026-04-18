@@ -151,7 +151,7 @@ const tr = {
   grafikKilit:            '7 Günlük grafik Premium\'da',
   // ── AĞLAMA YARDIMCISI ──────────────────────────────────────────────────────
   cryHelperBaslik:        '❓ Neden ağlıyor olabilir?',
-  cryHelperAcik:          '5 kısa soruyla olası nedeni bulalım',
+  cryHelperAcik:          'Kısa birkaç soruya cevap verin, olası nedeni bulalım',
   cryHelperBaslat:        'Başla',
   cryHelperSoru:          (n: number) => `Soru ${n}/5`,
   cryHelperIleri:         'İleri →',
@@ -652,7 +652,7 @@ const en = {
   grafikKilit:            '7-Day graph available in Premium',
   // ── CRY HELPER ─────────────────────────────────────────────────────────────
   cryHelperBaslik:        '❓ Why might baby be crying?',
-  cryHelperAcik:          '5 quick questions to find the likely cause',
+  cryHelperAcik:          'Answer a few short questions to find the likely cause',
   cryHelperBaslat:        'Start',
   cryHelperSoru:          (n: number) => `Question ${n}/5`,
   cryHelperIleri:         'Next →',
