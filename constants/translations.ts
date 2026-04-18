@@ -94,7 +94,7 @@ const tr = {
   premiumUpgradeBtn:   "👑 Premium'a Geç",
   tablo: [
     { ozellik: '🌙 Uyku Dedektörü',    ucretsiz: 'Günde 60 dk',  premium: 'Sınırsız' },
-    { ozellik: '🎤 Ağlama Analizi',     ucretsiz: 'Günde 1 hak',  premium: 'Sınırsız' },
+    { ozellik: '❓ Ağlama Analizi',     ucretsiz: 'Günde 1 hak',  premium: 'Sınırsız' },
     { ozellik: '💜 Anne Sesi',          ucretsiz: '—',            premium: '✓'         },
     { ozellik: '📳 Ebeveyn Bildirimi',  ucretsiz: '—',            premium: 'QR + Watch'},
     { ozellik: '📊 Geçmiş Uykular',     ucretsiz: '—',            premium: 'Tam Arşiv' },
@@ -595,7 +595,7 @@ const en = {
   premiumUpgradeBtn:   '👑 Go Premium',
   tablo: [
     { ozellik: '🌙 Sleep Detector',      ucretsiz: '60 min/day',   premium: 'Unlimited' },
-    { ozellik: '🎤 Cry Analysis',         ucretsiz: '1 use/day',    premium: 'Unlimited' },
+    { ozellik: '❓ Cry Analysis',         ucretsiz: '1 use/day',    premium: 'Unlimited' },
     { ozellik: '💜 Mom\'s Voice',         ucretsiz: '—',            premium: '✓'          },
     { ozellik: '📳 Parent Alerts',        ucretsiz: '—',            premium: 'QR + Watch' },
     { ozellik: '📊 Past Sleeps',           ucretsiz: '—',            premium: 'Full Archive'},

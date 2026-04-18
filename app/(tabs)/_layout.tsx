@@ -813,7 +813,19 @@ export default function TabLayout() {
               </TouchableOpacity>
 
               <TouchableOpacity style={[s.devMenuBtn, s.devMenuBtnFree]} onPress={async () => {
-                await AsyncStorage.multiRemove(['partner_premium', 'lumibaby_trial_start']);
+                // Tüm premium/trial anahtarlarını temizle
+                await AsyncStorage.multiRemove([
+                  'partner_premium',
+                  'lumibaby_detektor_kullanim',
+                  'lumibaby_analiz_kullanim',
+                  'lumibaby_detektor_ekstra',
+                  'lumibaby_analiz_ekstra',
+                ]);
+                // Trial başlangıcını 8 gün öncesine set et → trial süresi dolmuş → free mode
+                await AsyncStorage.setItem(
+                  'lumibaby_trial_start',
+                  String(Date.now() - 8 * 24 * 60 * 60 * 1000),
+                );
                 setDevMenuVisible(false);
                 require('react-native').DevSettings.reload();
               }}>
