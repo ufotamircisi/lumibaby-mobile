@@ -1,3 +1,4 @@
+// ⚠️ Bu dosyada direkt Audio.Sound KULLANILMAZ — tüm ses işlemleri audioManager üzerinden yapılır.
 import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';

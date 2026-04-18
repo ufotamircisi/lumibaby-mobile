@@ -1,3 +1,5 @@
+// ⚠️ Bu dosyada direkt Audio.Sound KULLANILMAZ — tüm ses işlemleri audioManager üzerinden yapılır.
+// İstisna: duration metadata okuma (shouldPlay:false + hemen unload) — ses çalmaz.
 import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
@@ -71,6 +73,7 @@ export default function Hikayeler() {
   const playMasalRef        = useRef<(id: number) => Promise<void>>(async () => {});
 
   // ── Load real durations from audio files ────────────────────────────────────
+  // METADATA ONLY — shouldPlay:false + hemen unload. Ses çalmaz, audioManager'ı bypass etmez.
   useEffect(() => {
     let cancelled = false;
     const masalListesi = lang === 'en' ? masallarEN : masallarTR;
@@ -78,6 +81,11 @@ export default function Hikayeler() {
     (async () => {
       for (const masal of masalListesi) {
         if (cancelled) return;
+        // Aktif ses varken yükleme yapma — ses oturumunu etkilemesin
+        if (audioManager.getState().id !== null) {
+          await new Promise(res => setTimeout(res, 200));
+          if (cancelled) return;
+        }
         try {
           const { sound, status } = await Audio.Sound.createAsync(masal.file, { shouldPlay: false });
           if (status.isLoaded && status.durationMillis) {

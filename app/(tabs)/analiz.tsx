@@ -1,3 +1,4 @@
+// ⚠️ Bu dosyada direkt Audio.Sound KULLANILMAZ — playback için audioManager, kayıt için Audio.Recording kullanılır.
 import AdBanner from '@/components/AdBanner';
 import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';

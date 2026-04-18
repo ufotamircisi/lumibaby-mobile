@@ -1,5 +1,13 @@
 // services/audioManager.ts
-// Global singleton — one active audio across all tabs
+// Global singleton — uygulama genelinde tek aktif ses (tüm sekmeler)
+//
+// KURAL: Hiçbir sekme dosyası doğrudan Audio.Sound oluşturmaz.
+//   play()  → mevcut sesi durdurur, yenisini başlatır
+//   stop()  → aktif sesi durdurur ve unload eder
+//   subscribe() → aktif ses değişince UI'yı günceller
+//
+// DOĞRU:   audioManager.play(file, id, 'ninniler', { loop: true })
+// YANLIŞ:  const { sound } = await Audio.Sound.createAsync(...)
 import { Audio } from 'expo-av';
 
 export type AudioTab = 'ninniler' | 'kolik' | 'hikayeler' | 'analiz' | 'sesim';
