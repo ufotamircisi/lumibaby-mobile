@@ -16,21 +16,48 @@ function getPAYWALL_RESULT() {
 }
 
 const KEYS = {
-  TRIAL_START:       'lumibaby_trial_start',
-  DETEKTOR_KULLANIM: 'lumibaby_detektor_kullanim',
-  ANALIZ_KULLANIM:   'lumibaby_analiz_kullanim',
-  DETEKTOR_EKSTRA:   'lumibaby_detektor_ekstra',
-  ANALIZ_EKSTRA:     'lumibaby_analiz_ekstra',
+  TRIAL_START:    'lumibaby_trial_start',
+  DETEKTOR_DAILY: 'detectorDailyUsage',
+  ANALIZ_DAILY:   'cryHelperDailyUsage',
 };
+
+interface DailyUsage {
+  date: string;
+  normalHakKullanildi: boolean;
+  reklamHakKullanildi: boolean; // ad was watched today → button hidden
+  kullanilmis: number;          // total feature uses today
+}
 
 const TRIAL_GUN   = 7;
 const ENTITLEMENT = 'LumiBaby Pro';
 
 export type PremiumDurum = 'trial' | 'premium' | 'free';
 
-function bugunKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+function bugunTarih(): string {
+  return new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+}
+
+async function getDailyUsage(key: string): Promise<DailyUsage> {
+  const today = bugunTarih();
+  try {
+    const data = await AsyncStorage.getItem(key);
+    if (data) {
+      const parsed: DailyUsage = JSON.parse(data);
+      if (parsed.date === today) return parsed;
+    }
+  } catch {}
+  // New day or no data — fresh start
+  return { date: today, normalHakKullanildi: false, reklamHakKullanildi: false, kullanilmis: 0 };
+}
+
+async function saveDailyUsage(key: string, usage: DailyUsage): Promise<void> {
+  await AsyncStorage.setItem(key, JSON.stringify(usage));
+}
+
+// earned = 1 normal + optional 1 reklam; kalan = earned - kullanilmis
+function computeHak(usage: DailyUsage): number {
+  const earned = 1 + (usage.reklamHakKullanildi ? 1 : 0);
+  return Math.max(0, earned - usage.kullanilmis);
 }
 
 async function rcIsPremium(): Promise<boolean> {
@@ -45,21 +72,19 @@ async function rcIsPremium(): Promise<boolean> {
 }
 
 export function usePremium() {
-  const [durum, setDurum]                 = useState<PremiumDurum>('trial');
-  const [trialKalanGun, setTrialKalanGun] = useState(TRIAL_GUN);
-  const [detektorHak, setDetektorHak]     = useState(1);
-  const [analizHak, setAnalizHak]         = useState(1);
-  const [yuklendi, setYuklendi]           = useState(false);
+  const [durum, setDurum]                         = useState<PremiumDurum>('trial');
+  const [trialKalanGun, setTrialKalanGun]         = useState(TRIAL_GUN);
+  const [detektorHak, setDetektorHak]             = useState(1);
+  const [analizHak, setAnalizHak]                 = useState(1);
+  const [detektorReklamGoster, setDetektorReklamGoster] = useState(true);
+  const [analizReklamGoster, setAnalizReklamGoster]     = useState(true);
+  const [yuklendi, setYuklendi]                   = useState(false);
 
   const yukle = useCallback(async () => {
-    const bugun = bugunKey();
-
-    // RC entitlement check
     const rcPremium      = await rcIsPremium();
     const partnerPremium = (await AsyncStorage.getItem('partner_premium')) === 'true';
     const isPremium      = rcPremium || partnerPremium;
 
-    // Trial kontrolü
     let trialStart = await AsyncStorage.getItem(KEYS.TRIAL_START);
     if (!trialStart) {
       trialStart = Date.now().toString();
@@ -69,41 +94,29 @@ export function usePremium() {
     const trialBitti    = trialGecenGun >= TRIAL_GUN;
     const kalanGun      = Math.max(0, TRIAL_GUN - trialGecenGun);
 
-    // Durum belirle
     let yeniDurum: PremiumDurum = 'free';
-    if (isPremium)       yeniDurum = 'premium';
+    if (isPremium)        yeniDurum = 'premium';
     else if (!trialBitti) yeniDurum = 'trial';
 
     setDurum(yeniDurum);
     setTrialKalanGun(kalanGun);
 
-    // Trial veya Premium → dedektör sınırsız
-    if (yeniDurum === 'premium' || yeniDurum === 'trial') {
+    // Trial & Premium → unlimited, no ads
+    if (yeniDurum !== 'free') {
       setDetektorHak(999);
-    } else {
-      // Free: günde 1 + ekstra
-      const detektorData     = await AsyncStorage.getItem(KEYS.DETEKTOR_KULLANIM);
-      const detektorObj      = detektorData ? JSON.parse(detektorData) : {};
-      const detektorEkstraData = await AsyncStorage.getItem(KEYS.DETEKTOR_EKSTRA);
-      const detektorEkstraObj  = detektorEkstraData ? JSON.parse(detektorEkstraData) : {};
-      const detektorKullanildi = detektorObj[bugun] || 0;
-      const detektorEkstra     = detektorEkstraObj[bugun] || 0;
-      setDetektorHak(Math.max(0, 1 + detektorEkstra - detektorKullanildi));
-    }
-
-    // Analiz hak
-    if (yeniDurum === 'premium') {
       setAnalizHak(999);
+      setDetektorReklamGoster(false);
+      setAnalizReklamGoster(false);
     } else {
-      const analizData     = await AsyncStorage.getItem(KEYS.ANALIZ_KULLANIM);
-      const analizObj      = analizData ? JSON.parse(analizData) : {};
-      const analizEkstraData = await AsyncStorage.getItem(KEYS.ANALIZ_EKSTRA);
-      const analizEkstraObj  = analizEkstraData ? JSON.parse(analizEkstraData) : {};
-      const analizKullanildi = analizObj[bugun] || 0;
-      const analizEkstra     = analizEkstraObj[bugun] || 0;
-      // Trial: günde 3 (reklamsız), Free: günde 1 + reklam
-      const analizMaxHak = yeniDurum === 'trial' ? 3 : 1;
-      setAnalizHak(Math.max(0, analizMaxHak + analizEkstra - analizKullanildi));
+      // Dedektör günlük hak
+      const detUsage = await getDailyUsage(KEYS.DETEKTOR_DAILY);
+      setDetektorHak(computeHak(detUsage));
+      setDetektorReklamGoster(!detUsage.reklamHakKullanildi);
+
+      // Ağlama analizi günlük hak
+      const anizUsage = await getDailyUsage(KEYS.ANALIZ_DAILY);
+      setAnalizHak(computeHak(anizUsage));
+      setAnalizReklamGoster(!anizUsage.reklamHakKullanildi);
     }
 
     setYuklendi(true);
@@ -146,82 +159,74 @@ export function usePremium() {
 
   // ── Dedektör kullanıldı ────────────────────────────────────────────────────
   const detektorKullan = useCallback(async (): Promise<boolean> => {
-    if (durum === 'premium' || durum === 'trial') return true; // sınırsız
+    if (durum !== 'free') return true;
     if (detektorHak <= 0) return false;
-    const bugun = bugunKey();
-    const data = await AsyncStorage.getItem(KEYS.DETEKTOR_KULLANIM);
-    const obj = data ? JSON.parse(data) : {};
-    obj[bugun] = (obj[bugun] || 0) + 1;
-    await AsyncStorage.setItem(KEYS.DETEKTOR_KULLANIM, JSON.stringify(obj));
+    const usage = await getDailyUsage(KEYS.DETEKTOR_DAILY);
+    usage.kullanilmis += 1;
+    usage.normalHakKullanildi = true;
+    await saveDailyUsage(KEYS.DETEKTOR_DAILY, usage);
     setDetektorHak(prev => prev - 1);
     return true;
   }, [durum, detektorHak]);
 
   // ── Analiz kullanıldı ──────────────────────────────────────────────────────
   const analizKullan = useCallback(async (): Promise<boolean> => {
-    if (durum === 'premium') return true; // sınırsız
+    if (durum !== 'free') return true;
     if (analizHak <= 0) return false;
-    const bugun = bugunKey();
-    const data = await AsyncStorage.getItem(KEYS.ANALIZ_KULLANIM);
-    const obj = data ? JSON.parse(data) : {};
-    obj[bugun] = (obj[bugun] || 0) + 1;
-    await AsyncStorage.setItem(KEYS.ANALIZ_KULLANIM, JSON.stringify(obj));
+    const usage = await getDailyUsage(KEYS.ANALIZ_DAILY);
+    usage.kullanilmis += 1;
+    usage.normalHakKullanildi = true;
+    await saveDailyUsage(KEYS.ANALIZ_DAILY, usage);
     setAnalizHak(prev => prev - 1);
     return true;
   }, [durum, analizHak]);
 
-  // ── Rewarded reklam izleyince +1 hak (sadece free kullanıcılar için) ────────
+  // ── Reklam izle → +1 hak (günde max 1 kez) ───────────────────────────────
   const reklamIzleDetektor = useCallback(async (lang: string = 'tr') => {
     if (durum !== 'free') return;
     const result = await showRewarded();
     if (result === 'unavailable') {
-      Alert.alert(
-        lang === 'en' ? "Ad couldn't load, please try again" : 'Reklam şu an yüklenemedi, lütfen tekrar deneyin'
-      );
+      Alert.alert(lang === 'en' ? "Ad couldn't load, please try again" : 'Reklam şu an yüklenemedi, lütfen tekrar deneyin');
       return;
     }
-    if (result !== 'earned') return; // kullanıcı reklamı kapattı
-    const bugun = bugunKey();
-    const data = await AsyncStorage.getItem(KEYS.DETEKTOR_EKSTRA);
-    const obj = data ? JSON.parse(data) : {};
-    obj[bugun] = (obj[bugun] || 0) + 1;
-    await AsyncStorage.setItem(KEYS.DETEKTOR_EKSTRA, JSON.stringify(obj));
+    if (result !== 'earned') return;
+    const usage = await getDailyUsage(KEYS.DETEKTOR_DAILY);
+    usage.reklamHakKullanildi = true;
+    await saveDailyUsage(KEYS.DETEKTOR_DAILY, usage);
     setDetektorHak(prev => prev + 1);
+    setDetektorReklamGoster(false);
   }, [durum]);
 
   const reklamIzleAnaliz = useCallback(async (lang: string = 'tr') => {
     if (durum !== 'free') return;
     const result = await showRewarded();
     if (result === 'unavailable') {
-      Alert.alert(
-        lang === 'en' ? "Ad couldn't load, please try again" : 'Reklam şu an yüklenemedi, lütfen tekrar deneyin'
-      );
+      Alert.alert(lang === 'en' ? "Ad couldn't load, please try again" : 'Reklam şu an yüklenemedi, lütfen tekrar deneyin');
       return;
     }
     if (result !== 'earned') return;
-    const bugun = bugunKey();
-    const data = await AsyncStorage.getItem(KEYS.ANALIZ_EKSTRA);
-    const obj = data ? JSON.parse(data) : {};
-    obj[bugun] = (obj[bugun] || 0) + 1;
-    await AsyncStorage.setItem(KEYS.ANALIZ_EKSTRA, JSON.stringify(obj));
+    const usage = await getDailyUsage(KEYS.ANALIZ_DAILY);
+    usage.reklamHakKullanildi = true;
+    await saveDailyUsage(KEYS.ANALIZ_DAILY, usage);
     setAnalizHak(prev => prev + 1);
+    setAnalizReklamGoster(false);
   }, [durum]);
 
-  // premiumAktifEt → presentPaywall (backward compat alias)
   const premiumAktifEt = presentPaywall;
 
   return {
     durum,
-    isPremium:         durum === 'premium',
-    isTrial:           durum === 'trial',
-    isFree:            durum === 'free',
-    // Helper: trial users treated as premium everywhere
-    canAccessPremium:  durum === 'premium' || durum === 'trial',
-    showTeaserOnly:    durum === 'free',
-    isLockedFeature:   durum === 'free',
+    isPremium:            durum === 'premium',
+    isTrial:              durum === 'trial',
+    isFree:               durum === 'free',
+    canAccessPremium:     durum === 'premium' || durum === 'trial',
+    showTeaserOnly:       durum === 'free',
+    isLockedFeature:      durum === 'free',
     trialKalanGun,
     detektorHak,
     analizHak,
+    detektorReklamGoster,
+    analizReklamGoster,
     detektorKullan,
     analizKullan,
     reklamIzleDetektor,

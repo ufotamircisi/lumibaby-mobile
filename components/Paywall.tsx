@@ -8,11 +8,12 @@ interface PaywallProps {
   onClose: () => void;
   onPremium: () => void;
   onReklam?: () => void;
+  limitMesaji?: string;
   baslik?: string;
   aciklama?: string;
 }
 
-export default function Paywall({ visible, onClose, onPremium, onReklam, baslik, aciklama }: PaywallProps) {
+export default function Paywall({ visible, onClose, onPremium, onReklam, limitMesaji, baslik, aciklama }: PaywallProps) {
   const { isTrial } = usePremium();
   const { lang, t } = useLang();
 
@@ -32,7 +33,7 @@ export default function Paywall({ visible, onClose, onPremium, onReklam, baslik,
             {isTrial && <Text style={s.premiumBtnAlt}>{t.premiumTrialBanner}</Text>}
           </TouchableOpacity>
 
-          {onReklam && (
+          {onReklam ? (
             <>
               <View style={s.ayrac}>
                 <View style={s.ayracCizgi} />
@@ -44,7 +45,11 @@ export default function Paywall({ visible, onClose, onPremium, onReklam, baslik,
                 <Text style={s.reklamBtnAlt}>{lang === 'en' ? 'Earn +1 free credit' : '+1 ücretsiz hak kazan'}</Text>
               </TouchableOpacity>
             </>
-          )}
+          ) : limitMesaji ? (
+            <View style={s.limitBox}>
+              <Text style={s.limitYazi}>⏰ {limitMesaji}</Text>
+            </View>
+          ) : null}
 
           <TouchableOpacity style={s.kapatBtn} onPress={onClose}>
             <Text style={s.kapatBtnYazi}>{t.simdilikIptal}</Text>
@@ -71,6 +76,8 @@ const s = StyleSheet.create({
   reklamBtn:      { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 16, paddingVertical: 16, width: '100%', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', marginBottom: 8 },
   reklamBtnYazi:  { color: 'white', fontSize: 16, fontWeight: '600' },
   reklamBtnAlt:   { color: 'rgba(255,255,255,0.4)', fontSize: 12 },
+  limitBox:       { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, width: '100%', alignItems: 'center', marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  limitYazi:      { color: 'rgba(255,255,255,0.45)', fontSize: 13, textAlign: 'center' },
   kapatBtn:       { paddingVertical: 14, width: '100%', alignItems: 'center' },
   kapatBtnYazi:   { color: 'rgba(255,255,255,0.35)', fontSize: 14 },
 });

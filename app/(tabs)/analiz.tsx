@@ -173,7 +173,7 @@ const sabitKolikListesiEN: SesTip[] = [
 ];
 
 export default function Analiz() {
-  const { isTrial, canAccessPremium, detektorHak, analizHak, detektorKullan, analizKullan, reklamIzleDetektor, reklamIzleAnaliz, premiumAktifEt } = usePremium();
+  const { isTrial, canAccessPremium, detektorHak, analizHak, detektorReklamGoster, analizReklamGoster, detektorKullan, analizKullan, reklamIzleDetektor, reklamIzleAnaliz, premiumAktifEt } = usePremium();
   const router = useRouter();
   const { lang, t } = useLang();
   const free = !canAccessPremium;
@@ -1738,10 +1738,18 @@ export default function Analiz() {
         visible={paywallVisible}
         onClose={() => setPaywallVisible(false)}
         onPremium={() => { setPaywallVisible(false); premiumAktifEt(); }}
-        onReklam={isTrial ? undefined
-          : paywallTip === 'detektor' ? async () => { setPaywallVisible(false); await reklamIzleDetektor(lang); }
-          : paywallTip === 'analiz'   ? async () => { setPaywallVisible(false); await reklamIzleAnaliz(lang); }
-          : undefined}
+        onReklam={
+          isTrial ? undefined
+          : paywallTip === 'detektor' && detektorReklamGoster ? async () => { setPaywallVisible(false); await reklamIzleDetektor(lang); }
+          : paywallTip === 'analiz'   && analizReklamGoster   ? async () => { setPaywallVisible(false); await reklamIzleAnaliz(lang); }
+          : undefined
+        }
+        limitMesaji={
+          !isTrial && (
+            (paywallTip === 'detektor' && !detektorReklamGoster) ||
+            (paywallTip === 'analiz'   && !analizReklamGoster)
+          ) ? t.gunlukLimit : undefined
+        }
         baslik={paywallTip === 'detektor' ? t.paywallDetektorBaslik : paywallTip === 'analiz' ? t.paywallAnalizBaslik : t.paywallPremiumBaslik}
         aciklama={paywallTip === 'detektor' ? t.paywallDetektorAcik : paywallTip === 'analiz' ? t.paywallAnalizAcik : t.paywallPremiumAcik}
       />

@@ -502,6 +502,9 @@ const tr = {
   aglamaAlgilandi:        '🔔 Ağlama Algılandı!',
   dinleniyorDetay:        (esik: number) => `👂 Dinleniyor — Eşik: %${esik}`,
 
+  // ── GÜNLÜK HAK LİMİTİ ────────────────────────────────────────────────────────
+  gunlukLimit:         'Bugünkü limitinize ulaştınız',
+
   // ── ONBOARDING ──────────────────────────────────────────────────────────────
   obHosGelBaslik:      'Minik Uyku\'ya Hoş Geldiniz',
   obHosGelAlt:         'Bebeğiniz için daha sakin geceler, sizin için daha az stres.',
@@ -1016,6 +1019,9 @@ const en = {
   cooldownGostergesi:     (s: number) => `⏳ Waiting ${s}s`,
   aglamaAlgilandi:        '🔔 Crying Detected!',
   dinleniyorDetay:        (esik: number) => `👂 Listening — Threshold: ${esik}%`,
+
+  // ── DAILY LIMIT ───────────────────────────────────────────────────────────────
+  gunlukLimit:         "You've reached today's limit",
 
   // ── ONBOARDING ──────────────────────────────────────────────────────────────
   obHosGelBaslik:      'Welcome to LumiBaby',

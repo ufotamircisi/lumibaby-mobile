@@ -820,6 +820,8 @@ export default function TabLayout() {
                   'lumibaby_analiz_kullanim',
                   'lumibaby_detektor_ekstra',
                   'lumibaby_analiz_ekstra',
+                  'detectorDailyUsage',
+                  'cryHelperDailyUsage',
                 ]);
                 // Trial başlangıcını 8 gün öncesine set et → trial süresi dolmuş → free mode
                 await AsyncStorage.setItem(
