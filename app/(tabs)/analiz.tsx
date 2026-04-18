@@ -292,7 +292,21 @@ export default function Analiz() {
     });
     cryEngineRef.current.loadPatterns().catch(() => {});
     AsyncStorage.getItem(GECE_RAPORLARI_KEY).then(v => {
-      if (v) { try { setGeceRaporlari(JSON.parse(v)); } catch {} }
+      if (v) {
+        try {
+          const parsed: GeceRaporu[] = JSON.parse(v);
+          const temiz = parsed.filter(r =>
+            r.baslangic > 1000000000000 &&
+            r.bitis > r.baslangic &&
+            r.toplamUyku > 0 &&
+            r.toplamUyku <= 86400,
+          );
+          setGeceRaporlari(temiz);
+          if (temiz.length !== parsed.length) {
+            AsyncStorage.setItem(GECE_RAPORLARI_KEY, JSON.stringify(temiz)).catch(() => {});
+          }
+        } catch {}
+      }
     });
     // Uygulama öldürülüp yeniden açılırsa devam eden uykuyu geri yükle
     AsyncStorage.getItem(SLEEP_START_KEY).then(v => {
@@ -605,8 +619,9 @@ export default function Analiz() {
     const yeniKayit: UykuKaydi = { id: Date.now(), baslangic: Date.now(), bitis: null };
     setAktifKayit(yeniKayit); aktifKayitRef.current = yeniKayit;
     setUyuyorMu(true); setSure(0); setDetektorSure(0);
-    geceBaslangicRef.current = Date.now(); aglamaSayisiRef.current = 0; ilkAglamaZamaniRef.current = null; setAglamaSayisi(0);
-    AsyncStorage.setItem(SLEEP_START_KEY, String(geceBaslangicRef.current)).catch(() => {});
+    const simdi = Date.now();
+    geceBaslangicRef.current = simdi; aglamaSayisiRef.current = 0; ilkAglamaZamaniRef.current = null; setAglamaSayisi(0);
+    AsyncStorage.setItem(SLEEP_START_KEY, String(simdi)).catch(() => {});
     timerRef.current = setInterval(() => setSure(Math.floor((Date.now() - geceBaslangicRef.current) / 1000)), 1000);
 
     // Zamanlı uyku bildirimi planla
@@ -700,7 +715,7 @@ export default function Analiz() {
     }
   };
 
-  const dinlemeBaslat = async (ses: SesTip) => {
+  const dinlemeBaslat = async (_ses: SesTip) => {
     if (dinlemeRef.current) return;
     dinlemeRef.current = true; setDinleniyor(true);
     cryEngineRef.current.reset();
@@ -796,6 +811,7 @@ export default function Analiz() {
   };
 
   const bebekUyandi = async () => {
+    if (geceBaslangicRef.current <= 0) return;
     if (bildirimIdRef.current) {
       await Notifications.cancelScheduledNotificationAsync(bildirimIdRef.current).catch(() => {});
       bildirimIdRef.current = null;
@@ -818,7 +834,7 @@ export default function Analiz() {
     } catch {}
 
     const bitis = Date.now(), baslangic = geceBaslangicRef.current;
-    const toplamUyku  = Math.floor((bitis - baslangic) / 1000);
+    const toplamUyku  = Math.max(0, Math.min(Math.floor((bitis - baslangic) / 1000), 24 * 3600));
     const uykulaDalma = ilkAglamaZamaniRef.current ? Math.max(120, Math.floor((ilkAglamaZamaniRef.current - baslangic) / 1000)) : Math.max(120, Math.floor(toplamUyku * 0.05));
     const enUzunUyku  = aglamaSayisiRef.current === 0 ? toplamUyku : Math.floor(toplamUyku / (aglamaSayisiRef.current + 1));
     const skorSonuc   = uykuSkoruHesapla(toplamUyku, aglamaSayisiRef.current, baslangic, t);
