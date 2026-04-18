@@ -473,7 +473,7 @@ export default function TabLayout() {
         )}
       </SafeAreaView>
 
-      <Tabs initialRouteName="analiz" screenOptions={{
+      <Tabs screenOptions={{
         headerShown: false,
         tabBarStyle: {
           backgroundColor: '#07101e',
