@@ -501,6 +501,20 @@ const tr = {
   cooldownGostergesi:     (s: number) => `⏳ ${s} sn bekleniyor`,
   aglamaAlgilandi:        '🔔 Ağlama Algılandı!',
   dinleniyorDetay:        (esik: number) => `👂 Dinleniyor — Eşik: %${esik}`,
+
+  // ── ONBOARDING ──────────────────────────────────────────────────────────────
+  obHosGelBaslik:      'Minik Uyku\'ya Hoş Geldiniz',
+  obHosGelAlt:         'Bebeğiniz için daha sakin geceler, sizin için daha az stres.',
+  obUykuBaslik:        'Uyku Modunu Anında Başlatın',
+  obUykuAlt:           'Tek dokunuşla başlatın. LumiBaby gece boyunca dinlesin ve bebeğiniz ağladığında seçtiğiniz sesi çalsın.',
+  obDedektorBaslik:    'Ağlamayı Algılar, Otomatik Sakinleştirir',
+  obDedektorAlt:       'Ağlama Dedektörü ninni çalar. Kolik Dedektörü ise pış pış ve beyaz gürültü sesleriyle destek olur.',
+  obAnneBaslik:        'Bebeğinizi Kendi Sesinizle Sakinleştirin',
+  obAnneAlt:           'Ninni, hikâye ve pış pış sesleri kaydedin. Bebeğiniz ihtiyaç duyduğunda tanıdık sesiniz yanında olsun.',
+  obRehberBaslik:      'İhtiyacınız Olduğunda Rehberlik Eder',
+  obRehberAlt:         'Kısa sorularla olası ağlama nedenlerini değerlendirin. Uyku zamanı yaklaşırken nazik hatırlatmalar alın.',
+  obBaglantiBaslik:    'Bağlantıda Kalın, Daha Fazlasını Keşfedin',
+  obBaglantiAlt:       'Telefon ve saat bildirimleriyle hiçbir anı kaçırmayın. Premium ile gelişmiş raporlar ve akıllı içgörülerin kilidini açın.',
 };
 
 const en = {
@@ -1002,6 +1016,20 @@ const en = {
   cooldownGostergesi:     (s: number) => `⏳ Waiting ${s}s`,
   aglamaAlgilandi:        '🔔 Crying Detected!',
   dinleniyorDetay:        (esik: number) => `👂 Listening — Threshold: ${esik}%`,
+
+  // ── ONBOARDING ──────────────────────────────────────────────────────────────
+  obHosGelBaslik:      'Welcome to LumiBaby',
+  obHosGelAlt:         'Calmer nights for your baby, less stress for you.',
+  obUykuBaslik:        'Start Sleep Mode Instantly',
+  obUykuAlt:           'Start with one tap. LumiBaby listens through the night and plays your selected sound when your baby cries.',
+  obDedektorBaslik:    'Detect Cries and Soothe Automatically',
+  obDedektorAlt:       'Cry Detector plays lullabies. Colic Detector supports your baby with shushing and white noise sounds.',
+  obAnneBaslik:        'Comfort Your Baby with Your Own Voice',
+  obAnneAlt:           'Record lullabies, stories, and soothing sounds so your baby can hear a familiar voice when needed.',
+  obRehberBaslik:      'Guidance When You Need It',
+  obRehberAlt:         'Explore possible crying reasons with a few quick questions. Get gentle reminders when sleep time is near.',
+  obBaglantiBaslik:    'Stay Connected and Unlock More',
+  obBaglantiAlt:       'Never miss a moment with phone and watch alerts. Unlock advanced reports and smarter insights with Premium.',
 };
 
 export const translations = { tr, en };

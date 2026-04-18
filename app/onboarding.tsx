@@ -1,4 +1,5 @@
 // app/onboarding.tsx
+import { translations } from '@/constants/translations';
 import { useLang } from '@/hooks/useLang';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito';
@@ -16,113 +17,54 @@ const { width } = Dimensions.get('window');
 
 type Lang = 'tr' | 'en';
 
-const slidesTR = [
-  {
-    id: 1, emoji: '🌍',
-    title: 'Dil seçin',
-    desc: "Minik Uyku LumiBaby'yi Türkçe veya English kullanabilirsiniz.",
-    note: 'Ayarlar bölümünden daha sonra değiştirebilirsiniz.',
-    showLang: true, primaryBtn: 'Devam et',
-  },
-  {
-    id: 2, emoji: '🌙',
-    title: 'O uyurken, LumiBaby dinlemeye devam eder',
-    desc: 'Bebeğim uyudu dedikten sonra ağlama veya kolik dedektörünü açın. Bebeğiniz huzursuzlandığında seçtiğiniz ses otomatik başlasın.',
-    items: ['Ağlama dedektörü', 'Kolik dedektörü', 'Uyku Boyunca Destek'],
-  },
-  {
-    id: 3, emoji: '🎙️',
-    title: 'Kendi sesinizi ekleyin',
-    desc: 'Ninni, hikaye ve pışpış için kendi ses kaydınızı oluşturun. Bebeğiniz en tanıdığı sesle sakinleşsin.',
-    items: ['Kendi ninnin', 'Kendi hikayen', 'Kendi pışpış sesin'],
-  },
-  {
-    id: 4, emoji: '✨',
-    title: 'Sizin sesiniz uyku boyunca yanında olabilir',
-    desc: 'Kaydettiğiniz sesler, ağlama veya kolik algılandığında otomatik oynatılabilir. Daha kişisel ve daha tanıdık bir rahatlatma deneyimi sunar.',
-    items: ['Otomatik oynatma', 'Dedektörlerle uyumlu', 'Daha kişisel destek'],
-  },
-  {
-    id: 5, emoji: '🔔',
-    title: 'Başka odadayken de haberdar olun',
-    desc: 'Bebeğiniz ağladığında anne ve babaya anlık bildirim gönderilebilir. Telefonunuzdan ve akıllı saatinizden bebeğinizi daha rahat takip edin.',
-    items: ['Anlık bildirim', 'Telefon ve saat desteği', 'Uzaktan takip'],
-  },
-  {
-    id: 6, emoji: '📈',
-    title: 'Uykusunu kaydedin, düzeni görün',
-    desc: 'Dedektör kullanımından sonra uyku kayıtlarını takip edin. Toplam uyku, ağlama sayısı, en uzun uyku ve uyku skorunu görün.',
-    items: ['Uyku Raporları', 'Uyku takibi', 'Gün gün kayıtlar', 'Uyku Rehberi ile bir sonraki uyku zamanını tahmin et'],
-  },
-  {
-    id: 7, emoji: '🍼',
-    title: '10 saniyede olası nedeni görün',
-    desc: 'Kısa bir ses kaydıyla ağlamanın olası nedenlerini tahmin edin. Açlık, gaz, uykusuzluk gibi ihtimalleri kolayca görün.',
-    note: 'Tahmindir, tıbbi tanı değildir.',
-    items: ['10 saniyelik analiz', 'Hızlı tahmin', 'Olasılık sonucu'],
-  },
-  {
-    id: 8, emoji: '⭐',
-    title: "Premium'u 7 Gün Ücretsiz Deneyin",
-    desc: "Size özel gelişmiş özellikleri 7 gün boyunca ücretsiz deneyimleyin.\nDevam edip etmemeye deneme sonunda siz karar verin.",
-    isLast: true, primaryBtn: "Premium'u Keşfet",
-    highlight: 'Otomatik ücret alınmaz.',
-  },
-];
-
-const slidesEN = [
-  {
-    id: 1, emoji: '🌍',
-    title: 'Choose your language',
-    desc: 'You can use Minik Uyku LumiBaby in Turkish or English.',
-    note: 'You can change this later in Settings.',
-    showLang: true, primaryBtn: 'Continue',
-  },
-  {
-    id: 2, emoji: '🌙',
-    title: 'While baby sleeps, LumiBaby keeps listening',
-    desc: "After tapping 'Baby Fell Asleep', turn on the cry or colic detector. When your baby gets fussy, the selected sound starts automatically.",
-    items: ['Cry detector', 'Colic detector', 'Sleep-long support'],
-  },
-  {
-    id: 3, emoji: '🎙️',
-    title: 'Add your own voice',
-    desc: "Record your own voice for lullabies, stories, and shushing. Let your baby be soothed by the most familiar sound they know.",
-    items: ['Your own lullaby', 'Your own story', 'Your own shush'],
-  },
-  {
-    id: 4, emoji: '✨',
-    title: 'Your voice can be there throughout their sleep',
-    desc: 'Your recordings can play automatically when crying or colic is detected. A more personal and familiar soothing experience.',
-    items: ['Auto playback', 'Works with detectors', 'More personal support'],
-  },
-  {
-    id: 5, emoji: '🔔',
-    title: 'Stay informed even from another room',
-    desc: 'When baby cries, instant notifications can be sent to mom and dad. Keep an eye on your baby comfortably from your phone and smartwatch.',
-    items: ['Instant notifications', 'Phone & Watch support', 'Remote monitoring'],
-  },
-  {
-    id: 6, emoji: '📈',
-    title: 'Record their sleep, see the pattern',
-    desc: 'Track sleep records after using the detector. See total sleep, cry count, longest sleep, and sleep score.',
-    items: ['Sleep Reports', 'Sleep tracking', 'Day by day records', 'Predict the next sleep time with the Sleep Guide'],
-  },
-  {
-    id: 7, emoji: '🍼',
-    title: 'Find out the likely reason in 10 seconds',
-    desc: 'Estimate the likely cause of crying with a short sound recording. Easily see possibilities like hunger, gas, or sleepiness.',
-    note: 'This is an estimate, not a medical diagnosis.',
-    items: ['10-second analysis', 'Quick estimate', 'Probability result'],
-  },
-  {
-    id: 8, emoji: '⭐',
-    title: 'Try Premium Free for 7 Days',
-    desc: "Experience all advanced features free for 7 days.\nYou decide whether to continue after the trial.",
-    isLast: true, primaryBtn: 'Explore Premium',
-    highlight: 'No automatic charges.',
-  },
-];
+const buildSlides = (lang: Lang) => {
+  const t = translations[lang];
+  return [
+    {
+      id: 1, emoji: '🌍',
+      title:   lang === 'tr' ? 'Dil seçin' : 'Choose your language',
+      desc:    lang === 'tr' ? "Minik Uyku LumiBaby'yi Türkçe veya English kullanabilirsiniz." : 'You can use Minik Uyku LumiBaby in Turkish or English.',
+      note:    lang === 'tr' ? 'Ayarlar bölümünden daha sonra değiştirebilirsiniz.' : 'You can change this later in Settings.',
+      showLang: true,
+      primaryBtn: lang === 'tr' ? 'Devam et' : 'Continue',
+      welcomeTitle:    t.obHosGelBaslik,
+      welcomeSubtitle: t.obHosGelAlt,
+    },
+    {
+      id: 2, emoji: '🌙',
+      title: t.obUykuBaslik,
+      desc:  t.obUykuAlt,
+    },
+    {
+      id: 3, emoji: '🎧',
+      title: t.obDedektorBaslik,
+      desc:  t.obDedektorAlt,
+    },
+    {
+      id: 4, emoji: '🎙️',
+      title: t.obAnneBaslik,
+      desc:  t.obAnneAlt,
+    },
+    {
+      id: 5, emoji: '❓',
+      title: t.obRehberBaslik,
+      desc:  t.obRehberAlt,
+    },
+    {
+      id: 6, emoji: '📈',
+      title: t.obBaglantiBaslik,
+      desc:  t.obBaglantiAlt,
+    },
+    {
+      id: 7, emoji: '⭐',
+      title:   lang === 'tr' ? "Premium'u 7 Gün Ücretsiz Deneyin" : 'Try Premium Free for 7 Days',
+      desc:    lang === 'tr' ? "Size özel gelişmiş özellikleri 7 gün boyunca ücretsiz deneyimleyin.\nDevam edip etmemeye deneme sonunda siz karar verin." : "Experience all advanced features free for 7 days.\nYou decide whether to continue after the trial.",
+      isLast:     true,
+      primaryBtn: lang === 'tr' ? "Premium'u Keşfet" : 'Explore Premium',
+      highlight:  lang === 'tr' ? 'Otomatik ücret alınmaz.' : 'No automatic charges.',
+    },
+  ];
+};
 
 export default function Onboarding(): JSX.Element {
   const insets = useSafeAreaInsets();
@@ -131,7 +73,7 @@ export default function Onboarding(): JSX.Element {
   const [fontsLoaded] = useFonts({ Nunito_800ExtraBold });
   const { setLang } = useLang();
 
-  const slides = selectedLang === 'en' ? slidesEN : slidesTR;
+  const slides = buildSlides(selectedLang);
   const current = slides[step];
   const progress = ((step + 1) / slides.length) * 100;
 
@@ -255,6 +197,13 @@ export default function Onboarding(): JSX.Element {
             </View>
           </View>
         )}
+
+        {(current as any).welcomeTitle && (
+          <View style={styles.welcomeBox}>
+            <Text style={styles.welcomeTitle}>{(current as any).welcomeTitle}</Text>
+            <Text style={styles.welcomeSubtitle}>{(current as any).welcomeSubtitle}</Text>
+          </View>
+        )}
       </ScrollView>
 
       {/* Footer */}
@@ -313,7 +262,10 @@ const styles = StyleSheet.create({
   listItem:         { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 4 },
   bullet:           { color: '#9d8cef', fontSize: 8, marginTop: 6 },
   listText:         { color: 'rgba(255,255,255,0.8)', fontSize: 15, flex: 1, lineHeight: 22 },
-  langSection:      { marginTop: 8 },
+  langSection:      { marginTop: 8, marginBottom: 0 },
+  welcomeBox:       { marginTop: 28, alignItems: 'center' },
+  welcomeTitle:     { color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
+  welcomeSubtitle:  { color: 'rgba(255,255,255,0.6)', fontSize: 15, textAlign: 'center', lineHeight: 22 },
   langRow:          { flexDirection: 'row', gap: 12 },
   langBtn:          { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   langBtnActive:    { backgroundColor: 'rgba(157,140,239,0.2)', borderColor: '#9d8cef' },
