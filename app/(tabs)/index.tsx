@@ -1,4 +1,5 @@
 // ⚠️ Bu dosyada direkt Audio.Sound KULLANILMAZ — tüm ses işlemleri audioManager üzerinden yapılır.
+import AdBanner from '@/components/AdBanner';
 import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
@@ -130,6 +131,7 @@ export default function Ninniler() {
 
   return (
     <View style={styles.container}>
+      {free && <AdBanner />}
       <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
         {/* Zamanlayıcı */}
