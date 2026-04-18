@@ -1,29 +1,22 @@
 // services/cryDetectionEngine.ts
-// YAMNet TFLite-based baby cry detection engine
+// Profesyonel 4 katmanlı bebek ağlama tespiti (dB tabanlı)
+//
+// TODO: YAMNet TFLite entegrasyonu hazır (services/cryDetectionEngine.yamnet.ts.bak)
+//       react-native-fast-tflite NitroModules gerektiriyor — yeni EAS Build alınınca aktifleştirilecek.
+//       Model: assets/models/yamnet.tflite (BABY_CRY_INDEX=20, CRYING_INDEX=19, WHIMPER_INDEX=21)
 
-import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
-import { loadTensorflowModel, type TfliteModel } from 'react-native-fast-tflite';
-import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ── YAMNet class indices ──────────────────────────────────────────────────────
-const BABY_CRY_INDEX = 20;
-const CRYING_INDEX   = 19;
-const WHIMPER_INDEX  = 21;
-
-// ── Audio config ──────────────────────────────────────────────────────────────
-const WINDOW_MS        = 975;
-const SAMPLE_RATE      = 16000;
-const EXPECTED_SAMPLES = 15600;
-
-// ── Detection config ──────────────────────────────────────────────────────────
-export const COOLDOWN_MS               = 10000;
-const        SILENCE_WINDOWS_THRESHOLD = 62;    // ~60 s of consecutive low-score windows
+// ── SABITLER ─────────────────────────────────────────────────────────────────
+export const WINDOW_SIZE_MS    = 500;
+export const DETECTION_WINDOWS = 6;
+export const COOLDOWN_MS       = 8000;
+export const MIN_CRY_WINDOWS   = 3;
 
 export const CONFIDENCE_THRESHOLD = {
-  high:     0.35,
-  balanced: 0.50,
-  strict:   0.70,
+  high:     60,
+  balanced: 72,
+  strict:   85,
 } as const;
 
 export type SensitivityLevel = 'high' | 'balanced' | 'strict';
@@ -33,231 +26,160 @@ export interface CryDetectionCallbacks {
   onSilenceDetected: () => void;
 }
 
-// iOS recording options that produce a PCM WAV file
-const IOS_RECORDING_OPTIONS: Audio.RecordingOptions = {
-  isMeteringEnabled: false,
-  android: {
-    extension:     '.wav',
-    outputFormat:  Audio.AndroidOutputFormat.DEFAULT,
-    audioEncoder:  Audio.AndroidAudioEncoder.DEFAULT,
-    sampleRate:    SAMPLE_RATE,
-    numberOfChannels: 1,
-    bitRate:       256000,
-  },
-  ios: {
-    extension:          '.wav',
-    outputFormat:       Audio.IOSOutputFormat.LINEARPCM,
-    audioQuality:       Audio.IOSAudioQuality.HIGH,
-    sampleRate:         SAMPLE_RATE,
-    numberOfChannels:   1,
-    bitRate:            256000,
-    linearPCMBitDepth:  16,
-    linearPCMIsBigEndian: false,
-    linearPCMIsFloat:   false,
-  },
-  web: {},
-};
+const PATTERN_STORAGE_KEY = 'lumibaby_cry_patterns';
+const MAX_PATTERNS        = 20;
 
-// ── Engine class ──────────────────────────────────────────────────────────────
+// ── YARDIMCI ─────────────────────────────────────────────────────────────────
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length === 0 || b.length === 0) return 0;
+  const len = Math.min(a.length, b.length);
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < len; i++) {
+    dot   += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+function normalizeDbSequence(seq: number[]): number[] {
+  const min = Math.min(...seq);
+  const max = Math.max(...seq);
+  const range = max - min;
+  if (range === 0) return seq.map(() => 0);
+  return seq.map(v => (v - min) / range);
+}
+
+// ── AĞLAMA TESPİT MOTORU ──────────────────────────────────────────────────────
 export class CryDetectionEngine {
+  private windows:     number[] = [];
+  private ambient:     number   = -50;
+  private patterns:    number[][] = [];
+  private lastTrigger: number   = 0;
+
   public  lastConfidence: number = 0;
 
-  private model:              TfliteModel | null = null;
-  private isListening:        boolean = false;
-  private silenceWindowCount: number  = 0;
-  private lastTriggerTime:    number  = 0;
+  private isListening:  boolean = false;
+  private loopTimeout:  ReturnType<typeof setTimeout> | null = null;
 
-  // ── Model loading ───────────────────────────────────────────────────────────
-  async loadModel(): Promise<void> {
-    if (this.model) return;
-    try {
-      this.model = await loadTensorflowModel(
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require('../assets/models/yamnet.tflite'),
-        [], // use default CPU delegate
-      );
-    } catch (e) {
-      console.log('[CryEngine] model load error:', e);
-    }
+  // ── KALİBRASYON ────────────────────────────────────────────────────────────
+  calibrate(samples: number[]): void {
+    if (samples.length === 0) return;
+    const sorted = [...samples].sort((a, b) => a - b);
+    this.ambient = sorted[Math.floor(sorted.length * 0.5)];
+    this.windows = [];
+    this.lastConfidence = 0;
   }
 
-  // ── Public state queries ────────────────────────────────────────────────────
+  // ── ANA ANALİZ ─────────────────────────────────────────────────────────────
+  analyze(db: number, _mode: 'aglama' | 'kolik'): number {
+    if (Date.now() - this.lastTrigger < COOLDOWN_MS) {
+      this.lastConfidence = 0;
+      return 0;
+    }
+    this.windows.push(db);
+    if (this.windows.length > DETECTION_WINDOWS) this.windows.shift();
+    if (this.windows.length < DETECTION_WINDOWS) { this.lastConfidence = 0; return 0; }
+    const score = this._computeConfidence(this.windows);
+    this.lastConfidence = score;
+    return score;
+  }
+
+  triggerDetected(): void {
+    this.lastTrigger = Date.now();
+    this.windows     = [];
+  }
+
   isCoolingDown(): boolean {
-    return Date.now() - this.lastTriggerTime < COOLDOWN_MS;
+    return Date.now() - this.lastTrigger < COOLDOWN_MS;
   }
 
   cooldownRemaining(): number {
-    return Math.max(0, COOLDOWN_MS - (Date.now() - this.lastTriggerTime));
+    return Math.max(0, COOLDOWN_MS - (Date.now() - this.lastTrigger));
   }
 
   reset(): void {
-    this.lastConfidence    = 0;
-    this.silenceWindowCount = 0;
-    this.lastTriggerTime   = 0;
+    this.windows        = [];
+    this.lastTrigger    = 0;
+    this.lastConfidence = 0;
   }
 
-  // ── Listening control ───────────────────────────────────────────────────────
+  // ── startListening / stopListening (YAMNet API uyumluluğu için stub) ────────
+  // Gerçek döngü analiz.tsx'teki pollIntervalRef tarafından yönetilir.
   async startListening(
-    sensitivity: SensitivityLevel,
-    callbacks:   CryDetectionCallbacks,
+    _sensitivity: SensitivityLevel,
+    _callbacks:   CryDetectionCallbacks,
   ): Promise<void> {
-    if (this.isListening) return;
-    await this.loadModel();
-    // Set PlayAndRecord mode once — stays until stopListening
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS:      true,
-        playsInSilentModeIOS:    true,
-        staysActiveInBackground: true,
-      });
-    } catch {}
-    this.isListening        = true;
-    this.silenceWindowCount = 0;
-    this._runLoop(sensitivity, callbacks);
+    this.isListening = true;
   }
 
   stopListening(): void {
     this.isListening = false;
-    // Restore Playback mode
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS:      false,
-      playsInSilentModeIOS:    true,
-      staysActiveInBackground: true,
-    }).catch(() => {});
+    if (this.loopTimeout) { clearTimeout(this.loopTimeout); this.loopTimeout = null; }
   }
 
-  // ── Internal loop ───────────────────────────────────────────────────────────
-  private async _runLoop(
-    sensitivity: SensitivityLevel,
-    callbacks:   CryDetectionCallbacks,
-  ): Promise<void> {
-    while (this.isListening) {
-      try {
-        const samples = await this._recordWindow();
+  // Model preload — YAMNet ile uyumlu stub
+  async loadModel(): Promise<void> {}
 
-        if (!samples || !this.model || !this.isListening) continue;
-
-        const score = this._runInference(samples);
-        this.lastConfidence = score;
-
-        const threshold = CONFIDENCE_THRESHOLD[sensitivity];
-
-        if (score >= threshold && !this.isCoolingDown()) {
-          this.lastTriggerTime    = Date.now();
-          this.silenceWindowCount = 0;
-          callbacks.onDetected(score);
-        } else if (score < threshold) {
-          this.silenceWindowCount++;
-          if (this.silenceWindowCount >= SILENCE_WINDOWS_THRESHOLD) {
-            this.silenceWindowCount = 0;
-            if (this.isListening) callbacks.onSilenceDetected();
-          }
-        } else {
-          // score above threshold but in cooldown — not silence
-          this.silenceWindowCount = 0;
-        }
-      } catch (e) {
-        console.log('[CryEngine] loop error:', e);
-      }
-    }
+  // ── PATTERN ÖĞRENME ────────────────────────────────────────────────────────
+  async saveCurrentPattern(): Promise<void> {
+    if (this.windows.length < DETECTION_WINDOWS) return;
+    const normalized = normalizeDbSequence([...this.windows]);
+    this.patterns    = [normalized, ...this.patterns].slice(0, MAX_PATTERNS);
+    try { await AsyncStorage.setItem(PATTERN_STORAGE_KEY, JSON.stringify(this.patterns)); } catch {}
   }
 
-  // ── Recording ───────────────────────────────────────────────────────────────
-  private async _recordWindow(): Promise<Float32Array | null> {
-    let recording: Audio.Recording | null = null;
-    let uri: string | null = null;
-
+  async loadPatterns(): Promise<void> {
     try {
-      const opts = Platform.OS === 'ios'
-        ? IOS_RECORDING_OPTIONS
-        : Audio.RecordingOptionsPresets.HIGH_QUALITY;
-
-      recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(opts);
-      await recording.startAsync();
-      await new Promise<void>(res => setTimeout(res, WINDOW_MS));
-      await recording.stopAndUnloadAsync();
-      uri = recording.getURI() ?? null;
-      recording = null;
-
-      if (!uri) return null;
-
-      const b64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: 'base64',
-      });
-      await FileSystem.deleteAsync(uri, { idempotent: true });
-
-      return this._parseWav(b64);
-    } catch (e) {
-      console.log('[CryEngine] record error:', e);
-      if (recording) {
-        try { await recording.stopAndUnloadAsync(); } catch {}
-      }
-      if (uri) {
-        try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
-      }
-      return null;
-    }
+      const raw = await AsyncStorage.getItem(PATTERN_STORAGE_KEY);
+      if (raw) this.patterns = JSON.parse(raw);
+    } catch {}
   }
 
-  // ── WAV parser ───────────────────────────────────────────────────────────────
-  // Finds the PCM 'data' chunk in a WAV file and converts int16 → float32.
-  // Returns null if the file isn't a valid PCM WAV.
-  private _parseWav(base64: string): Float32Array | null {
-    try {
-      const bin   = atob(base64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  // ── SKORING ─────────────────────────────────────────────────────────────────
+  private _computeConfidence(win: number[]): number {
+    const YUKSEK_ESIK = this.ambient + 20;
+    let score = 0;
 
-      // Scan for 'data' chunk marker
-      let dataOffset = -1;
-      let dataLength = 0;
-      for (let i = 0; i < bytes.length - 8; i++) {
-        if (
-          bytes[i]   === 0x64 && // d
-          bytes[i+1] === 0x61 && // a
-          bytes[i+2] === 0x74 && // t
-          bytes[i+3] === 0x61    // a
-        ) {
-          dataLength =
-            bytes[i+4]        |
-            (bytes[i+5] << 8) |
-            (bytes[i+6] << 16)|
-            (bytes[i+7] << 24);
-          dataOffset = i + 8;
-          break;
-        }
-      }
-      if (dataOffset < 0 || dataLength <= 0) return null;
+    // Katman 1: Genlik
+    const highCount = win.filter(v => v >= YUKSEK_ESIK).length;
+    if (highCount >= MIN_CRY_WINDOWS) score += 25;
+    let rising = 0;
+    for (let i = 1; i < win.length; i++) { if (win[i] > win[i - 1]) rising++; }
+    if (rising >= 3) score += 10;
+    if (highCount === 1) score -= 25;
 
-      const sampleCount = Math.min(dataLength >> 1, EXPECTED_SAMPLES);
-      const pcm         = new Float32Array(EXPECTED_SAMPLES); // zero-pad to exact size
-      const view        = new DataView(bytes.buffer, dataOffset);
-      for (let i = 0; i < sampleCount; i++) {
-        pcm[i] = view.getInt16(i * 2, true) / 32768.0;
-      }
-      return pcm;
-    } catch {
-      return null;
+    // Katman 2: Varyans
+    const mean     = win.reduce((a, b) => a + b, 0) / win.length;
+    const variance = win.reduce((acc, v) => acc + (v - mean) ** 2, 0) / win.length;
+    if (variance >= 4 && variance <= 30) score += 25;
+    if (variance < 2) score -= 25;
+    if (variance < 4) score -= 15;
+
+    // Katman 3: Ritim
+    if (highCount >= 3 && highCount <= 5) score += 20;
+    if (highCount === 6) score -= 15;
+    let transitions = 0;
+    for (let i = 1; i < win.length; i++) {
+      const prev = win[i - 1] >= YUKSEK_ESIK;
+      const curr = win[i]     >= YUKSEK_ESIK;
+      if (prev !== curr) transitions++;
     }
-  }
+    if (transitions >= 1 && transitions <= 4) score += 15;
+    if (transitions === 0 && variance < 8) score -= 20;
 
-  // ── TFLite inference ─────────────────────────────────────────────────────────
-  private _runInference(samples: Float32Array): number {
-    if (!this.model) return 0;
-    try {
-      const rawOutputs = this.model.runSync([samples.buffer as ArrayBuffer]);
-      const scores     = new Float32Array(rawOutputs[0]);
-      if (!scores || scores.length < 22) return 0;
-      return Math.min(
-        1.0,
-        scores[BABY_CRY_INDEX] +
-        scores[CRYING_INDEX]   * 0.8 +
-        scores[WHIMPER_INDEX]  * 0.6,
-      );
-    } catch (e) {
-      console.log('[CryEngine] inference error:', e);
-      return 0;
+    // Katman 4: Öğrenilmiş örüntü benzerliği
+    if (this.patterns.length > 0) {
+      const normalized = normalizeDbSequence([...win]);
+      let maxSim = 0;
+      for (const p of this.patterns) {
+        const sim = cosineSimilarity(normalized, p);
+        if (sim > maxSim) maxSim = sim;
+      }
+      score += Math.round(maxSim * 15);
     }
+
+    return Math.max(0, Math.min(100, score));
   }
 }
