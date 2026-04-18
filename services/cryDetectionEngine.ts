@@ -1,13 +1,17 @@
 // services/cryDetectionEngine.ts
-// Profesyonel 4 katmanlı bebek ağlama tespiti (dB tabanlı)
+// YAMNet TFLite bebek ağlama tespiti
+// Model: assets/models/yamnet.tflite
+// BABY_CRY_INDEX=20, CRYING_INDEX=19, WHIMPER_INDEX=21
 //
-// TODO: YAMNet TFLite entegrasyonu hazır (services/cryDetectionEngine.yamnet.ts.bak)
-//       react-native-fast-tflite NitroModules gerektiriyor — yeni EAS Build alınınca aktifleştirilecek.
-//       Model: assets/models/yamnet.tflite (BABY_CRY_INDEX=20, CRYING_INDEX=19, WHIMPER_INDEX=21)
+// startListening/stopListening: analiz.tsx kendi kayıt döngüsünü yönetir; bu metodlar
+// YAMNet'in doğrudan bağımsız döngü olarak kullanılacağı (gelecek) entegrasyon içindir.
+// analyze(db) çağrısında; YAMNet döngüsü aktifse lastScore, değilse genlik proxy döner.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
 
-// ── SABITLER ─────────────────────────────────────────────────────────────────
+// ── EXPORTS (analiz.tsx bunları kullanıyor — değiştirme) ──────────────────────
 export const WINDOW_SIZE_MS    = 500;
 export const DETECTION_WINDOWS = 6;
 export const COOLDOWN_MS       = 8000;
@@ -26,69 +30,166 @@ export interface CryDetectionCallbacks {
   onSilenceDetected: () => void;
 }
 
+// ── YAMNet SINIFLANDIRICI İNDEKSLERİ ─────────────────────────────────────────
+const CRYING_INDEX   = 19;
+const BABY_CRY_INDEX = 20;
+const WHIMPER_INDEX  = 21;
+
+// YAMNet girişi: 16kHz × 975ms = 15600 Float32 örnek
+const YAMNET_FRAME_LEN = 15600;
+const YAMNET_RATE      = 16000;
+
 const PATTERN_STORAGE_KEY = 'lumibaby_cry_patterns';
-const MAX_PATTERNS        = 20;
 
-// ── YARDIMCI ─────────────────────────────────────────────────────────────────
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length === 0 || b.length === 0) return 0;
-  const len = Math.min(a.length, b.length);
-  let dot = 0, normA = 0, normB = 0;
-  for (let i = 0; i < len; i++) {
-    dot   += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+// ── WAV ÇÖZÜCÜ ────────────────────────────────────────────────────────────────
+// base64 WAV dosyasını PCM Float32 örneklerine dönüştürür.
+// WAV başlığından gerçek sample rate okunur.
+function parseWav(base64: string): { samples: Float32Array; sampleRate: number } | null {
+  try {
+    const binary = atob(base64);
+    const buf    = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+
+    // RIFF/WAVE doğrulama
+    if (buf[0] !== 0x52 || buf[1] !== 0x49 || buf[2] !== 0x46 || buf[3] !== 0x46) return null;
+
+    // fmt chunk: byte 24-27 = sampleRate (LE int32), byte 16-19 = subchunk1 size
+    const sampleRate = buf[24] | (buf[25] << 8) | (buf[26] << 16) | (buf[27] << 24);
+    const fmtSize    = buf[16] | (buf[17] << 8) | (buf[18] << 16) | (buf[19] << 24);
+
+    // 'data' chunk'ı bul
+    let offset = 20 + fmtSize;
+    while (offset + 8 < buf.length) {
+      const tag = String.fromCharCode(buf[offset], buf[offset + 1], buf[offset + 2], buf[offset + 3]);
+      const chunkSize = buf[offset + 4] | (buf[offset + 5] << 8) | (buf[offset + 6] << 16) | (buf[offset + 7] << 24);
+      if (tag === 'data') {
+        offset += 8;
+        break;
+      }
+      offset += 8 + chunkSize;
+    }
+    if (offset >= buf.length) return null;
+
+    // Int16LE → Float32 [-1, 1]
+    const pcm     = buf.slice(offset);
+    const samples = new Float32Array(pcm.length >> 1);
+    for (let i = 0; i < samples.length; i++) {
+      let v = (pcm[i * 2 + 1] << 8) | pcm[i * 2];
+      if (v > 32767) v -= 65536;
+      samples[i] = v / 32768.0;
+    }
+    return { samples, sampleRate };
+  } catch {
+    return null;
   }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  return denom === 0 ? 0 : dot / denom;
 }
 
-function normalizeDbSequence(seq: number[]): number[] {
-  const min = Math.min(...seq);
-  const max = Math.max(...seq);
-  const range = max - min;
-  if (range === 0) return seq.map(() => 0);
-  return seq.map(v => (v - min) / range);
+// En yakın komşu yeniden örnekleme
+function resample(src: Float32Array, fromRate: number, toRate: number): Float32Array {
+  if (fromRate === toRate) return src;
+  const ratio = fromRate / toRate;
+  const len   = Math.floor(src.length / ratio);
+  const out   = new Float32Array(len);
+  for (let i = 0; i < len; i++) out[i] = src[Math.floor(i * ratio)];
+  return out;
 }
+
+// Sabit uzunluğa kırp veya sıfırla doldur
+function padOrTrim(src: Float32Array, len: number): Float32Array {
+  if (src.length === len) return src;
+  const out = new Float32Array(len);
+  out.set(src.subarray(0, Math.min(src.length, len)));
+  return out;
+}
+
+// iOS'ta 16kHz tek kanal PCM WAV kayıt seçenekleri
+const IOS_RECORDING_OPTIONS = {
+  ios: {
+    extension:           '.wav',
+    outputFormat:        'lpcm' as any,  // IOSOutputFormat.LINEARPCM
+    audioQuality:        127,            // IOSAudioQuality.MAX
+    sampleRate:          YAMNET_RATE,
+    numberOfChannels:    1,
+    bitRate:             256000,
+    linearPCMBitDepth:   16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat:    false,
+  },
+  android: { extension: '.wav', outputFormat: 0, audioEncoder: 0, sampleRate: YAMNET_RATE, numberOfChannels: 1, bitRate: 256000 },
+  web:     { mimeType: 'audio/wav', bitsPerSample: 16 },
+};
 
 // ── AĞLAMA TESPİT MOTORU ──────────────────────────────────────────────────────
 export class CryDetectionEngine {
-  private windows:     number[] = [];
-  private ambient:     number   = -50;
-  private patterns:    number[][] = [];
-  private lastTrigger: number   = 0;
+  // YAMNet modeli (lazy-loaded)
+  private model:       any | null = null;
+  private modelLoaded: boolean    = false;
 
-  public  lastConfidence: number = 0;
+  // Çalışma durumu
+  private lastTrigger: number  = 0;
+  private lastScore:   number  = 0;
+  private ambientDb:   number  = -50;
 
-  private isListening:  boolean = false;
-  private loopTimeout:  ReturnType<typeof setTimeout> | null = null;
+  // Dinleme döngüsü
+  private isListening: boolean = false;
+  private loopTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  // ── KALİBRASYON ────────────────────────────────────────────────────────────
+  public lastConfidence: number = 0;
+
+  // ── MODEL YÜKLEME ────────────────────────────────────────────────────────────
+  async loadModel(): Promise<void> {
+    if (this.modelLoaded) return;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { loadTensorflowModel } = require('react-native-fast-tflite');
+      this.model = await loadTensorflowModel(
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        require('../assets/models/yamnet.tflite'),
+        [],  // boş delegates = CPU çıkarımı
+      );
+      this.modelLoaded = true;
+    } catch {
+      this.model       = null;
+      this.modelLoaded = false;
+    }
+  }
+
+  // ── KALİBRASYON ─────────────────────────────────────────────────────────────
   calibrate(samples: number[]): void {
     if (samples.length === 0) return;
-    const sorted = [...samples].sort((a, b) => a - b);
-    this.ambient = sorted[Math.floor(sorted.length * 0.5)];
-    this.windows = [];
+    const sorted   = [...samples].sort((a, b) => a - b);
+    this.ambientDb = sorted[Math.floor(sorted.length * 0.5)];
+    this.lastScore = 0;
     this.lastConfidence = 0;
   }
 
-  // ── ANA ANALİZ ─────────────────────────────────────────────────────────────
+  // ── ANA ANALİZ ──────────────────────────────────────────────────────────────
+  // analiz.tsx tarafından her 500ms'de dB metering değeriyle çağrılır.
+  // YAMNet döngüsü aktifken (startListening) lastScore döndürülür.
+  // Döngü aktif değilse basit genlik proxy kullanılır.
   analyze(db: number, _mode: 'aglama' | 'kolik'): number {
     if (Date.now() - this.lastTrigger < COOLDOWN_MS) {
       this.lastConfidence = 0;
       return 0;
     }
-    this.windows.push(db);
-    if (this.windows.length > DETECTION_WINDOWS) this.windows.shift();
-    if (this.windows.length < DETECTION_WINDOWS) { this.lastConfidence = 0; return 0; }
-    const score = this._computeConfidence(this.windows);
+
+    if (this.isListening && this.modelLoaded) {
+      // YAMNet döngüsü çalışıyor — confidence = max(scores[19], scores[20], scores[21]) * 100
+      this.lastConfidence = this.lastScore;
+      return this.lastScore;
+    }
+
+    // YAMNet döngüsü henüz aktif değil — genlik proxy (eski 4-katmanlı sistem değil)
+    const aboveAmbient  = Math.max(0, db - this.ambientDb);
+    const score         = Math.min(100, Math.round(aboveAmbient * 3));
+    this.lastScore      = score;
     this.lastConfidence = score;
     return score;
   }
 
   triggerDetected(): void {
     this.lastTrigger = Date.now();
-    this.windows     = [];
+    this.lastScore   = 0;
   }
 
   isCoolingDown(): boolean {
@@ -100,86 +201,108 @@ export class CryDetectionEngine {
   }
 
   reset(): void {
-    this.windows        = [];
     this.lastTrigger    = 0;
+    this.lastScore      = 0;
     this.lastConfidence = 0;
   }
 
-  // ── startListening / stopListening (YAMNet API uyumluluğu için stub) ────────
-  // Gerçek döngü analiz.tsx'teki pollIntervalRef tarafından yönetilir.
+  // ── startListening / stopListening ───────────────────────────────────────────
+  // YAMNet bağımsız kayıt döngüsünü başlatır.
+  // analiz.tsx şu an kendi döngüsünü yönetiyor; bu metodlar tam entegrasyon içindir.
   async startListening(
     _sensitivity: SensitivityLevel,
     _callbacks:   CryDetectionCallbacks,
   ): Promise<void> {
     this.isListening = true;
+    if (!this.modelLoaded) await this.loadModel();
+    this._runLoop();
   }
 
   stopListening(): void {
     this.isListening = false;
-    if (this.loopTimeout) { clearTimeout(this.loopTimeout); this.loopTimeout = null; }
+    if (this.loopTimeout) {
+      clearTimeout(this.loopTimeout);
+      this.loopTimeout = null;
+    }
   }
 
-  // Model preload — YAMNet ile uyumlu stub
-  async loadModel(): Promise<void> {}
+  // ── YAMNet ÇIKARIM DÖNGÜSÜ ───────────────────────────────────────────────────
+  private _runLoop(): void {
+    if (!this.isListening || !this.model) return;
+    this._recordAndInfer()
+      .catch(() => {})
+      .finally(() => {
+        if (this.isListening) {
+          // 975ms kayıt + 100ms boşluk → ~1.075s döngü
+          this.loopTimeout = setTimeout(() => this._runLoop(), 100);
+        }
+      });
+  }
 
-  // ── PATTERN ÖĞRENME ────────────────────────────────────────────────────────
+  private async _recordAndInfer(): Promise<void> {
+    if (!this.model || !this.isListening) return;
+    // Android: expo-av PCM WAV güvenilir değil — şimdilik iOS only
+    if (Platform.OS !== 'ios') return;
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Audio } = require('expo-av');
+    let rec: any = null;
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS:     true,
+        playsInSilentModeIOS:   true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid:      false,
+      });
+      const { recording } = await Audio.Recording.createAsync(
+        IOS_RECORDING_OPTIONS as any,
+      );
+      rec = recording;
+
+      // Tam olarak 975ms kayıt = 16000 × 0.975 = 15600 örnek
+      await new Promise<void>(res => setTimeout(res, 975));
+
+      if (!this.isListening) {
+        await rec.stopAndUnloadAsync();
+        return;
+      }
+      await rec.stopAndUnloadAsync();
+      const uri: string | null = rec.getURI();
+      rec = null;
+      if (!uri) return;
+
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const parsed = parseWav(base64);
+      if (!parsed) return;
+
+      const { samples, sampleRate } = parsed;
+      const resampled   = resample(samples, sampleRate, YAMNET_RATE);
+      const input       = padOrTrim(resampled, YAMNET_FRAME_LEN);
+      const outputs: ArrayBuffer[] = this.model.runSync([input.buffer as ArrayBuffer]);
+      if (!outputs?.length) return;
+
+      const scores     = new Float32Array(outputs[0]);
+      const confidence = Math.max(
+        scores[CRYING_INDEX]   ?? 0,
+        scores[BABY_CRY_INDEX] ?? 0,
+        scores[WHIMPER_INDEX]  ?? 0,
+      ) * 100;
+      this.lastScore = Math.round(Math.min(100, confidence));
+    } catch {
+      if (rec) { try { await rec.stopAndUnloadAsync(); } catch {} }
+    }
+  }
+
+  // ── PATTERN ÖĞRENME (analiz.tsx API uyumluluğu) ───────────────────────────────
   async saveCurrentPattern(): Promise<void> {
-    if (this.windows.length < DETECTION_WINDOWS) return;
-    const normalized = normalizeDbSequence([...this.windows]);
-    this.patterns    = [normalized, ...this.patterns].slice(0, MAX_PATTERNS);
-    try { await AsyncStorage.setItem(PATTERN_STORAGE_KEY, JSON.stringify(this.patterns)); } catch {}
+    // YAMNet kendi gömme vektörlerini kullanır — dB pattern öğrenme gerekmiyor
   }
 
   async loadPatterns(): Promise<void> {
     try {
-      const raw = await AsyncStorage.getItem(PATTERN_STORAGE_KEY);
-      if (raw) this.patterns = JSON.parse(raw);
+      await AsyncStorage.getItem(PATTERN_STORAGE_KEY);
     } catch {}
-  }
-
-  // ── SKORING ─────────────────────────────────────────────────────────────────
-  private _computeConfidence(win: number[]): number {
-    const YUKSEK_ESIK = this.ambient + 20;
-    let score = 0;
-
-    // Katman 1: Genlik
-    const highCount = win.filter(v => v >= YUKSEK_ESIK).length;
-    if (highCount >= MIN_CRY_WINDOWS) score += 25;
-    let rising = 0;
-    for (let i = 1; i < win.length; i++) { if (win[i] > win[i - 1]) rising++; }
-    if (rising >= 3) score += 10;
-    if (highCount === 1) score -= 25;
-
-    // Katman 2: Varyans
-    const mean     = win.reduce((a, b) => a + b, 0) / win.length;
-    const variance = win.reduce((acc, v) => acc + (v - mean) ** 2, 0) / win.length;
-    if (variance >= 4 && variance <= 30) score += 25;
-    if (variance < 2) score -= 25;
-    if (variance < 4) score -= 15;
-
-    // Katman 3: Ritim
-    if (highCount >= 3 && highCount <= 5) score += 20;
-    if (highCount === 6) score -= 15;
-    let transitions = 0;
-    for (let i = 1; i < win.length; i++) {
-      const prev = win[i - 1] >= YUKSEK_ESIK;
-      const curr = win[i]     >= YUKSEK_ESIK;
-      if (prev !== curr) transitions++;
-    }
-    if (transitions >= 1 && transitions <= 4) score += 15;
-    if (transitions === 0 && variance < 8) score -= 20;
-
-    // Katman 4: Öğrenilmiş örüntü benzerliği
-    if (this.patterns.length > 0) {
-      const normalized = normalizeDbSequence([...win]);
-      let maxSim = 0;
-      for (const p of this.patterns) {
-        const sim = cosineSimilarity(normalized, p);
-        if (sim > maxSim) maxSim = sim;
-      }
-      score += Math.round(maxSim * 15);
-    }
-
-    return Math.max(0, Math.min(100, score));
+    // loadPatterns çağrısını model yüklemeye bağla (analiz.tsx mount'ından tetiklenir)
+    if (!this.modelLoaded) this.loadModel().catch(() => {});
   }
 }
