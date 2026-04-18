@@ -1,7 +1,8 @@
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import React from 'react';
-import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface PaywallProps {
   visible: boolean;
@@ -16,12 +17,13 @@ interface PaywallProps {
 export default function Paywall({ visible, onClose, onPremium, onReklam, limitMesaji, baslik, aciklama }: PaywallProps) {
   const { isTrial } = usePremium();
   const { lang, t } = useLang();
+  const insets = useSafeAreaInsets();
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={s.backdrop}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
-        <View style={s.sheet}>
+        <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
           <View style={s.handle} />
 
           <Text style={s.ikon}>👑</Text>
@@ -62,7 +64,7 @@ export default function Paywall({ visible, onClose, onPremium, onReklam, limitMe
 
 const s = StyleSheet.create({
   backdrop:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  sheet:          { backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, alignItems: 'center' },
+  sheet:          { backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, alignItems: 'center' },
   handle:         { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, marginBottom: 20 },
   ikon:           { fontSize: 48, marginBottom: 12 },
   baslik:         { color: 'white', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
