@@ -95,6 +95,12 @@
         {
           "enableCoreMLDelegate": true
         }
+      ],
+      [
+        "react-native-purchases",
+        {
+          "enableStoreKit2": true
+        }
       ]
     ],
     "experiments": {
