@@ -30,6 +30,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" />
+        <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
       </Stack>
     </SafeAreaProvider>
   );
