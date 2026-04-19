@@ -170,7 +170,7 @@ export async function initAdMob(): Promise<void> {
   try {
     const { MaxAdContentRating } = ads;
     await ads.MobileAds().setRequestConfiguration({
-      maxAdContentRating:           MaxAdContentRating.PG,
+      maxAdContentRating:           MaxAdContentRating.G,   // G = en kısıtlı: kumar/18+/cinsel içerik engeli
       tagForChildDirectedTreatment: false,
       tagForUnderAgeOfConsent:      false,
     });
