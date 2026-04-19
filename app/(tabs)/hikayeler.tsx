@@ -1,12 +1,11 @@
 // ⚠️ Bu dosyada direkt Audio.Sound KULLANILMAZ — tüm ses işlemleri audioManager üzerinden yapılır.
 // İstisna: duration metadata okuma (shouldPlay:false + hemen unload) — ses çalmaz.
-import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import * as audioManager from '@/services/audioManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -41,14 +40,12 @@ const masallarEN: MasalTip[] = [
 ];
 
 export default function Hikayeler() {
-  const { canAccessPremium, premiumAktifEt } = usePremium();
+  const { canAccessPremium } = usePremium();
   const { lang, t } = useLang();
+  const router = useRouter();
   const free = !canAccessPremium;
 
   const sabitMasallar = lang === 'en' ? masallarEN : masallarTR;
-
-  const [paywallVisible, setPaywallVisible]   = useState(false);
-  const [paywallSinirMi, setPaywallSinirMi]   = useState(false);
   const [anneHikayeUri, setAnneHikayeUri]     = useState<string | null>(null);
   const [anneHikayeSure, setAnneHikayeSure]   = useState<number>(0);
   const [calananId, setCalananId]             = useState<number | null>(null);
@@ -127,7 +124,7 @@ export default function Hikayeler() {
         AsyncStorage.removeItem(HIKAYE_SINIR_KEY).catch(() => {});
         if (audioManager.getState().tab === 'hikayeler') {
           audioManager.stop();
-          setPaywallSinirMi(true); setPaywallVisible(true);
+          router.push('/paywall');
         }
       } else {
         sinirSayacRef.current = kalan; setKalanSure(kalan);
@@ -149,7 +146,7 @@ export default function Hikayeler() {
         if (kalan <= 0) {
           AsyncStorage.removeItem(HIKAYE_SINIR_KEY).catch(() => {});
           audioManager.stop();
-          setPaywallSinirMi(true); setPaywallVisible(true);
+          router.push('/paywall');
         } else {
           sinirSayacRef.current = kalan; setKalanSure(kalan);
           if (sinirTimerRef.current) clearInterval(sinirTimerRef.current);
@@ -271,7 +268,7 @@ export default function Hikayeler() {
   };
 
   const toggleAnneHikaye = async () => {
-    if (free) { setPaywallSinirMi(false); setPaywallVisible(true); return; }
+    if (free) { router.push('/paywall'); return; }
     if (!anneHikayeUri) return;
     // Clear any running 1-min limit timer (same as toggleMasal)
     clearSinirTimer();
@@ -404,13 +401,6 @@ export default function Hikayeler() {
 
       </ScrollView>
 
-      <Paywall
-        visible={paywallVisible}
-        onClose={() => setPaywallVisible(false)}
-        onPremium={() => { setPaywallVisible(false); premiumAktifEt(); }}
-        baslik={paywallSinirMi ? t.sinirBitti : t.premiumBadge}
-        aciklama={paywallSinirMi ? t.sinirBittiAcik : t.paywallHikayePremAcik}
-      />
     </View>
   );
 }

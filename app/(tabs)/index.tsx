@@ -1,11 +1,10 @@
 // ⚠️ Bu dosyada direkt Audio.Sound KULLANILMAZ — tüm ses işlemleri audioManager üzerinden yapılır.
 import AdBanner from '@/components/AdBanner';
-import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import * as audioManager from '@/services/audioManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -17,11 +16,11 @@ const sabitNinnilerTR: SesTip[] = [
   { id:  3, name: 'Güzel Annem',           desc: 'Anneye duyulan sevgiyi anlatan sıcak ninni',       tag: 'Türkçe',       icon: '💜', file: require('../../assets/sounds/guzel_annem_tr.mp3'),              premium: false },
   { id:  4, name: 'Yağmur Ninnisi',        desc: 'Yağmur damlalarının ritmiyle hazırlanmış ninni',   tag: 'Doğa',         icon: '🌧️', file: require('../../assets/sounds/yagmur_ninnisi_tr.mp3'),            premium: false },
   { id:  5, name: 'Uyu Yavrum',            desc: 'Bebeğinizi yavaşça uyutacak sevgi dolu ninni',     tag: 'Türkçe',       icon: '🌙', file: require('../../assets/sounds/uyu_yavrum_tr.mp3'),               premium: false },
-  { id:  6, name: 'Müzik Kutusu 1',        desc: 'Huzur veren hafif müzik kutusu melodisi',          tag: 'Melodi',       icon: '🎵', file: require('../../assets/sounds/muzik_kutusu_tr.mp3'),             premium: false },
-  { id:  7, name: 'Müzik Kutusu 2',        desc: 'Nazik ve sakinleştirici ikinci melodi',            tag: 'Melodi',       icon: '🎶', file: require('../../assets/sounds/muzik_kutusu_2_tr.mp3'),           premium: false },
-  { id:  8, name: 'Müzik Kutusu 3',        desc: 'Üçüncü müzik kutusu ninnisi',                     tag: 'Melodi',       icon: '🎼', file: require('../../assets/sounds/muzik_kutusu_3_tr.mp3'),           premium: false },
-  { id:  9, name: 'Yumuşak Piyano Ninnisi', desc: 'Piyano ile çalınan yumuşak uyku melodisi',       tag: 'Piyano',       icon: '🎹', file: require('../../assets/sounds/yumusak_piyano_ninnisi_tr.mp3'),   premium: false },
-  { id: 10, name: 'Enstrümantal Ninni',    desc: 'Sözsüz enstrümanlarla hazırlanmış ninni',          tag: 'Enstrümantal', icon: '🎻', file: require('../../assets/sounds/enstrumantal_ninni_tr.mp3'),       premium: false },
+  { id:  6, name: 'Müzik Kutusu 1',        desc: 'Huzur veren hafif müzik kutusu melodisi',          tag: 'Melodi',       icon: '🎵', file: require('../../assets/sounds/muzik_kutusu_tr.mp3'),             premium: true },
+  { id:  7, name: 'Müzik Kutusu 2',        desc: 'Nazik ve sakinleştirici ikinci melodi',            tag: 'Melodi',       icon: '🎶', file: require('../../assets/sounds/muzik_kutusu_2_tr.mp3'),           premium: true },
+  { id:  8, name: 'Müzik Kutusu 3',        desc: 'Üçüncü müzik kutusu ninnisi',                     tag: 'Melodi',       icon: '🎼', file: require('../../assets/sounds/muzik_kutusu_3_tr.mp3'),           premium: true },
+  { id:  9, name: 'Yumuşak Piyano Ninnisi', desc: 'Piyano ile çalınan yumuşak uyku melodisi',       tag: 'Piyano',       icon: '🎹', file: require('../../assets/sounds/yumusak_piyano_ninnisi_tr.mp3'),   premium: true },
+  { id: 10, name: 'Enstrümantal Ninni',    desc: 'Sözsüz enstrümanlarla hazırlanmış ninni',          tag: 'Enstrümantal', icon: '🎻', file: require('../../assets/sounds/enstrumantal_ninni_tr.mp3'),       premium: true },
 ];
 const sabitNinnilerEN: SesTip[] = [
   { id:  1, name: 'Little Star',          desc: 'A shining star guides baby to dreamland',           tag: 'Classic',      icon: '⭐', file: require('../../assets/sounds/star_in_the_sky_en.mp3'),          premium: false },
@@ -29,19 +28,19 @@ const sabitNinnilerEN: SesTip[] = [
   { id:  3, name: 'Rock-a-Bye',           desc: 'The timeless cradle song for peaceful nights',      tag: 'Traditional',  icon: '🍃', file: require('../../assets/sounds/rock_a_bye_en.mp3'),               premium: false },
   { id:  4, name: 'Sleep Baby',           desc: 'Warm melodies for a cozy and restful sleep',        tag: 'Lullaby',      icon: '😴', file: require('../../assets/sounds/sleep_baby_en.mp3'),               premium: false },
   { id:  5, name: 'A Candle',             desc: 'Soft candlelight melodies for serene bedtimes',     tag: 'Ambient',      icon: '🕯️', file: require('../../assets/sounds/a_candle_en.mp3'),                 premium: false },
-  { id:  6, name: 'Music Box 1',          desc: 'Delicate music box melody to drift off gently',     tag: 'Melody',       icon: '🎵', file: require('../../assets/sounds/music_box_en.mp3'),                premium: false },
-  { id:  7, name: 'Music Box 2',          desc: 'Second soothing music box tune',                    tag: 'Melody',       icon: '🎶', file: require('../../assets/sounds/music_box_2_en.mp3'),              premium: false },
-  { id:  8, name: 'Music Box 3',          desc: 'Third gentle music box lullaby',                    tag: 'Melody',       icon: '🎼', file: require('../../assets/sounds/music_box_3_en.mp3'),              premium: false },
-  { id:  9, name: 'Soft Piano Lullaby',   desc: 'Tender piano notes for the sweetest dreams',        tag: 'Piano',        icon: '🎹', file: require('../../assets/sounds/soft_piano_lullaby_en.mp3'),       premium: false },
-  { id: 10, name: 'Instrumental Lullaby', desc: 'Wordless instrumental tones for calm sleep',        tag: 'Instrumental', icon: '🎻', file: require('../../assets/sounds/instrumental_lullaby_en.mp3'),    premium: false },
+  { id:  6, name: 'Music Box 1',          desc: 'Delicate music box melody to drift off gently',     tag: 'Melody',       icon: '🎵', file: require('../../assets/sounds/music_box_en.mp3'),                premium: true },
+  { id:  7, name: 'Music Box 2',          desc: 'Second soothing music box tune',                    tag: 'Melody',       icon: '🎶', file: require('../../assets/sounds/music_box_2_en.mp3'),              premium: true },
+  { id:  8, name: 'Music Box 3',          desc: 'Third gentle music box lullaby',                    tag: 'Melody',       icon: '🎼', file: require('../../assets/sounds/music_box_3_en.mp3'),              premium: true },
+  { id:  9, name: 'Soft Piano Lullaby',   desc: 'Tender piano notes for the sweetest dreams',        tag: 'Piano',        icon: '🎹', file: require('../../assets/sounds/soft_piano_lullaby_en.mp3'),       premium: true },
+  { id: 10, name: 'Instrumental Lullaby', desc: 'Wordless instrumental tones for calm sleep',        tag: 'Instrumental', icon: '🎻', file: require('../../assets/sounds/instrumental_lullaby_en.mp3'),    premium: true },
 ];
 
 export default function Ninniler() {
-  const { isPremium, isTrial, premiumAktifEt } = usePremium();
+  const { isPremium, isTrial } = usePremium();
   const { lang, t } = useLang();
+  const router = useRouter();
   const free = !isPremium && !isTrial;
   const sabitNinniler = lang === 'en' ? sabitNinnilerEN : sabitNinnilerTR;
-  const [paywallVisible, setPaywallVisible] = useState(false);
 
   const [anneNinniUri, setAnneNinniUri]   = useState<string | null>(null);
   const [calananId, setCalananId]         = useState<number | null>(null);
@@ -120,8 +119,8 @@ export default function Ninniler() {
   const formatSure = (saniye: number) =>
     Math.floor(saniye / 60) + ':' + (saniye % 60).toString().padStart(2, '0');
 
-  const toggleNinni = async (file: any, id: number) => {
-    if (id === 999 && free) { setPaywallVisible(true); return; }
+  const toggleNinni = async (file: any, id: number, isPremiumSong = false) => {
+    if (free && (id === 999 || isPremiumSong)) { router.push('/paywall'); return; }
     if (calananId === id) {
       await audioManager.stop();
     } else {
@@ -211,33 +210,29 @@ export default function Ninniler() {
             </View>
           )}
         </View>
-        {sabitNinniler.map((ninni) => (
-          <TouchableOpacity
-            key={ninni.id}
-            style={[styles.ninniCard, calananId === ninni.id && styles.ninniCardActive]}
-            onPress={() => toggleNinni(ninni.file, ninni.id)}
-          >
-            <Text style={styles.ninniIcon}>{ninni.icon}</Text>
-            <View style={styles.ninniInfo}>
-              <Text style={styles.ninniTitle}>{ninni.name}</Text>
-              <Text style={styles.ninniDesc}>{ninni.desc}</Text>
-              <View style={styles.tagRow}>
-                <View style={styles.tag}><Text style={styles.tagText}>{ninni.tag}</Text></View>
+        {sabitNinniler.map((ninni) => {
+          const locked = free && ninni.premium;
+          return (
+            <TouchableOpacity
+              key={ninni.id}
+              style={[styles.ninniCard, calananId === ninni.id && styles.ninniCardActive, locked && styles.ninniCardKilitli]}
+              onPress={() => toggleNinni(ninni.file, ninni.id, ninni.premium)}
+            >
+              <Text style={styles.ninniIcon}>{ninni.icon}</Text>
+              <View style={styles.ninniInfo}>
+                <Text style={styles.ninniTitle}>{ninni.name}</Text>
+                <Text style={styles.ninniDesc}>{ninni.desc}</Text>
+                <View style={styles.tagRow}>
+                  <View style={styles.tag}><Text style={styles.tagText}>{ninni.tag}</Text></View>
+                  {locked && <View style={styles.premiumBadge}><Text style={styles.premiumBadgeText}>{t.premiumBadge}</Text></View>}
+                </View>
               </View>
-            </View>
-            <Text style={styles.playBtn}>{calananId === ninni.id ? '⏹' : '▶️'}</Text>
-          </TouchableOpacity>
-        ))}
+              <Text style={styles.playBtn}>{locked ? '🔒' : calananId === ninni.id ? '⏹' : '▶️'}</Text>
+            </TouchableOpacity>
+          );
+        })}
 
       </ScrollView>
-
-      <Paywall
-        visible={paywallVisible}
-        onClose={() => setPaywallVisible(false)}
-        onPremium={() => { setPaywallVisible(false); premiumAktifEt(); }}
-        baslik={t.paywallAnneNinniBaslik}
-        aciklama={t.paywallAnneNinniAcik}
-      />
     </View>
   );
 }

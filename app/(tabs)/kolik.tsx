@@ -1,11 +1,10 @@
 // ⚠️ Bu dosyada direkt Audio.Sound KULLANILMAZ — tüm ses işlemleri audioManager üzerinden yapılır.
 import AdBanner from '@/components/AdBanner';
-import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import * as audioManager from '@/services/audioManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -49,10 +48,10 @@ const dogaSesleriEN: KolikSes[] = [
 ];
 
 export default function Kolik() {
-  const { isPremium, isTrial, premiumAktifEt } = usePremium();
+  const { isPremium, isTrial } = usePremium();
   const { lang, t } = useLang();
+  const router = useRouter();
   const free = !isPremium && !isTrial;
-  const [paywallVisible, setPaywallVisible] = useState(false);
 
   const beyazGurultu = lang === 'en' ? beyazGurultuEN : beyazGurultuTR;
   const dogaSesleri  = lang === 'en' ? dogaSesleriEN  : dogaSesleriTR;
@@ -135,7 +134,7 @@ export default function Kolik() {
     Math.floor(saniye / 60) + ':' + (saniye % 60).toString().padStart(2, '0');
 
   const toggleSes = async (file: any, id: number) => {
-    if (id === 999 && free) { setPaywallVisible(true); return; }
+    if (id === 999 && free) { router.push('/paywall'); return; }
     if (!file) return;
     if (calananId === id) {
       await audioManager.stop();
@@ -272,13 +271,6 @@ export default function Kolik() {
 
       </ScrollView>
 
-      <Paywall
-        visible={paywallVisible}
-        onClose={() => setPaywallVisible(false)}
-        onPremium={() => { setPaywallVisible(false); premiumAktifEt(); }}
-        baslik={t.paywallPisPisBaslik}
-        aciklama={t.paywallPisPisAcik}
-      />
     </View>
   );
 }

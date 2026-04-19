@@ -28,8 +28,11 @@ interface DailyUsage {
   kullanilmis: number;          // total feature uses today
 }
 
-const TRIAL_GUN   = 7;
-const ENTITLEMENT = 'LumiBaby Pro';
+const TRIAL_GUN        = 7;
+const ENTITLEMENT      = 'premium';
+const PREMIUM_CACHE_KEY = 'lumibaby_rc_premium_cache';
+const SLEEP_DAILY_KEY  = 'lumibaby_sleep_daily';
+const SLEEP_FREE_LIMIT = 3;
 
 export type PremiumDurum = 'trial' | 'premium' | 'free';
 
@@ -62,13 +65,39 @@ function computeHak(usage: DailyUsage): number {
 
 async function rcIsPremium(): Promise<boolean> {
   try {
+    // Check 1-hour cache first
+    const cached = await AsyncStorage.getItem(PREMIUM_CACHE_KEY);
+    if (cached) {
+      const { isPremium, ts } = JSON.parse(cached);
+      if (Date.now() - ts < 3600_000) return isPremium;
+    }
     const Purchases = getRCPurchases();
     if (!Purchases) return false;
     const info = await Purchases.getCustomerInfo();
-    return info.entitlements.active[ENTITLEMENT] !== undefined;
+    const isPremium = info.entitlements.active[ENTITLEMENT] !== undefined;
+    await AsyncStorage.setItem(PREMIUM_CACHE_KEY, JSON.stringify({ isPremium, ts: Date.now() }));
+    return isPremium;
   } catch {
     return false;
   }
+}
+
+async function getSleepCountToday(): Promise<number> {
+  try {
+    const today = bugunTarih();
+    const data  = await AsyncStorage.getItem(SLEEP_DAILY_KEY);
+    if (data) {
+      const { date, count } = JSON.parse(data);
+      if (date === today) return count;
+    }
+  } catch {}
+  return 0;
+}
+
+export async function incrementSleepCount(): Promise<void> {
+  const today = bugunTarih();
+  const count = await getSleepCountToday();
+  await AsyncStorage.setItem(SLEEP_DAILY_KEY, JSON.stringify({ date: today, count: count + 1 }));
 }
 
 export function usePremium() {
@@ -214,11 +243,18 @@ export function usePremium() {
 
   const premiumAktifEt = presentPaywall;
 
+  const sleepLimitDoldu = useCallback(async (): Promise<boolean> => {
+    if (durum !== 'free') return false;
+    const count = await getSleepCountToday();
+    return count >= SLEEP_FREE_LIMIT;
+  }, [durum]);
+
   return {
     durum,
     isPremium:            durum === 'premium',
     isTrial:              durum === 'trial',
     isFree:               durum === 'free',
+    isLoading:            !yuklendi,
     canAccessPremium:     durum === 'premium' || durum === 'trial',
     showTeaserOnly:       durum === 'free',
     isLockedFeature:      durum === 'free',
@@ -234,6 +270,7 @@ export function usePremium() {
     premiumAktifEt,
     presentPaywall,
     restorePurchases,
+    sleepLimitDoldu,
     yukle,
     yuklendi,
   };

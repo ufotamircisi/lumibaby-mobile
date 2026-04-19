@@ -2,7 +2,7 @@
 import AdBanner from '@/components/AdBanner';
 import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
-import { usePremium } from '@/hooks/usePremium';
+import { incrementSleepCount, usePremium } from '@/hooks/usePremium';
 import { showInterstitialIfReady } from '@/services/adMob';
 import * as audioManager from '@/services/audioManager';
 import { CONFIDENCE_THRESHOLD, CryDetectionEngine, type SensitivityLevel } from '@/services/cryDetectionEngine';
@@ -173,7 +173,7 @@ const sabitKolikListesiEN: SesTip[] = [
 ];
 
 export default function Analiz() {
-  const { isTrial, canAccessPremium, detektorHak, analizHak, detektorReklamGoster, analizReklamGoster, detektorKullan, analizKullan, reklamIzleDetektor, reklamIzleAnaliz, premiumAktifEt } = usePremium();
+  const { isTrial, canAccessPremium, detektorHak, analizHak, detektorReklamGoster, analizReklamGoster, detektorKullan, analizKullan, reklamIzleDetektor, reklamIzleAnaliz, premiumAktifEt, sleepLimitDoldu } = usePremium();
   const router = useRouter();
   const { lang, t } = useLang();
   const free = !canAccessPremium;
@@ -655,7 +655,10 @@ export default function Analiz() {
     }
   }, [cryCevaplar, crySonucHesapla, crySonucuKaydet]);
 
-  const bebekUyudu = () => {
+  const bebekUyudu = async () => {
+    const limitDoldu = await sleepLimitDoldu();
+    if (limitDoldu) { router.push('/paywall'); return; }
+    await incrementSleepCount();
     const yeniKayit: UykuKaydi = { id: Date.now(), baslangic: Date.now(), bitis: null };
     setAktifKayit(yeniKayit); aktifKayitRef.current = yeniKayit;
     setUyuyorMu(true); setSure(0); setDetektorSure(0);
@@ -909,7 +912,7 @@ export default function Analiz() {
   };
 
   const raporDetayAc = (rapor: GeceRaporu) => {
-    if (free) { setPaywallTip('premium'); setPaywallVisible(true); return; }
+    if (free) { router.push('/paywall'); return; }
     setSeciliRapor(rapor); setDetayModal(true);
   };
 
@@ -1036,7 +1039,7 @@ export default function Analiz() {
         <View onLayout={e => { gecmisOffsetRef.current = e.nativeEvent.layout.y; }}>
         <Text style={styles.bolumBaslik}>{t.gecmisGeceler}</Text>
         {free ? (
-          <TouchableOpacity style={styles.arsivKilitKutu} onPress={() => { setPaywallTip('premium'); setPaywallVisible(true); }}>
+          <TouchableOpacity style={styles.arsivKilitKutu} onPress={() => { router.push('/paywall'); }}>
             <Text style={styles.arsivKilitYazi}>{t.arsivKilit}</Text>
             <Text style={styles.arsivKilitAlt}>{t.arsivKilitAlt}</Text>
           </TouchableOpacity>
@@ -1106,7 +1109,7 @@ export default function Analiz() {
         <View onLayout={e => { grafikOffsetRef.current = e.nativeEvent.layout.y; }}>
         <Text style={[styles.bolumBaslik, { marginTop: 16 }]}>{t.yedıGunGrafik}</Text>
         {free ? (
-          <TouchableOpacity style={styles.premiumKilitKutu} onPress={() => { setPaywallTip('premium'); setPaywallVisible(true); }}>
+          <TouchableOpacity style={styles.premiumKilitKutu} onPress={() => { router.push('/paywall'); }}>
             <Text style={styles.premiumKilitIkon}>📊</Text>
             <Text style={styles.premiumKilitYazi}>{t.grafikKilit}</Text>
             <Text style={styles.premiumKilitBtn}>{t.arsivKilitAlt}</Text>
@@ -1163,7 +1166,7 @@ export default function Analiz() {
           <View style={styles.yasaGoreKart}>
             <Text style={styles.yasaGoreBaslik}>{t.yasaGoreBaslik}</Text>
             {free ? (
-              <TouchableOpacity onPress={() => { setPaywallTip('premium'); setPaywallVisible(true); }}>
+              <TouchableOpacity onPress={() => { router.push('/paywall'); }}>
                 <Text style={styles.premiumKilitGenelYazi}>{t.yasaGorePremium}</Text>
                 <Text style={styles.premiumKilitGenelBtn}>{t.premiumKilitGenelBtn}</Text>
               </TouchableOpacity>
@@ -1296,7 +1299,7 @@ export default function Analiz() {
                   <TouchableOpacity
                     key={ses.id}
                     style={[styles.sesBtn, secili && styles.sesBtnSecili, anneMi && styles.sesBtnAnne, kilitli && { opacity: 0.6 }]}
-                    onPress={() => { if (kilitli) { setPaywallTip('premium'); setPaywallVisible(true); return; } sesSecildi(ses); }}
+                    onPress={() => { if (kilitli) { router.push('/paywall'); return; } sesSecildi(ses); }}
                   >
                     <Text style={styles.sesIkon}>{ses.icon}</Text>
                     <Text style={styles.sesAdi}>{ses.name}</Text>
@@ -1339,7 +1342,7 @@ export default function Analiz() {
                         </View>
                       ))}
                     </View>
-                    <TouchableOpacity style={styles.detayKilitKutu} onPress={() => { setRaporModal(false); setPaywallTip('premium'); setPaywallVisible(true); }}>
+                    <TouchableOpacity style={styles.detayKilitKutu} onPress={() => { setRaporModal(false); router.push('/paywall'); }}>
                       <Text style={styles.detayKilitYazi}>{t.detayKilit}</Text>
                       <Text style={styles.detayKilitBtn}>{t.arsivKilitAlt}</Text>
                     </TouchableOpacity>
