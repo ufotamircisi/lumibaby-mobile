@@ -1,52 +1,56 @@
 import { Platform } from 'react-native';
-import Purchases, { LOG_LEVEL } from 'react-native-purchases';
+import Purchases, { LOG_LEVEL, PurchasesOffering, CustomerInfo } from 'react-native-purchases';
 
-const REVENUECAT_IOS_KEY = 'test_NEQGTCZprAVYcQdZUYZcAHvMdEd';
+export const PRODUCT_IDS = {
+  android: {
+    monthly: 'lumibaby_premium_monthly',
+    yearly:  'lumibaby_premium_yearly',
+  },
+  ios: {
+    monthly: 'com.lumibaby.premium.monthly',
+    yearly:  'com.lumibaby.premium.yearly',
+  },
+} as const;
 
-export const initializeRevenueCat = () => {
-  Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
-  
-  if (Platform.OS === 'ios') {
-    Purchases.configure({ apiKey: REVENUECAT_IOS_KEY });
-  }
-};
+export const ENTITLEMENT_ID = 'premium';
 
-export const getOfferings = async () => {
+const IOS_API_KEY     = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY     ?? 'test_NEQGTCZprAVYcQdZUYZcAHvMdEd';
+const ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? '';
+
+export function configureRevenueCat(): void {
+  if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
+  const apiKey = Platform.OS === 'ios' ? IOS_API_KEY : ANDROID_API_KEY;
+  if (!apiKey) return;
+  Purchases.configure({ apiKey });
+}
+
+// Backward-compat alias — used in app/_layout.tsx
+export const initializeRevenueCat = configureRevenueCat;
+
+export async function getOfferings(): Promise<PurchasesOffering | null> {
   try {
     const offerings = await Purchases.getOfferings();
     return offerings.current;
-  } catch (error) {
-    console.error('RevenueCat offerings error:', error);
+  } catch {
     return null;
   }
-};
+}
 
-export const purchasePackage = async (pkg: any) => {
-  try {
-    const { customerInfo } = await Purchases.purchasePackage(pkg);
-    return customerInfo;
-  } catch (error) {
-    console.error('Purchase error:', error);
-    throw error;
-  }
-};
+export async function purchasePackage(pkg: any): Promise<CustomerInfo> {
+  const { customerInfo } = await Purchases.purchasePackage(pkg);
+  return customerInfo;
+}
 
-export const checkPremiumStatus = async () => {
+export async function checkPremiumStatus(): Promise<boolean> {
   try {
-    const customerInfo = await Purchases.getCustomerInfo();
-    return customerInfo.entitlements.active['premium'] !== undefined;
-  } catch (error) {
-    console.error('Premium check error:', error);
+    const info = await Purchases.getCustomerInfo();
+    return info.entitlements.active[ENTITLEMENT_ID] !== undefined;
+  } catch {
     return false;
   }
-};
+}
 
-export const restorePurchases = async () => {
-  try {
-    const customerInfo = await Purchases.restorePurchases();
-    return customerInfo.entitlements.active['premium'] !== undefined;
-  } catch (error) {
-    console.error('Restore purchases error:', error);
-    throw error;
-  }
-};
+export async function restorePurchases(): Promise<boolean> {
+  const info = await Purchases.restorePurchases();
+  return info.entitlements.active[ENTITLEMENT_ID] !== undefined;
+}
