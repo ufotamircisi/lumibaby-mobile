@@ -20,6 +20,11 @@ let activeTab: AudioTab | null = null;
 let activeOnFinish: (() => void) | null = null;
 const listeners: Set<Listener> = new Set();
 
+// Monotonically increasing token — every play() and stop() increments it.
+// After each await, the caller checks its token against the current value;
+// if they differ a newer call won the race and the current call bails out.
+let playGeneration = 0;
+
 function notify(): void {
   listeners.forEach((l) => l(activeId, activeTab));
 }
@@ -40,7 +45,8 @@ export async function setActiveVolume(volume: number): Promise<void> {
 }
 
 export async function stop(): Promise<void> {
-  activeOnFinish = null;           // suppress callback on manual stop
+  playGeneration++;                // cancel any in-flight play()
+  activeOnFinish = null;
   const sound = activeSound;
   activeSound = null;
   activeId    = null;
@@ -57,36 +63,50 @@ export async function play(
   tab: AudioTab,
   options?: PlayOptions,
 ): Promise<void> {
-  // Stop previous sound without firing its onFinish
+  // Claim this generation — any concurrent play() with an older token will bail.
+  const generation = ++playGeneration;
+
   const prev = activeSound;
   activeOnFinish = null;
   activeSound    = null;
   activeId       = null;
   activeTab      = null;
+
   if (prev) {
     try { await prev.stopAsync(); await prev.unloadAsync(); } catch {}
   }
+
+  // A newer call arrived while we were stopping the previous sound.
+  if (generation !== playGeneration) return;
 
   if (!file) return;
 
   try {
     await Audio.setAudioModeAsync({
-      allowsRecordingIOS:     false,
-      playsInSilentModeIOS:   true,
+      allowsRecordingIOS:      false,
+      playsInSilentModeIOS:    true,
       staysActiveInBackground: true,
     });
+
+    if (generation !== playGeneration) return;
+
     const { sound } = await Audio.Sound.createAsync(file, {
       shouldPlay: true,
       isLooping:  options?.loop ?? false,
     });
 
-    activeSound   = sound;
-    activeId      = id;
-    activeTab     = tab;
+    // A newer call arrived while createAsync was running — discard this sound.
+    if (generation !== playGeneration) {
+      try { await sound.stopAsync(); await sound.unloadAsync(); } catch {}
+      return;
+    }
+
+    activeSound    = sound;
+    activeId       = id;
+    activeTab      = tab;
     activeOnFinish = options?.onFinish ?? null;
     notify();
 
-    // Wire onFinish for non-looping sounds
     if (!options?.loop) {
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish && activeSound === sound) {
