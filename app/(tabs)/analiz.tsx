@@ -82,24 +82,34 @@ function uykuSkoruHesapla(
   baslangicSaat: number,
   t: any
 ): { toplam: number; detaylar: { baslik: string; puan: number; pozitif: boolean }[] } {
-  const detaylar: { baslik: string; puan: number; pozitif: boolean }[] = [];
-  let toplam = 0;
   const lang = t.grafikGunler[0] === 'Sun' ? 'en' : 'tr';
+  const detaylar: { baslik: string; puan: number; pozitif: boolean }[] = [];
 
+  // < 5 dakika → geçersiz kayıt, skor 0
+  if (toplamUyku < 300) {
+    detaylar.push({ baslik: lang === 'en' ? 'Invalid record (< 5 min)' : 'Geçersiz kayıt (< 5 dk)', puan: 0, pozitif: false });
+    return { toplam: 0, detaylar };
+  }
+
+  let toplam = 0;
+
+  // Uyku süresi puanı
   if (toplamUyku >= 32400)      { detaylar.push({ baslik: lang === 'en' ? 'Long sleep (9h+)' : 'Uzun uyku süresi (9s+)',  puan: 50, pozitif: true });  toplam += 50; }
   else if (toplamUyku >= 25200) { detaylar.push({ baslik: lang === 'en' ? 'Good sleep (7h+)' : 'İyi uyku süresi (7s+)',   puan: 35, pozitif: true });  toplam += 35; }
   else if (toplamUyku >= 18000) { detaylar.push({ baslik: lang === 'en' ? 'Fair sleep (5h+)' : 'Orta uyku süresi (5s+)',  puan: 20, pozitif: true });  toplam += 20; }
   else                          { detaylar.push({ baslik: lang === 'en' ? 'Short sleep' : 'Kısa uyku süresi',             puan: -10, pozitif: false }); toplam -= 10; }
 
-  if (aglamaSayisi === 0)      { detaylar.push({ baslik: lang === 'en' ? 'Did not cry at all' : 'Hiç ağlamadı',            puan: 30, pozitif: true }); toplam += 30; }
-  else if (aglamaSayisi === 1) { detaylar.push({ baslik: lang === 'en' ? 'Cried once' : '1 kez ağladı',                   puan: 20, pozitif: true }); toplam += 20; }
-  else if (aglamaSayisi === 2) { detaylar.push({ baslik: lang === 'en' ? 'Cried twice' : '2 kez ağladı',                  puan: 10, pozitif: true }); toplam += 10; }
-  else if (aglamaSayisi <= 4)  { detaylar.push({ baslik: lang === 'en' ? `Cried ${aglamaSayisi} times` : aglamaSayisi + ' kez ağladı', puan: 0, pozitif: false }); }
-  else                         { detaylar.push({ baslik: lang === 'en' ? `Cried ${aglamaSayisi} times (frequent)` : aglamaSayisi + ' kez ağladı (sık)', puan: -10, pozitif: false }); toplam -= 10; }
+  // Ağlama puanı: 0→+20, 1→+5, 2→-10, 3-4→-20, 5+→-30
+  if (aglamaSayisi === 0)      { detaylar.push({ baslik: lang === 'en' ? 'Did not cry at all' : 'Hiç ağlamadı',                                         puan: 20,  pozitif: true  }); toplam += 20; }
+  else if (aglamaSayisi === 1) { detaylar.push({ baslik: lang === 'en' ? 'Cried once' : '1 kez ağladı',                                                 puan: 5,   pozitif: false }); toplam += 5;  }
+  else if (aglamaSayisi === 2) { detaylar.push({ baslik: lang === 'en' ? 'Cried twice' : '2 kez ağladı',                                                puan: -10, pozitif: false }); toplam -= 10; }
+  else if (aglamaSayisi <= 4)  { detaylar.push({ baslik: lang === 'en' ? `Cried ${aglamaSayisi} times` : `${aglamaSayisi} kez ağladı`,                  puan: -20, pozitif: false }); toplam -= 20; }
+  else                         { detaylar.push({ baslik: lang === 'en' ? `Cried ${aglamaSayisi} times (frequent)` : `${aglamaSayisi} kez ağladı (sık)`, puan: -30, pozitif: false }); toplam -= 30; }
 
+  // Uyku saati puanı
   const saat = new Date(baslangicSaat).getHours();
-  if (saat >= 19 && saat <= 21) { detaylar.push({ baslik: lang === 'en' ? 'Regular bedtime' : 'Düzenli uyku saati',     puan: 20, pozitif: true }); toplam += 20; }
-  else                           { detaylar.push({ baslik: lang === 'en' ? 'Late bedtime' : 'Geç uyku saati',             puan: 0,  pozitif: false }); }
+  if (saat >= 19 && saat <= 21) { detaylar.push({ baslik: lang === 'en' ? 'Regular bedtime' : 'Düzenli uyku saati', puan: 20, pozitif: true  }); toplam += 20; }
+  else                           { detaylar.push({ baslik: lang === 'en' ? 'Late bedtime'    : 'Geç uyku saati',    puan: 0,  pozitif: false }); }
 
   return { toplam: Math.max(0, Math.min(100, toplam)), detaylar };
 }
@@ -1416,7 +1426,7 @@ export default function Analiz() {
                     </View>
                     <View style={styles.analizYorumKutu}>
                       <Text style={styles.analizYorumBaslik}>{t.analizYorumBaslik}</Text>
-                      <Text style={styles.analizYorumYazi}>{t.analizYorum(sonRapor.aglamaSayisi)}</Text>
+                      <Text style={styles.analizYorumYazi}>{t.analizYorum(sonRapor.uykuKalitesi, sonRapor.toplamUyku, sonRapor.aglamaSayisi)}</Text>
                     </View>
                     {geceRaporlari.length > 1 && (() => {
                       const onceki = geceRaporlari[1];

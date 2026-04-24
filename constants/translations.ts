@@ -210,10 +210,21 @@ const tr = {
   detayKilit:             '🔒 Detaylı analiz ve uyku skoru Premium\'da',
   puanDetayBaslik:        '📊 Puan Detayı',
   analizYorumBaslik:      '💬 Analiz',
-  analizYorum:            (n: number) =>
-    n === 0 ? '• Harika! Uyku boyunca hiç ağlamadı 🎉'
-    : n <= 2 ? `• İyi bir uyku geçirdiniz. Sadece ${n} kez ağladı.`
-    : `• Uyku boyunca ${n} kez ağladı. Uyku rutinini gözden geçirin.`,
+  analizYorum:            (score: number, toplamUykuSn: number, aglamaSayisi: number) => {
+    const dk = Math.floor(toplamUykuSn / 60);
+    if (dk < 5)    return '⚠️ Uyku süresi 5 dakikanın altında. Bu kayıt analiz için geçersiz.';
+    const saat = Math.floor(toplamUykuSn / 3600);
+    const kalanDk = Math.floor((toplamUykuSn % 3600) / 60);
+    const sureStr = saat > 0 ? `${saat}s ${kalanDk}dk` : `${kalanDk}dk`;
+    if (score >= 85) return `• Mükemmel bir gece! Bebek ${aglamaSayisi === 0 ? 'hiç ağlamadı' : aglamaSayisi + ' kez ağladı'}, toplam ${sureStr} uyudu. 🎉`;
+    if (score >= 70) return `• İyi bir uyku. Bebek ${aglamaSayisi === 0 ? 'hiç ağlamadı' : aglamaSayisi + ' kez ağladı'}, toplam ${sureStr} uyudu.`;
+    if (score >= 50) {
+      const aglamaYorum = aglamaSayisi >= 2 ? ` Ağlama sayısı (${aglamaSayisi}) uyku kalitesini düşürdü.` : '';
+      return `• Orta kalitede uyku.${aglamaYorum} Uyku rutinini gözden geçirin.`;
+    }
+    if (dk < 60)   return `• Uyku süresi yetersiz (${sureStr}). Bebeğin uyku ihtiyacı karşılanmadı.`;
+    return `• Zorlu bir gece. Bebek ${aglamaSayisi} kez ağladı ve uyku süresi kısaydı. Uyku rutini ve ortam koşulları gözden geçirilmeli.`;
+  },
   dunleKarsilastirma:     '📈 Dünle Karşılaştırma',
   uyku:                   'Uyku Süresi',
   aglamaKars:             'Ağlama',
@@ -728,10 +739,21 @@ const en = {
   detayKilit:             '🔒 Detailed analysis & sleep score in Premium',
   puanDetayBaslik:        '📊 Score Details',
   analizYorumBaslik:      '💬 Analysis',
-  analizYorum:            (n: number) =>
-    n === 0 ? '• Great! Baby didn\'t cry at all during sleep 🎉'
-    : n <= 2 ? `• Good sleep! Baby cried only ${n} time${n !== 1 ? 's' : ''}.`
-    : `• Baby cried ${n} times during sleep. Consider reviewing the sleep routine.`,
+  analizYorum:            (score: number, toplamUykuSn: number, aglamaSayisi: number) => {
+    const dk = Math.floor(toplamUykuSn / 60);
+    if (dk < 5)    return '⚠️ Sleep duration is under 5 minutes. This record is invalid for analysis.';
+    const h = Math.floor(toplamUykuSn / 3600);
+    const m = Math.floor((toplamUykuSn % 3600) / 60);
+    const sureStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+    if (score >= 85) return `• Excellent night! Baby ${aglamaSayisi === 0 ? 'did not cry at all' : `cried ${aglamaSayisi} time${aglamaSayisi !== 1 ? 's' : ''}`} and slept ${sureStr} total. 🎉`;
+    if (score >= 70) return `• Good sleep. Baby ${aglamaSayisi === 0 ? 'did not cry at all' : `cried ${aglamaSayisi} time${aglamaSayisi !== 1 ? 's' : ''}`} and slept ${sureStr} total.`;
+    if (score >= 50) {
+      const cryNote = aglamaSayisi >= 2 ? ` Crying (${aglamaSayisi}×) reduced sleep quality.` : '';
+      return `• Fair quality sleep.${cryNote} Consider reviewing the sleep routine.`;
+    }
+    if (dk < 60)   return `• Insufficient sleep duration (${sureStr}). Baby's sleep needs were not met.`;
+    return `• Difficult night. Baby cried ${aglamaSayisi} time${aglamaSayisi !== 1 ? 's' : ''} and sleep duration was short. Review sleep routine and environment.`;
+  },
   dunleKarsilastirma:     '📈 Compared to Yesterday',
   uyku:                   'Sleep Duration',
   aglamaKars:             'Crying',
