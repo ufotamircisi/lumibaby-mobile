@@ -11,7 +11,7 @@ import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Alert, AppState, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendAlertToAll } from './_layout';
 
@@ -315,11 +315,19 @@ export default function Analiz() {
     AsyncStorage.getItem(SLEEP_START_KEY).then(v => {
       if (!v) return;
       const savedStart = parseInt(v, 10);
-      if (isNaN(savedStart) || savedStart <= 0) return;
+      const now = Date.now();
+      // Geçersiz: NaN, sıfır veya negatif, gelecekte, ya da 24 saatten eski
+      if (isNaN(savedStart) || savedStart <= 0 || savedStart > now || now - savedStart > 86_400_000) {
+        AsyncStorage.removeItem(SLEEP_START_KEY).catch(() => {});
+        return;
+      }
       geceBaslangicRef.current = savedStart;
       setUyuyorMu(true);
-      setSure(Math.floor((Date.now() - savedStart) / 1000));
-      timerRef.current = setInterval(() => setSure(Math.floor((Date.now() - geceBaslangicRef.current) / 1000)), 1000);
+      setSure(Math.min(Math.floor((now - savedStart) / 1000), 24 * 3600));
+      timerRef.current = setInterval(() => {
+        const elapsed = Date.now() - geceBaslangicRef.current;
+        setSure(Math.min(Math.floor(elapsed / 1000), 24 * 3600));
+      }, 1000);
     });
 
     // Arka planda süresi dolmamış dedektör varsa geri yükle
@@ -354,7 +362,7 @@ export default function Analiz() {
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState !== 'active') return;
       if (geceBaslangicRef.current > 0) {
-        setSure(Math.floor((Date.now() - geceBaslangicRef.current) / 1000));
+        setSure(Math.min(Math.floor((Date.now() - geceBaslangicRef.current) / 1000), 24 * 3600));
       }
       if (detektorBitisRef.current > 0) {
         const kalanMs = detektorBitisRef.current - Date.now();
@@ -885,6 +893,17 @@ export default function Analiz() {
     } catch {}
 
     const bitis = Date.now(), baslangic = geceBaslangicRef.current;
+    // Bozuk kayıt: başlangıç yok, gelecekte veya 24 saatten uzun
+    if (baslangic <= 0 || baslangic > bitis || bitis - baslangic > 86_400_000) {
+      AsyncStorage.removeItem(SLEEP_START_KEY).catch(() => {});
+      aktifKayitRef.current = null; setAktifKayit(null); setUyuyorMu(false); setSure(0);
+      geceBaslangicRef.current = 0;
+      Alert.alert(
+        lang === 'en' ? 'Invalid Record' : 'Geçersiz Kayıt',
+        lang === 'en' ? 'Sleep record was corrupted and has been cleared.' : 'Uyku kaydı bozulmuş ve temizlendi.',
+      );
+      return;
+    }
     const toplamUyku  = Math.max(0, Math.min(Math.floor((bitis - baslangic) / 1000), 24 * 3600));
     const uykulaDalma = ilkAglamaZamaniRef.current ? Math.max(120, Math.floor((ilkAglamaZamaniRef.current - baslangic) / 1000)) : Math.max(120, Math.floor(toplamUyku * 0.05));
     const enUzunUyku  = aglamaSayisiRef.current === 0 ? toplamUyku : Math.floor(toplamUyku / (aglamaSayisiRef.current + 1));
