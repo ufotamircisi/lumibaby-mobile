@@ -11,7 +11,8 @@ import {
   Dimensions, Linking, ScrollView, StyleSheet, Text,
   TouchableOpacity, View
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ms, vs } from '@/constants/responsive';
 
 const { width } = Dimensions.get('window');
 
@@ -103,7 +104,7 @@ export default function Onboarding(): JSX.Element {
   const termsLabel   = selectedLang === 'en' ? 'Terms of Use' : 'Kullanım Koşulları';
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView edges={['top']} style={styles.container}>
 
       {/* Logo */}
       <View style={styles.header}>
@@ -229,7 +230,7 @@ export default function Onboarding(): JSX.Element {
           </View>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -251,8 +252,8 @@ const styles = StyleSheet.create({
   scrollView:       { flex: 1 },
   scrollContent:    { paddingHorizontal: 28, paddingTop: 20, paddingBottom: 20 },
   titleSection:     { alignItems: 'center', marginBottom: 24 },
-  emoji:            { fontSize: 48, marginBottom: 16 },
-  title:            { color: 'white', fontSize: 24, fontWeight: 'bold', textAlign: 'center', lineHeight: 32 },
+  emoji:            { fontSize: ms(48), marginBottom: 16 },
+  title:            { color: 'white', fontSize: 24, fontWeight: 'bold', textAlign: 'center', lineHeight: vs(32) },
   desc:             { color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 24, textAlign: 'center', marginBottom: 20 },
   highlightBox:     { backgroundColor: 'rgba(157,140,239,0.15)', borderRadius: 12, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(157,140,239,0.3)' },
   highlightText:    { color: '#9d8cef', fontSize: 17, fontWeight: 'bold', textAlign: 'center' },

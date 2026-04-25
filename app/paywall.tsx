@@ -1,4 +1,5 @@
 import { getOfferings, purchasePackage, restorePurchases } from '@/services/revenuecat';
+import { s as rsp } from '@/constants/responsive';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -10,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type PlanId = 'monthly' | 'yearly';
 
@@ -24,7 +25,6 @@ interface Plan {
 }
 
 export default function PaywallScreen() {
-  const insets = useSafeAreaInsets();
   const [plans, setPlans]           = useState<Plan[]>([]);
   const [selected, setSelected]     = useState<PlanId>('yearly');
   const [loading, setLoading]       = useState(true);
@@ -106,7 +106,7 @@ export default function PaywallScreen() {
   const selectedPlan = plans.find(p => p.id === selected);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <SafeAreaView style={s.root}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <TouchableOpacity style={s.closeBtn} onPress={() => router.back()}>
@@ -200,7 +200,7 @@ export default function PaywallScreen() {
           Abonelik otomatik yenilenir. iTunes hesabınızdan ücret alınır. Yenileme döneminin en az 24 saat öncesinde iptal edilmediği sürece abonelik yenilenir.
         </Text>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -231,9 +231,9 @@ const s = StyleSheet.create({
   planCard:         { borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.04)', padding: 16 },
   planCardSelected: { borderColor: '#9d8cef', backgroundColor: 'rgba(157,140,239,0.12)' },
   planRow:          { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  radio:            { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' },
+  radio:            { width: rsp(22), height: rsp(22), borderRadius: rsp(11), borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' },
   radioSelected:    { borderColor: '#9d8cef' },
-  radioDot:         { width: 11, height: 11, borderRadius: 6, backgroundColor: '#9d8cef' },
+  radioDot:         { width: rsp(11), height: rsp(11), borderRadius: rsp(6), backgroundColor: '#9d8cef' },
   planTitle:        { color: 'white', fontSize: 16, fontWeight: '600', marginBottom: 2 },
   planPeriod:       { color: 'rgba(255,255,255,0.5)', fontSize: 13 },
   badge:            { alignSelf: 'flex-start', backgroundColor: '#e879a0', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3, marginBottom: 10 },

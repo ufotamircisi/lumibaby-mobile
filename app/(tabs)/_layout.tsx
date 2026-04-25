@@ -248,7 +248,7 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
-        <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: Math.max(insets.bottom + 8, 16), height: '85%' }}>
+        <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: Math.max(insets.bottom + 8, 16), height: isTablet ? '60%' : '85%' }}>
           <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
           <Text style={pm.baslik}>{t.partnerBaslik}</Text>
           <Text style={pm.alt}>{t.partnerAlt}</Text>
