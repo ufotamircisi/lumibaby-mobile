@@ -9,7 +9,6 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
-import { Platform } from 'react-native';
 
 // ── EXPORTS (analiz.tsx bunları kullanıyor — değiştirme) ──────────────────────
 export const WINDOW_SIZE_MS    = 500;
@@ -22,6 +21,14 @@ export const CONFIDENCE_THRESHOLD = {
   balanced: 72,
   strict:   85,
 } as const;
+
+// YAMNet ham skor eşikleri (0-100 aralığı)
+// 0-24 → sessizlik / 25-59 → şüpheli / 60+ → kesin ağlama
+export const YAMNET_CRY_THRESHOLD: Record<SensitivityLevel, number> = {
+  high:     25,  // hafif ağlamayı da yakala
+  balanced: 40,  // default
+  strict:   60,  // sadece çok net ağlama
+};
 
 export type SensitivityLevel = 'high' | 'balanced' | 'strict';
 
@@ -102,7 +109,7 @@ function padOrTrim(src: Float32Array, len: number): Float32Array {
   return out;
 }
 
-// iOS'ta 16kHz tek kanal PCM WAV kayıt seçenekleri
+// 16kHz tek kanal PCM WAV kayıt seçenekleri — iOS ve Android
 const IOS_RECORDING_OPTIONS = {
   ios: {
     extension:           '.wav',
@@ -119,6 +126,8 @@ const IOS_RECORDING_OPTIONS = {
   web:     { mimeType: 'audio/wav', bitsPerSample: 16 },
 };
 
+export const WAV_RECORDING_OPTIONS = IOS_RECORDING_OPTIONS;
+
 // ── AĞLAMA TESPİT MOTORU ──────────────────────────────────────────────────────
 export class CryDetectionEngine {
   // YAMNet modeli (lazy-loaded)
@@ -134,7 +143,8 @@ export class CryDetectionEngine {
   private isListening: boolean = false;
   private loopTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  public lastConfidence: number = 0;
+  public lastConfidence:  number = 0;
+  public yamnetThreshold: number = YAMNET_CRY_THRESHOLD.balanced;
 
   // ── MODEL YÜKLEME ────────────────────────────────────────────────────────────
   async loadModel(): Promise<void> {
@@ -163,23 +173,54 @@ export class CryDetectionEngine {
     this.lastConfidence = 0;
   }
 
+  configure(sensitivity: SensitivityLevel): void {
+    this.yamnetThreshold = YAMNET_CRY_THRESHOLD[sensitivity];
+  }
+
+  // ── WAV'DAN YAMNet ÇIKARIMI ──────────────────────────────────────────────────
+  // analiz.tsx burst döngüsünden çağrılır: uri → base64 → PCM → model → skor (0-100)
+  async inferFromWav(uri: string): Promise<number> {
+    if (!this.modelLoaded) await this.loadModel();
+    if (!this.model) return 0;
+    try {
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+      const parsed = parseWav(base64);
+      if (!parsed) return 0;
+      const { samples, sampleRate } = parsed;
+      const resampled = resample(samples, sampleRate, YAMNET_RATE);
+      const input     = padOrTrim(resampled, YAMNET_FRAME_LEN);
+      const outputs: ArrayBuffer[] = this.model.runSync([input.buffer as ArrayBuffer]);
+      if (!outputs?.length) return 0;
+      const scores     = new Float32Array(outputs[0]);
+      const confidence = Math.max(
+        scores[CRYING_INDEX]   ?? 0,
+        scores[BABY_CRY_INDEX] ?? 0,
+        scores[WHIMPER_INDEX]  ?? 0,
+      ) * 100;
+      const score = Math.round(Math.min(100, confidence));
+      this.lastScore      = score;
+      this.lastConfidence = score;
+      return score;
+    } catch {
+      return 0;
+    }
+  }
+
   // ── ANA ANALİZ ──────────────────────────────────────────────────────────────
-  // analiz.tsx tarafından her 500ms'de dB metering değeriyle çağrılır.
-  // YAMNet döngüsü aktifken (startListening) lastScore döndürülür.
-  // Döngü aktif değilse basit genlik proxy kullanılır.
+  // Burst döngüsünde kullanılmaz — geriye uyumluluk için bırakıldı.
+  // lastScore > 0 ise (inferFromWav doldurmuş) onu döndürür, aksi hâlde genlik proxy.
   analyze(db: number, _mode: 'aglama' | 'kolik'): number {
     if (Date.now() - this.lastTrigger < COOLDOWN_MS) {
       this.lastConfidence = 0;
       return 0;
     }
 
-    if (this.isListening && this.modelLoaded) {
-      // YAMNet döngüsü çalışıyor — confidence = max(scores[19], scores[20], scores[21]) * 100
+    if (this.lastScore > 0) {
       this.lastConfidence = this.lastScore;
       return this.lastScore;
     }
 
-    // YAMNet döngüsü henüz aktif değil — genlik proxy (eski 4-katmanlı sistem değil)
+    // YAMNet sonucu yok — genlik proxy
     const aboveAmbient  = Math.max(0, db - this.ambientDb);
     const score         = Math.min(100, Math.round(aboveAmbient * 3));
     this.lastScore      = score;
@@ -241,9 +282,6 @@ export class CryDetectionEngine {
 
   private async _recordAndInfer(): Promise<void> {
     if (!this.model || !this.isListening) return;
-    // Android: expo-av PCM WAV güvenilir değil — şimdilik iOS only
-    if (Platform.OS !== 'ios') return;
-
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { Audio } = require('expo-av');
     let rec: any = null;

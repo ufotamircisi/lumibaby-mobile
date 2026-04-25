@@ -5,13 +5,13 @@ import { useLang } from '@/hooks/useLang';
 import { incrementSleepCount, usePremium } from '@/hooks/usePremium';
 import { showInterstitialIfReady } from '@/services/adMob';
 import * as audioManager from '@/services/audioManager';
-import { CONFIDENCE_THRESHOLD, CryDetectionEngine, type SensitivityLevel } from '@/services/cryDetectionEngine';
+import { CONFIDENCE_THRESHOLD, CryDetectionEngine, WAV_RECORDING_OPTIONS, type SensitivityLevel } from '@/services/cryDetectionEngine';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, AppState, Modal, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendAlertToAll } from './_layout';
 
@@ -65,7 +65,7 @@ type GeceRaporu = {
   uykuKalitesi: number; puanDetay: { baslik: string; puan: number; pozitif: boolean }[];
 };
 
-const BAR_MAX_HEIGHT = 80;
+const BAR_MAX_HEIGHT = 106;
 const HASSASIYET_KEY = 'lumibaby_hassasiyet';
 type DedektorTip = 'aglama' | 'kolik';
 
@@ -74,6 +74,14 @@ function kaliteRenk(puan: number): string {
   if (puan >= 70) return '#facc15';
   if (puan >= 50) return '#fb923c';
   return '#f87171';
+}
+
+function skorRenk(puan: number): string {
+  if (puan >= 85) return '#4CAF50';
+  if (puan >= 70) return '#8BC34A';
+  if (puan >= 50) return '#FFC107';
+  if (puan >= 30) return '#FF9800';
+  return '#F44336';
 }
 
 function uykuSkoruHesapla(
@@ -226,6 +234,7 @@ export default function Analiz() {
   const [nasılIslerModal, setNasılIslerModal]     = useState(false);
   const [rehberDetayModal, setRehberDetayModal]   = useState(false);
   const [nasılCalisirModal, setNasılCalisirModal] = useState(false);
+  const [gecmisThumbH, setGecmisThumbH]           = useState(40);
   // Yeni özellikler
   const [sesOgrenmeKayitlar, setSesOgrenmeKayitlar] = useState<SesOgrenmeKayit[]>([]);
   const sesCalmaBaslangicRef = useRef<number>(0);
@@ -233,6 +242,30 @@ export default function Analiz() {
   const gecmisOffsetRef     = useRef<number>(0);
   const grafikOffsetRef     = useRef<number>(0);
   const bildirimIdRef       = useRef<string | null>(null);
+  const gecmisScrollRef     = useRef<ScrollView>(null);
+  const gecmisThumbAnim     = useRef(new Animated.Value(0)).current;
+  const gecmisContentH      = useRef(0);
+  const gecmisContainerH    = useRef(0);
+  const gecmisPanStartThumb = useRef(0);
+  const gecmisPanResponder  = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder:  () => true,
+      onPanResponderGrant: () => {
+        gecmisPanStartThumb.current = (gecmisThumbAnim as any)._value ?? 0;
+      },
+      onPanResponderMove: (_, gs) => {
+        const c = gecmisContainerH.current;
+        const h = gecmisContentH.current;
+        if (h <= c) return;
+        const thumbH = Math.max(40, (c / h) * c);
+        const maxT   = c - thumbH;
+        const newY   = Math.max(0, Math.min(maxT, gecmisPanStartThumb.current + gs.dy));
+        gecmisThumbAnim.setValue(newY);
+        if (maxT > 0) gecmisScrollRef.current?.scrollTo({ y: (newY / maxT) * (h - c), animated: false });
+      },
+    })
+  ).current;
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const tlBarW = screenWidth - 116; // ScrollView pad 40 + modal pad 48 + kutu pad 28
@@ -256,8 +289,11 @@ export default function Analiz() {
   const hassasiyetRef      = useRef<SensitivityLevel>('balanced');
   const cryEngineRef       = useRef(new CryDetectionEngine());
 
-  // hassasiyet state değişince ref'i güncelle (polling closure içinde güncel değer okunur)
-  useEffect(() => { hassasiyetRef.current = hassasiyet; }, [hassasiyet]);
+  // hassasiyet state değişince ref + engine'i güncelle
+  useEffect(() => {
+    hassasiyetRef.current = hassasiyet;
+    cryEngineRef.current.configure(hassasiyet);
+  }, [hassasiyet]);
 
   useEffect(() => { return () => { herSeyiDurdur(); }; }, []);
 
@@ -301,6 +337,7 @@ export default function Analiz() {
     AsyncStorage.getItem(HASSASIYET_KEY).then(v => {
       if (v === 'high' || v === 'balanced' || v === 'strict') {
         setHassasiyet(v); hassasiyetRef.current = v;
+        cryEngineRef.current.configure(v);
       }
     });
     cryEngineRef.current.loadPatterns().catch(() => {});
@@ -612,7 +649,7 @@ export default function Analiz() {
   }, []);
 
   const kaydiDurdur = async () => {
-    if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+    if (pollIntervalRef.current) { clearTimeout(pollIntervalRef.current as unknown as ReturnType<typeof setTimeout>); pollIntervalRef.current = null; }
     if (recordingRef.current) { try { await recordingRef.current.stopAndUnloadAsync(); } catch (_) {} recordingRef.current = null; }
   };
   const probeTimerTemizle = () => { if (probeTimerRef.current) { clearTimeout(probeTimerRef.current); probeTimerRef.current = null; } };
@@ -789,38 +826,61 @@ export default function Analiz() {
     dinlemeRef.current = true; setDinleniyor(true);
     cryEngineRef.current.reset();
     await kalibrasyonYap();
-    try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
-      const { recording } = await Audio.Recording.createAsync({ ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true });
-      recordingRef.current = recording;
-      const engine  = cryEngineRef.current;
-      const dedTip  = aktifDedektorRef.current ?? 'aglama';
-      pollIntervalRef.current = setInterval(async () => {
-        if (!dinlemeRef.current || caliyorRef.current) {
-          if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
-          return;
-        }
-        if (engine.isCoolingDown()) {
-          setCooldownKalan(Math.ceil(engine.cooldownRemaining() / 1000));
-          setConfidenceScore(0);
-          return;
-        }
-        setCooldownKalan(0);
-        try {
-          const status = await recording.getStatusAsync();
-          const db     = (status as any).metering ?? -160;
-          const confidence = engine.analyze(db, dedTip);
-          setConfidenceScore(confidence);
-          const threshold = CONFIDENCE_THRESHOLD[hassasiyetRef.current];
-          if (confidence >= threshold) {
+
+    const engine = cryEngineRef.current;
+
+    // YAMNet burst döngüsü: 975ms WAV kaydı → inferFromWav → eşik kontrolü → tekrar
+    const burstLoop = async (): Promise<void> => {
+      if (!dinlemeRef.current || caliyorRef.current) return;
+
+      if (engine.isCoolingDown()) {
+        setCooldownKalan(Math.ceil(engine.cooldownRemaining() / 1000));
+        setConfidenceScore(0);
+        pollIntervalRef.current = setTimeout(burstLoop, 500) as unknown as ReturnType<typeof setInterval>;
+        return;
+      }
+      setCooldownKalan(0);
+
+      let rec: Audio.Recording | null = null;
+      try {
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: false });
+        const { recording } = await Audio.Recording.createAsync(WAV_RECORDING_OPTIONS as any);
+        rec = recording;
+        recordingRef.current = rec;
+
+        // Tam 975ms = 16000 × 0.975 = 15600 örnek
+        await new Promise<void>(res => setTimeout(res, 975));
+
+        if (!dinlemeRef.current) { await rec.stopAndUnloadAsync(); recordingRef.current = null; return; }
+
+        await rec.stopAndUnloadAsync();
+        const uri = rec.getURI();
+        rec = null; recordingRef.current = null;
+
+        if (uri) {
+          // 0-24 → sessizlik / 25-59 → şüpheli / 60+ → kesin ağlama
+          const score = await engine.inferFromWav(uri);
+          setConfidenceScore(score);
+
+          if (score >= engine.yamnetThreshold) {
             engine.triggerDetected();
             setConfidenceScore(0);
-            if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
             const g = aktifSesRef.current;
             if (g) sesCaldir(g);
+            return;
           }
-        } catch (_) {}
-      }, 500);
+        }
+      } catch (_) {
+        if (rec) { try { await rec.stopAndUnloadAsync(); } catch (__) {} recordingRef.current = null; }
+      }
+
+      if (dinlemeRef.current && !caliyorRef.current) {
+        pollIntervalRef.current = setTimeout(burstLoop, 50) as unknown as ReturnType<typeof setInterval>;
+      }
+    };
+
+    try {
+      burstLoop();
     } catch (e) { dinlemeRef.current = false; setDinleniyor(false); }
   };
 
@@ -948,6 +1008,10 @@ export default function Analiz() {
   const haftalikGruplar  = haftayaGoreGrupla(geceRaporlari);
   const haftaAnahtarlari = Object.keys(haftalikGruplar);
   const son7Gun          = son7GunHazirla(geceRaporlari, t.grafikGunler);
+  const son4Hafta        = Array.from({ length: 4 }, (_, i) => haftaKeyGetir(Date.now() - i * 7 * 24 * 3600 * 1000));
+  const haftaEtiketleri  = lang === 'en'
+    ? ['This Week', 'Last Week', '2 Weeks Ago', '3 Weeks Ago']
+    : ['Bu Hafta', 'Geçen Hafta', '2 Hafta Önce', '3 Hafta Önce'];
 
   const sabitNinniler = lang === 'en' ? sabitNinniListesiEN : sabitNinniListesiTR;
   const sabitKolik    = lang === 'en' ? sabitKolikListesiEN : sabitKolikListesiTR;
@@ -1064,40 +1128,183 @@ export default function Analiz() {
           </View>
         )}
 
-        {/* GEÇMİŞ GECELER */}
-        <View onLayout={e => { gecmisOffsetRef.current = e.nativeEvent.layout.y; }}>
-        <Text style={styles.bolumBaslik}>{t.gecmisGeceler}</Text>
-        {free ? (
-          <TouchableOpacity style={styles.arsivKilitKutu} onPress={() => { router.push('/paywall'); }}>
-            <Text style={styles.arsivKilitYazi}>{t.arsivKilit}</Text>
-            <Text style={styles.arsivKilitAlt}>{t.arsivKilitAlt}</Text>
-          </TouchableOpacity>
-        ) : geceRaporlari.length === 0 ? (
-          <View style={styles.bosKutu}><Text style={styles.bosKutuIkon}>📊</Text><Text style={styles.bosKutuYazi}>{t.bosRapor}</Text></View>
-        ) : (
-          haftaAnahtarlari.map((hafta) => (
-            <View key={hafta} style={styles.haftaGrubu}>
-              <TouchableOpacity style={styles.haftaBaslikRow} onPress={() => setAcikHafta(acikHafta === hafta ? null : hafta)}>
-                <Text style={styles.haftaBaslikYazi}>{t.haftaBaslik(hafta)}</Text>
-                <Text style={styles.haftaOk}>{acikHafta === hafta ? '▲' : '▼'}</Text>
+        {/* GEÇMİŞ UYKULAR + 7 GÜNLÜK UYKU SKORU — alt alta, tam genişlik */}
+        <View
+          style={{ gap: 12, marginBottom: 16 }}
+          onLayout={e => { gecmisOffsetRef.current = e.nativeEvent.layout.y; }}
+        >
+          {/* KART 1: Geçmiş Uykular — accordion, 4 hafta sabit */}
+          <View style={[styles.tekliKart, { width: screenWidth - 32 }]}>
+            <Text style={styles.tekliKartBaslik}>{t.gecmisGeceler}</Text>
+            {free ? (
+              <TouchableOpacity style={styles.kilitAlani} onPress={() => { router.push('/paywall'); }}>
+                <Text style={styles.arsivKilitYazi}>{t.arsivKilit}</Text>
+                <Text style={styles.arsivKilitAlt}>{t.arsivKilitAlt}</Text>
               </TouchableOpacity>
-              {acikHafta === hafta && haftalikGruplar[hafta].map((r) => (
-                <TouchableOpacity key={r.id} style={styles.geceRow} onPress={() => raporDetayAc(r)}>
-                  <View style={styles.geceRowSol}>
-                    <Text style={styles.geceTarih}>{formatTarihGuzel(r.baslangic)}</Text>
-                    <Text style={styles.geceSaat}>{formatSaat(r.baslangic) + ' → ' + formatSaat(r.bitis) + ' · ' + formatSure(r.toplamUyku)}</Text>
-                  </View>
-                  <View style={styles.geceRowSag}>
-                    <View style={[styles.puanDaire, { borderColor: kaliteRenk(r.uykuKalitesi) }]}>
-                      <Text style={[styles.puanYazi, { color: kaliteRenk(r.uykuKalitesi) }]}>{r.uykuKalitesi}</Text>
+            ) : geceRaporlari.length === 0 ? (
+              <View style={styles.bosKutu}>
+                <Text style={styles.bosKutuIkon}>📊</Text>
+                <Text style={styles.bosKutuYazi}>{t.bosRapor}</Text>
+              </View>
+            ) : (
+              <View>
+                {son4Hafta.map((hafta, i) => {
+                  const raporlar = haftalikGruplar[hafta] ?? [];
+                  const acik     = acikHafta === hafta;
+                  return (
+                    <View key={hafta} style={i > 0 ? { marginTop: 6 } : undefined}>
+                      <TouchableOpacity
+                        style={[styles.haftaHeaderRow, acik && styles.haftaHeaderRowAcik]}
+                        onPress={() => setAcikHafta(acik ? null : hafta)}
+                        activeOpacity={0.75}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={styles.haftaHeaderEmoji}>📅</Text>
+                          <Text style={styles.haftaHeaderYazi}>{haftaEtiketleri[i]}</Text>
+                          {raporlar.length > 0 && (
+                            <View style={styles.haftaSayisiBadge}>
+                              <Text style={styles.haftaSayisiYazi}>{raporlar.length}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.haftaHeaderOk}>{acik ? '▲' : '▼'}</Text>
+                      </TouchableOpacity>
+
+                      {acik && (
+                        raporlar.length === 0 ? (
+                          <View style={styles.haftaBosAlan}>
+                            <Text style={styles.haftaBosYazi}>{lang === 'en' ? 'No records this week' : 'Bu hafta kayıt yok'}</Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.accordionBody, { flexDirection: 'row' }]}>
+                            <ScrollView
+                              ref={gecmisScrollRef}
+                              showsVerticalScrollIndicator={false}
+                              style={{ flex: 1 }}
+                              onContentSizeChange={(_, h) => {
+                                gecmisContentH.current = h;
+                                const c = gecmisContainerH.current;
+                                if (c > 0) setGecmisThumbH(Math.max(36, h > c ? (c / h) * c : c));
+                              }}
+                              onLayout={(e) => {
+                                gecmisContainerH.current = e.nativeEvent.layout.height;
+                                const h = gecmisContentH.current;
+                                const c = e.nativeEvent.layout.height;
+                                setGecmisThumbH(Math.max(36, h > c ? (c / h) * c : c));
+                              }}
+                              onScroll={(e) => {
+                                const c = gecmisContainerH.current;
+                                const h = gecmisContentH.current;
+                                if (h <= c) return;
+                                const thumbH = Math.max(36, (c / h) * c);
+                                const maxT   = c - thumbH;
+                                gecmisThumbAnim.setValue(maxT > 0 ? (e.nativeEvent.contentOffset.y / (h - c)) * maxT : 0);
+                              }}
+                              scrollEventThrottle={16}
+                            >
+                              {raporlar.map((r) => (
+                                <TouchableOpacity key={r.id} style={styles.accordionGeceRow} onPress={() => raporDetayAc(r)}>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.accordionGeceTarih} numberOfLines={1}>{formatTarihGuzel(r.baslangic)}</Text>
+                                    <Text style={styles.accordionGeceSaat} numberOfLines={1}>{formatSaat(r.baslangic) + ' › ' + formatSure(r.toplamUyku)}</Text>
+                                  </View>
+                                  <View style={[styles.puanDaire, { borderColor: kaliteRenk(r.uykuKalitesi), width: 36, height: 36, borderRadius: 18 }]}>
+                                    <Text style={[styles.puanYazi, { color: kaliteRenk(r.uykuKalitesi), fontSize: 12 }]}>{r.uykuKalitesi}</Text>
+                                  </View>
+                                </TouchableOpacity>
+                              ))}
+                            </ScrollView>
+                            <View style={styles.scrollTrack}>
+                              <Animated.View
+                                style={[styles.scrollThumb, { height: gecmisThumbH, transform: [{ translateY: gecmisThumbAnim }] }]}
+                                {...gecmisPanResponder.panHandlers}
+                              />
+                            </View>
+                          </View>
+                        )
+                      )}
                     </View>
-                    <Text style={styles.geceOk}>›</Text>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
+          {/* KART 2: 7 Günlük Uyku Skoru */}
+          <View
+            style={[styles.tekliKart, { width: screenWidth - 32 }]}
+            onLayout={e => { grafikOffsetRef.current = e.nativeEvent.layout.y; }}
+          >
+            <Text style={styles.tekliKartBaslik}>{t.yedıGunGrafik}</Text>
+            {free ? (
+              <TouchableOpacity style={styles.kilitAlani} onPress={() => { router.push('/paywall'); }}>
+                <Text style={{ fontSize: 28 }}>📊</Text>
+                <Text style={styles.premiumKilitYazi}>{t.grafikKilit}</Text>
+                <Text style={styles.premiumKilitBtn}>{t.arsivKilitAlt}</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                {/* Bar chart */}
+                <View style={{ flexDirection: 'row' }}>
+                  {son7Gun.map((g, i) => {
+                    const barH = g.puan !== null ? Math.max(4, (g.puan / 100) * BAR_MAX_HEIGHT) : 0;
+                    const renk = g.puan !== null ? skorRenk(g.puan) : '#2a2a4a';
+                    return (
+                      <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                        {/* Skor barın üstünde */}
+                        <Text style={{ fontSize: 10, color: g.puan !== null ? renk : 'transparent', fontWeight: 'bold', height: 14, marginBottom: 2 }}>
+                          {g.puan !== null ? String(g.puan) : ' '}
+                        </Text>
+                        {/* Bar alanı — sabit yükseklik, bar tabandan büyür */}
+                        <View style={{ height: BAR_MAX_HEIGHT, justifyContent: 'flex-end', alignItems: 'center', width: '100%' }}>
+                          {g.puan !== null ? (
+                            <View style={[
+                              { height: barH, width: '72%', backgroundColor: renk, borderRadius: 4, opacity: g.bugun ? 1 : 0.72 },
+                              g.bugun && { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)' },
+                            ]} />
+                          ) : (
+                            <View style={{ height: 4, width: '72%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderStyle: 'dashed', borderRadius: 2 }} />
+                          )}
+                        </View>
+                        {/* X ekseni: gün adı */}
+                        <Text style={{ fontSize: 11, marginTop: 5, color: g.bugun ? 'white' : 'rgba(255,255,255,0.5)', fontWeight: g.bugun ? 'bold' : 'normal' }}>
+                          {g.gun}
+                        </Text>
+                        {/* X ekseni: tarih */}
+                        <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
+                          {g.tarih}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* Renk açıklaması (legend) */}
+                <View style={{ marginTop: 12, gap: 5 }}>
+                  <View style={{ flexDirection: 'row', gap: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4CAF50' }} />
+                      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{lang === 'tr' ? 'Mükemmel 85+' : 'Excellent 85+'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#8BC34A' }} />
+                      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{lang === 'tr' ? 'İyi 70–84' : 'Good 70–84'}</Text>
+                    </View>
                   </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ))
-        )}
+                  <View style={{ flexDirection: 'row', gap: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFC107' }} />
+                      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{lang === 'tr' ? 'Orta 50–69' : 'Fair 50–69'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#F44336' }} />
+                      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{lang === 'tr' ? 'Zayıf 0–49' : 'Poor 0–49'}</Text>
+                    </View>
+                  </View>
+                </View>
+              </>
+            )}
+          </View>
         </View>
 
         {/* UYKU REHBERİ */}
@@ -1134,44 +1341,6 @@ export default function Analiz() {
           )}
         </TouchableOpacity>
 
-        {/* 7 GÜNLÜK GRAFİK */}
-        <View onLayout={e => { grafikOffsetRef.current = e.nativeEvent.layout.y; }}>
-        <Text style={[styles.bolumBaslik, { marginTop: 16 }]}>{t.yedıGunGrafik}</Text>
-        {free ? (
-          <TouchableOpacity style={styles.premiumKilitKutu} onPress={() => { router.push('/paywall'); }}>
-            <Text style={styles.premiumKilitIkon}>📊</Text>
-            <Text style={styles.premiumKilitYazi}>{t.grafikKilit}</Text>
-            <Text style={styles.premiumKilitBtn}>{t.arsivKilitAlt}</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.grafikKart}>
-            <View style={styles.grafikIcerik}>
-              {son7Gun.map((g, i) => {
-                const barH = g.puan !== null ? Math.max(4, (g.puan / 100) * BAR_MAX_HEIGHT) : 4;
-                const renk = g.puan !== null ? kaliteRenk(g.puan) : 'rgba(255,255,255,0.1)';
-                return (
-                  <View key={i} style={styles.grafikSutun}>
-                    <Text style={[styles.grafikPuanText, { color: g.puan !== null ? renk : 'transparent' }]}>{g.puan !== null ? '' + g.puan : ' '}</Text>
-                    <View style={[styles.grafikBarAlani, { height: BAR_MAX_HEIGHT }]}>
-                      <View style={[styles.grafikBar, { height: barH, backgroundColor: renk, opacity: g.bugun ? 1 : 0.7 }]} />
-                    </View>
-                    <Text style={[styles.grafikGun, g.bugun && styles.grafikGunBugun]}>{g.gun}</Text>
-                    <Text style={styles.grafikTarih}>{'' + g.tarih}</Text>
-                  </View>
-                );
-              })}
-            </View>
-            <View style={styles.grafikAciklama}>
-              {[{ renk: '#4ade80' }, { renk: '#facc15' }, { renk: '#fb923c' }, { renk: '#f87171' }].map((item, i) => (
-                <View key={i} style={styles.grafikAciklamaRow}>
-                  <View style={[styles.grafikAciklamaNokta, { backgroundColor: item.renk }]} />
-                  <Text style={styles.grafikAciklamaYazi}>{t.grafikAciklama[i]}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-        </View>
 
         {/* GELİŞİM SIÇRAMASI — Wonder Weeks — herkese görünür */}
         {gelisimSicramasiVarMi && (
@@ -2044,4 +2213,32 @@ const styles = StyleSheet.create({
   buGeceIcinKutu:         { backgroundColor: 'rgba(157,140,239,0.1)', borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(157,140,239,0.25)', alignItems: 'center', gap: 8 },
   buGeceIcinBaslik:       { color: '#b8a8f8', fontSize: 14, fontWeight: 'bold' },
   buGeceIcinMesaj:        { color: 'rgba(255,255,255,0.8)', fontSize: 14, lineHeight: 22, textAlign: 'center' },
+
+  // Tekli kart (Geçmiş Uykular + 7 Günlük Uyku Skoru — tam genişlik, alt alta)
+  tekliKart:              { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  tekliKartBaslik:        { color: 'white', fontSize: 15, fontWeight: 'bold', marginBottom: 12 },
+  kilitAlani:             { alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 20 },
+  haftaHeaderRow:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
+  haftaHeaderRowAcik:     { backgroundColor: 'rgba(157,140,239,0.1)', borderColor: 'rgba(157,140,239,0.25)' },
+  haftaHeaderEmoji:       { fontSize: 14 },
+  haftaHeaderYazi:        { color: 'white', fontSize: 13, fontWeight: '600' },
+  haftaHeaderOk:          { color: 'rgba(255,255,255,0.4)', fontSize: 12 },
+  haftaSayisiBadge:       { backgroundColor: 'rgba(157,140,239,0.25)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 },
+  haftaSayisiYazi:        { color: '#b8a8f8', fontSize: 10, fontWeight: 'bold' },
+  haftaBosAlan:           { paddingVertical: 12, paddingHorizontal: 4, alignItems: 'center' },
+  haftaBosYazi:           { color: 'rgba(255,255,255,0.35)', fontSize: 12 },
+  accordionBody:          { marginTop: 6, maxHeight: 220, borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  accordionGeceRow:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', gap: 10 },
+  accordionGeceTarih:     { color: 'white', fontSize: 13, fontWeight: '600' },
+  accordionGeceSaat:      { color: 'rgba(255,255,255,0.45)', fontSize: 11, marginTop: 2 },
+  scrollTrack:            { width: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4, marginLeft: 4, overflow: 'hidden' },
+  scrollThumb:            { width: 8, backgroundColor: 'rgba(157,140,239,0.5)', borderRadius: 4 },
+  // Artık kullanılmayan ama bırakılan eski stiller (hata vermez)
+  ikiliKart:              { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  ikiliKartBaslik:        { color: 'white', fontSize: 13, fontWeight: 'bold', marginBottom: 10 },
+  ikiliGeceRow:           { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  ikiliGeceTarih:         { color: 'white', fontSize: 12, fontWeight: '600' },
+  ikiliGeceSure:          { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 1 },
+  ikiliPuanCizgi:         { width: 3, height: 12, borderRadius: 1.5 },
+  ikiliPuanYazi:          { fontSize: 11, fontWeight: 'bold' },
 });

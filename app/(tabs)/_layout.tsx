@@ -25,7 +25,8 @@ const KEY_ANNE_TOKEN      = 'lumibaby_anne_token';
 const KEY_PARTNER_TOKEN   = 'lumibaby_partner_token';
 const KEY_PARTNER_PREMIUM = 'partner_premium';
 const { width: SCREEN_W } = Dimensions.get('window');
-const QR_SIZE = SCREEN_W * 0.55;
+const QR_SIZE   = SCREEN_W * 0.55;
+const isTablet  = SCREEN_W >= 768;
 
 export async function sendAlertToAll(
   type: 'crying' | 'colic' | 'lullaby' | 'silence'
@@ -200,7 +201,7 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
 
   if (ekran === 'qr_tara') {
     return (
-      <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={() => setEkran('menu')}>
+      <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={() => setEkran('menu')} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
         <QRTaraEkrani onScanned={handleScanned} onClose={() => setEkran('menu')} />
       </Modal>
     );
@@ -213,7 +214,7 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
       : null;
     const cihazVar = bagliCihazlar.length >= 1;
     return (
-      <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setEkran('menu')}>
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setEkran('menu')} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setEkran('menu')} />
           <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: Math.max(insets.bottom + 16, 40), alignItems: 'center' }}>
@@ -244,7 +245,7 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
     );
   }
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
         <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: Math.max(insets.bottom + 8, 16), height: '85%' }}>
@@ -493,7 +494,7 @@ export default function TabLayout() {
       </Tabs>
 
       {/* BEBEK MODAL */}
-      <Modal visible={bebekModal} transparent animationType="slide" onRequestClose={() => setBebekModal(false)}>
+      <Modal visible={bebekModal} transparent animationType="slide" onRequestClose={() => setBebekModal(false)} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
         <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={() => setBebekModal(false)}>
           <TouchableOpacity activeOpacity={1} style={[s.modalSheet, { paddingBottom: Math.max(insets.bottom + 16, 40) }]}>
             <View style={s.modalHandle} />
@@ -518,7 +519,7 @@ export default function TabLayout() {
       </Modal>
 
       {/* PREMİUM MODAL */}
-      <Modal visible={premiumModal} transparent animationType="slide" onRequestClose={() => setPremiumModal(false)}>
+      <Modal visible={premiumModal} transparent animationType="slide" onRequestClose={() => setPremiumModal(false)} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
         <View style={s.modalBackdrop}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setPremiumModal(false)} />
           <View style={[s.premiumSheet, { paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
@@ -599,7 +600,7 @@ export default function TabLayout() {
       <PartnerModal visible={partnerModal} onClose={() => setPartnerModal(false)} />
 
       {/* AYARLAR MODAL */}
-      <Modal visible={ayarlarModal} transparent animationType="slide" onRequestClose={() => setAyarlarModal(false)}>
+      <Modal visible={ayarlarModal} transparent animationType="slide" onRequestClose={() => setAyarlarModal(false)} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
         <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={() => setAyarlarModal(false)}>
           <TouchableOpacity activeOpacity={1} style={[s.ayarlarSheet, { paddingBottom: Math.max(insets.bottom + 16, 16) }]}>
             <View style={s.modalHandle} />
@@ -737,7 +738,7 @@ export default function TabLayout() {
       </Modal>
 
       {/* TRİAL 5. GÜN POPUP — değerlendirme */}
-      <Modal visible={trial5Popup} transparent animationType="fade" onRequestClose={() => setTrial5Popup(false)}>
+      <Modal visible={trial5Popup} transparent animationType="fade" onRequestClose={() => setTrial5Popup(false)} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
         <View style={s.popupBackdrop}>
           <View style={s.popupKart}>
             <Text style={s.popupIkon}>⭐</Text>
@@ -764,7 +765,7 @@ export default function TabLayout() {
       </Modal>
 
       {/* TRİAL 6. GÜN POPUP — premium hatırlatma */}
-      <Modal visible={trial6Popup} transparent animationType="fade" onRequestClose={() => setTrial6Popup(false)}>
+      <Modal visible={trial6Popup} transparent animationType="fade" onRequestClose={() => setTrial6Popup(false)} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
         <View style={s.popupBackdrop}>
           <View style={s.popupKart}>
             <Text style={s.popupIkon}>👑</Text>
@@ -790,7 +791,7 @@ export default function TabLayout() {
 
       {/* DEV MENU — sadece __DEV__ modunda, production'da hiç render edilmez */}
       {__DEV__ && (
-        <Modal visible={devMenuVisible} transparent animationType="fade" onRequestClose={() => setDevMenuVisible(false)}>
+        <Modal visible={devMenuVisible} transparent animationType="fade" onRequestClose={() => setDevMenuVisible(false)} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
           <View style={s.devMenuBackdrop}>
             <View style={s.devMenuKutu}>
               <Text style={s.devMenuBaslik}>🛠️ Dev Menu</Text>
