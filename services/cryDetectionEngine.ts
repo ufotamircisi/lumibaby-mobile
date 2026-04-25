@@ -158,7 +158,10 @@ export class CryDetectionEngine {
         [],  // boş delegates = CPU çıkarımı
       );
       this.modelLoaded = true;
-    } catch {
+      console.log('[YAMNet] Model başarıyla yüklendi ✅');
+    } catch (e) {
+      console.error('[YAMNet] Model yüklenemedi:', e);
+      console.log('[YAMNet] model null mu:', this.model === null);
       this.model       = null;
       this.modelLoaded = false;
     }
@@ -180,8 +183,12 @@ export class CryDetectionEngine {
   // ── WAV'DAN YAMNet ÇIKARIMI ──────────────────────────────────────────────────
   // analiz.tsx burst döngüsünden çağrılır: uri → base64 → PCM → model → skor (0-100)
   async inferFromWav(uri: string): Promise<number> {
+    console.log('[YAMNet] inferFromWav çağrıldı, modelLoaded:', this.modelLoaded);
     if (!this.modelLoaded) await this.loadModel();
-    if (!this.model) return 0;
+    if (!this.model) {
+      console.log('[YAMNet] Model null, 0 dönüyor');
+      return 0;
+    }
     try {
       const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
       const parsed = parseWav(base64);
@@ -198,10 +205,12 @@ export class CryDetectionEngine {
         scores[WHIMPER_INDEX]  ?? 0,
       ) * 100;
       const score = Math.round(Math.min(100, confidence));
+      console.log('[YAMNet] Score:', score);
       this.lastScore      = score;
       this.lastConfidence = score;
       return score;
-    } catch {
+    } catch (e) {
+      console.error('[YAMNet] parseWav hatası:', e);
       return 0;
     }
   }

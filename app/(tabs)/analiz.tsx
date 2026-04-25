@@ -870,7 +870,8 @@ export default function Analiz() {
             return;
           }
         }
-      } catch (_) {
+      } catch (e) {
+        console.error('[YAMNet] burstLoop hatası:', e);
         if (rec) { try { await rec.stopAndUnloadAsync(); } catch (__) {} recordingRef.current = null; }
       }
 
