@@ -28,19 +28,43 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const QR_SIZE   = SCREEN_W * 0.55;
 const isTablet  = SCREEN_W >= 768;
 
+// Foreground'da gelen bildirimleri göster (setNotificationHandler tanımlı olmazsa sessizce düşer)
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
 export async function sendAlertToAll(
   type: 'crying' | 'colic' | 'lullaby' | 'silence'
 ): Promise<void> {
   const anneToken    = await AsyncStorage.getItem(KEY_ANNE_TOKEN);
   const partnerToken = await AsyncStorage.getItem(KEY_PARTNER_TOKEN);
   const myToken      = await AsyncStorage.getItem(KEY_MY_TOKEN);
-  const messages = {
+
+  let lang = 'tr';
+  try {
+    const saved = await AsyncStorage.getItem('lumibaby_lang');
+    if (saved === 'en' || saved === 'tr') lang = saved;
+  } catch {}
+
+  const messagesTR = {
     crying:  { title: '👶 Bebek Ağlıyor',   body: 'LumiBaby ağlama sesi algıladı.' },
     colic:   { title: '😣 Kolik Belirtisi',  body: 'Kolik sesi algılandı, müzik çalınıyor.' },
     lullaby: { title: '🎵 Ninni Çalıyor',    body: 'Bebek sakinleştirilmeye çalışılıyor.' },
     silence: { title: '😴 Bebek Sakinleşti', body: 'Artık ses algılanmıyor.' },
   };
-  const { title, body } = messages[type];
+  const messagesEN = {
+    crying:  { title: '👶 Baby Crying',      body: 'LumiBaby detected crying sounds.' },
+    colic:   { title: '😣 Colic Detected',   body: 'Colic sound detected, playing music.' },
+    lullaby: { title: '🎵 Lullaby Playing',  body: 'Trying to soothe the baby.' },
+    silence: { title: '😴 Baby Calmed Down', body: 'No more sound detected.' },
+  };
+  const { title, body } = (lang === 'en' ? messagesEN : messagesTR)[type];
   const targets: { to: string; sound: boolean }[] = [];
   if (anneToken)    targets.push({ to: anneToken,    sound: false }); // baby's phone — silent so Watch sees it
   if (partnerToken) targets.push({ to: partnerToken, sound: true  }); // parent's phone — loud
@@ -412,7 +436,7 @@ export default function TabLayout() {
       if (v === 'high' || v === 'balanced' || v === 'strict') setHassasiyetState(v);
     });
 
-    // Android notification channel
+    // Android notification channels
     if (Platform.OS === 'android') {
       Notifications.setNotificationChannelAsync('lumibaby-alerts', {
         name: 'LumiBaby Alerts',
@@ -420,6 +444,13 @@ export default function TabLayout() {
         sound: 'default',
         vibrationPattern: [0, 250, 250, 250],
         enableVibrate: true,
+      }).catch(() => {});
+      Notifications.setNotificationChannelAsync('wake-window', {
+        name: 'Uyanma Penceresi / Wake Window',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#6B4EFF',
+        sound: 'default',
       }).catch(() => {});
     }
 

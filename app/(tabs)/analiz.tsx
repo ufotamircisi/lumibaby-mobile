@@ -394,7 +394,8 @@ export default function Analiz() {
   const scrollRef           = useRef<ScrollView>(null);
   const gecmisOffsetRef     = useRef<number>(0);
   const grafikOffsetRef     = useRef<number>(0);
-  const bildirimIdRef       = useRef<string | null>(null);
+  const bildirimIdRef           = useRef<string | null>(null);
+  const wakeWindowNotifIdRef    = useRef<string | null>(null);
   const gecmisScrollRef     = useRef<ScrollView>(null);
   const gecmisThumbAnim     = useRef(new Animated.Value(0)).current;
   const gecmisContentH      = useRef(0);
@@ -735,7 +736,7 @@ export default function Analiz() {
     const sapma = Math.sqrt(baslangicSaatler.reduce((a, b) => a + Math.pow(b - ort, 2), 0) / baslangicSaatler.length);
     if (sapma <= 0.75) return 'dengeli';
     if (sapma <= 1.5)  return 'hafifKaymis';
-    return 'hafifKaymis';
+    return 'yetersiz';
   }, [geceRaporlari]);
 
   // ── UYKU HAFIZASI (geçen hafta bu gün) ──────────────────────────────────
@@ -870,6 +871,11 @@ export default function Analiz() {
   const bebekUyudu = async () => {
     const limitDoldu = await sleepLimitDoldu();
     if (limitDoldu) { router.push('/paywall'); return; }
+    // Önceki uyanma penceresi bildirimi varsa iptal et (bebek tekrar uyudu)
+    if (wakeWindowNotifIdRef.current) {
+      await Notifications.cancelScheduledNotificationAsync(wakeWindowNotifIdRef.current).catch(() => {});
+      wakeWindowNotifIdRef.current = null;
+    }
     await incrementSleepCount();
     const yeniKayit: UykuKaydi = { id: Date.now(), baslangic: Date.now(), bitis: null };
     setAktifKayit(yeniKayit); aktifKayitRef.current = yeniKayit;
@@ -1108,7 +1114,7 @@ export default function Analiz() {
       bildirimIdRef.current = null;
     }
     await herSeyiDurdur();
-    // Wake Window bildirimini planla
+    // Wake Window bildirimini OS seviyesinde planla (setTimeout Android'de arka planda çalışmaz)
     try {
       const haftalar = bebekHaftasiHesapla();
       if (haftalar !== null) {
@@ -1119,8 +1125,31 @@ export default function Analiz() {
         else if (haftalar < 24) wakeWindowDk = 120;
         else if (haftalar < 36) wakeWindowDk = 150;
         else                    wakeWindowDk = 180;
-        const msg = t.wakeWindowAcik(wakeWindowDk);
-        setTimeout(() => wakeWindowBildirimGonder(msg), wakeWindowDk * 60 * 1000);
+
+        const { status: wakeStatus } = await Notifications.getPermissionsAsync();
+        if (wakeStatus === 'granted') {
+          const bugun = new Date().toDateString();
+          const data  = await AsyncStorage.getItem(WAKE_WINDOW_BILDIRIM_KEY);
+          const obj   = data ? JSON.parse(data) : {};
+          const bugunSayisi = obj[bugun] || 0;
+          if (bugunSayisi < 3) {
+            const wakeId = await Notifications.scheduleNotificationAsync({
+              content: {
+                title: lang === 'en' ? '⏰ Wake Window' : '⏰ Uyanma Penceresi',
+                body:  t.wakeWindowAcik(wakeWindowDk),
+                sound: true,
+              },
+              trigger: {
+                seconds: wakeWindowDk * 60,
+                type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+                channelId: 'wake-window',
+              },
+            });
+            wakeWindowNotifIdRef.current = wakeId;
+            obj[bugun] = bugunSayisi + 1;
+            await AsyncStorage.setItem(WAKE_WINDOW_BILDIRIM_KEY, JSON.stringify(obj));
+          }
+        }
       }
     } catch {}
 
