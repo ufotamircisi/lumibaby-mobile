@@ -145,13 +145,26 @@ export class CryDetectionEngine {
 
   public lastConfidence:  number = 0;
   public yamnetThreshold: number = YAMNET_CRY_THRESHOLD.balanced;
+  public lastDb:          number = -50;
 
   // ── MODEL YÜKLEME ────────────────────────────────────────────────────────────
   async loadModel(): Promise<void> {
     if (this.modelLoaded) return;
+
+    // NitroModules (react-native-fast-tflite) kurulu değilse sessizce çık
+    let tflite: any;
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { loadTensorflowModel } = require('react-native-fast-tflite');
+      tflite = require('react-native-fast-tflite');
+    } catch (e) {
+      console.log('[YAMNet] NitroModules yok, genlik proxy aktif');
+      this.model       = null;
+      this.modelLoaded = false;
+      return;
+    }
+
+    try {
+      const { loadTensorflowModel } = tflite;
       this.model = await loadTensorflowModel(
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         require('../assets/models/yamnet.tflite'),
@@ -178,6 +191,12 @@ export class CryDetectionEngine {
 
   configure(sensitivity: SensitivityLevel): void {
     this.yamnetThreshold = YAMNET_CRY_THRESHOLD[sensitivity];
+  }
+
+  getAmplitudeScore(): number {
+    if (this.ambientDb === 0) return 0;
+    const diff = this.lastDb - this.ambientDb;
+    return Math.min(100, Math.max(0, Math.round(diff * 3)));
   }
 
   // ── WAV'DAN YAMNet ÇIKARIMI ──────────────────────────────────────────────────

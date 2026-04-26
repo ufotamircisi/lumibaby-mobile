@@ -834,7 +834,7 @@ export default function Analiz() {
       kalRec = recording;
       const ornekler: number[] = [];
       const interval = setInterval(async () => {
-        try { const st = await recording.getStatusAsync(); const db = (st as any).metering ?? -160; if (db > -160) ornekler.push(db); } catch (_) {}
+        try { const st = await recording.getStatusAsync(); const db = (st as any).metering ?? -160; if (db > -160) { ornekler.push(db); cryEngineRef.current.lastDb = db; } } catch (_) {}
       }, 200);
       await new Promise(res => setTimeout(res, KALIBRASYON_SURE_MS));
       clearInterval(interval);
@@ -885,10 +885,11 @@ export default function Analiz() {
 
         if (uri) {
           // 0-24 → sessizlik / 25-59 → şüpheli / 60+ → kesin ağlama
-          const score = await engine.inferFromWav(uri);
-          setConfidenceScore(score);
+          const yamnetScore = await engine.inferFromWav(uri);
+          const finalScore  = yamnetScore > 0 ? yamnetScore : engine.getAmplitudeScore();
+          setConfidenceScore(finalScore);
 
-          if (score >= engine.yamnetThreshold) {
+          if (finalScore >= engine.yamnetThreshold) {
             engine.triggerDetected();
             setConfidenceScore(0);
             const g = aktifSesRef.current;
