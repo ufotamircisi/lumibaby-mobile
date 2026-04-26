@@ -98,13 +98,26 @@ function _fmtT(h: number, m: number): string {
 
 // ── UYKU SKORU (100'den düşen sistem) ────────────────────────────────────────
 // MIN_SCORE = 10 — final skor asla 10'un altına düşmez.
-//
-// Örnek: 4-11 ay, 5s 36dk uyku, 04:56 başlangıç (exploit), 0 ağlama, 16dk dalma
-//   eksik = 12 - 5.6 = 6.4s → -(min(6.4,2)*10 + max(0,6.4-2)*5) = -(20+22) = -42
-//   geç başlangıç (03:00-04:59) → sabit -20
-//   dalma (16dk, 10-20dk arası) → -3
-//   toplam: 100 - 42 - 20 - 3 - 0 = 35 → büyük etki: uyku süresi (42/65 = %65)
 const _MIN_SCORE = 10;
+
+function _gunduzHedef(haftasi: number | null): { min: number; max: number } {
+  if (haftasi === null)   return { min: 1, max: 3 };
+  if (haftasi <= 12)      return { min: 6, max: 8 };
+  if (haftasi <= 26)      return { min: 4, max: 5 };
+  if (haftasi <= 52)      return { min: 3, max: 4 };
+  if (haftasi <= 78)      return { min: 2, max: 3 };
+  if (haftasi <= 156)     return { min: 1, max: 2 };
+  return { min: 0, max: 1 };
+}
+
+function _geceMin(haftasi: number | null): number {
+  if (haftasi === null)   return 10;
+  if (haftasi <= 12)      return 8;
+  if (haftasi <= 26)      return 9;
+  if (haftasi <= 52)      return 10;
+  if (haftasi <= 156)     return 10;
+  return 9;
+}
 
 function uykuSkoruHesapla(
   toplamUyku: number,
@@ -142,33 +155,35 @@ function uykuSkoruHesapla(
     });
   }
 
-  // ── YAŞ GRUBUNA GÖRE MİNİMUM UYKU ────────────────────────────────────────────
-  // 0-12h: 14s | 13-47h: 12s | 48-104h: 11s | 105-260h: 10s | 261+h: 9s
-  let minGece = 11;
-  if (bebekHaftasi !== null) {
-    if (bebekHaftasi <= 12)       minGece = 14;
-    else if (bebekHaftasi <= 47)  minGece = 12;
-    else if (bebekHaftasi <= 104) minGece = 11;
-    else if (bebekHaftasi <= 260) minGece = 10;
-    else                          minGece =  9;
-  }
-
   // ── SÜRE KESINTISI (yumuşatılmış) ────────────────────────────────────────────
-  // İlk 2s eksik: -10/s | Sonraki: -5/s | Max: -50
+  // Gece: İlk 2s eksik -10/s, sonraki -5/s, max -50
+  // Gündüz: eksik aynı formül; fazla 0<f≤1s -5, f>1s -15
   let surePuan = 0;
   let sureBaslik: string;
   if (isGunduz) {
-    if (toplamSaat < 1) {
-      surePuan = -10;
+    const hedef = _gunduzHedef(bebekHaftasi);
+    const fazla = Math.max(0, toplamSaat - hedef.max);
+    const eksik = Math.max(0, hedef.min - toplamSaat);
+    const hedefStr = `${hedef.min}–${hedef.max}`;
+    if (eksik > 0) {
+      const p1 = Math.min(eksik, 2) * 10;
+      const p2 = Math.max(0, eksik - 2) * 5;
+      surePuan = -Math.min(50, Math.round(p1 + p2));
       sureBaslik = lang === 'en'
-        ? `Duration (${_fmtH(toplamSaat, lang)}, short nap < 1h)`
-        : `Süre (${_fmtH(toplamSaat, lang)}, kısa nap < 1s)`;
+        ? `Nap (target ${hedefStr}h, slept ${_fmtH(toplamSaat, lang)}, ${_fmtH(eksik, lang)} short)`
+        : `Gündüz süresi (hedef ${hedefStr}s, ${_fmtH(toplamSaat, lang)} uyudu, ${_fmtH(eksik, lang)} eksik)`;
+    } else if (fazla > 0) {
+      surePuan = fazla <= 1 ? -5 : -15;
+      sureBaslik = lang === 'en'
+        ? `Nap (target ${hedefStr}h, ${_fmtH(toplamSaat, lang)}, ${_fmtH(fazla, lang)} over)`
+        : `Gündüz süresi (hedef ${hedefStr}s, ${_fmtH(toplamSaat, lang)}, ${_fmtH(fazla, lang)} fazla)`;
     } else {
       sureBaslik = lang === 'en'
-        ? `Duration (${_fmtH(toplamSaat, lang)}, ideal 1–3h)`
-        : `Süre (${_fmtH(toplamSaat, lang)}, ideal 1–3s)`;
+        ? `Nap (target ${hedefStr}h, ${_fmtH(toplamSaat, lang)} ✓)`
+        : `Gündüz süresi (hedef ${hedefStr}s, ${_fmtH(toplamSaat, lang)} ✓)`;
     }
   } else {
+    const minGece = _geceMin(bebekHaftasi);
     const eksik = Math.max(0, minGece - toplamSaat);
     if (eksik > 0) {
       const p1 = Math.min(eksik, 2) * 10;
@@ -275,6 +290,11 @@ function uykuSkoruHesapla(
   return { toplam: Math.max(_MIN_SCORE, Math.min(100, toplam)), detaylar };
 }
 
+function _isGunduzRapor(r: GeceRaporu): boolean {
+  const h = new Date(r.baslangic).getHours();
+  return h >= 5 && h < 18 && r.toplamUyku / 3600 <= 3;
+}
+
 function son7GunHazirla(raporlar: GeceRaporu[], gunIsimleri: string[]) {
   const bugun = new Date();
   const gunler = [];
@@ -283,8 +303,22 @@ function son7GunHazirla(raporlar: GeceRaporu[], gunIsimleri: string[]) {
     gun.setDate(bugun.getDate() - i);
     const gunBaslangic = new Date(gun.getFullYear(), gun.getMonth(), gun.getDate()).getTime();
     const gunBitis = gunBaslangic + 86400000;
-    const rapor = raporlar.find(r => r.baslangic >= gunBaslangic && r.baslangic < gunBitis);
-    gunler.push({ gun: gunIsimleri[gun.getDay()], tarih: gun.getDate(), puan: rapor ? rapor.uykuKalitesi : null, bugun: i === 0 });
+    const raporlarGun = raporlar.filter(r => r.baslangic >= gunBaslangic && r.baslangic < gunBitis);
+    const gunduz = raporlarGun.find(r => _isGunduzRapor(r));
+    const gece = raporlarGun.find(r => !_isGunduzRapor(r));
+    let puan: number | null = null;
+    let etiket: 'G+N' | 'G' | 'N' | null = null;
+    if (gunduz && gece) {
+      puan = Math.round((gunduz.uykuKalitesi + gece.uykuKalitesi) / 2);
+      etiket = 'G+N';
+    } else if (gunduz) {
+      puan = gunduz.uykuKalitesi;
+      etiket = 'G';
+    } else if (gece) {
+      puan = gece.uykuKalitesi;
+      etiket = 'N';
+    }
+    gunler.push({ gun: gunIsimleri[gun.getDay()], tarih: gun.getDate(), puan, etiket, bugun: i === 0 });
   }
   return gunler;
 }
@@ -1448,6 +1482,12 @@ export default function Analiz() {
                         <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
                           {g.tarih}
                         </Text>
+                        {/* G / N / G+N etiketi */}
+                        {g.etiket !== null && (
+                          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.28)' }}>
+                            {g.etiket}
+                          </Text>
+                        )}
                       </View>
                     );
                   })}

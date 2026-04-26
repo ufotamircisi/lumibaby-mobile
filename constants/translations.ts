@@ -517,7 +517,7 @@ const tr = {
   buGeceIcinMesajlar: [
     'Harika bir gece geçirdiniz! Bebeğiniz çok iyi uyudu 🌟',
     'İyi bir gece oldu. Küçük adımlar, büyük başarılar 💜',
-    'Zorlu bir gece olmuş olabilir ama siz hep oradadınız 🤍',
+    'Zorlu bir gece olmuş olabilir ama siz hep oradasınız 🤍',
     'Yorucu bir gece geçtiyse de kendinize iyi bakın 🌙',
   ],
 
