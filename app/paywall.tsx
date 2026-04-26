@@ -1,5 +1,6 @@
-import { getOfferings, purchasePackage, restorePurchases } from '@/services/revenuecat';
+import { getOfferings, purchasePackage, restorePurchases, ENTITLEMENT_ID } from '@/services/revenuecat';
 import { s as rsp } from '@/constants/responsive';
+import { useLang } from '@/hooks/useLang';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -11,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Purchases from 'react-native-purchases';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type PlanId = 'monthly' | 'yearly';
@@ -25,16 +27,29 @@ interface Plan {
 }
 
 export default function PaywallScreen() {
-  const [plans, setPlans]           = useState<Plan[]>([]);
-  const [selected, setSelected]     = useState<PlanId>('yearly');
-  const [loading, setLoading]       = useState(true);
-  const [purchasing, setPurchasing] = useState(false);
-  const [restoring, setRestoring]   = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+  const { t } = useLang();
+
+  const [plans, setPlans]               = useState<Plan[]>([]);
+  const [selected, setSelected]         = useState<PlanId>('yearly');
+  const [loading, setLoading]           = useState(true);
+  const [purchasing, setPurchasing]     = useState(false);
+  const [restoring, setRestoring]       = useState(false);
+  const [error, setError]               = useState<string | null>(null);
+  const [trialKullanildi, setTrialKullanildi] = useState(false);
 
   useEffect(() => {
     loadOfferings();
+    checkTrialStatus();
   }, []);
+
+  async function checkTrialStatus() {
+    try {
+      const info = await Purchases.getCustomerInfo();
+      setTrialKullanildi(info.entitlements.all[ENTITLEMENT_ID] !== undefined);
+    } catch (e) {
+      console.warn('[RevenueCat] trial check failed:', e);
+    }
+  }
 
   async function loadOfferings() {
     try {
@@ -42,7 +57,8 @@ export default function PaywallScreen() {
       setError(null);
       const offering = await getOfferings();
       if (!offering?.availablePackages?.length) {
-        setError('Planlar yüklenemedi. Lütfen tekrar deneyin.');
+        console.warn('[RevenueCat] No current offering or empty packages');
+        setError(t.pwHataYukleme);
         return;
       }
 
@@ -51,16 +67,16 @@ export default function PaywallScreen() {
         const pid = pkg.identifier as string;
         const price: string = pkg.product?.priceString ?? '';
         if (pid.includes('monthly') || pid === '$rc_monthly') {
-          built.push({ id: 'monthly', pkg, title: 'Aylık Plan', price: price || '$6.99', period: 'ay' });
+          built.push({ id: 'monthly', pkg, title: t.pwAylik, price: price || '$6.99', period: t.pwAy });
         } else if (pid.includes('yearly') || pid === '$rc_annual') {
-          built.push({ id: 'yearly', pkg, title: 'Yıllık Plan', price: price || '$49.99', period: 'yıl', badge: '%40 Tasarruf' });
+          built.push({ id: 'yearly', pkg, title: t.pwYillik, price: price || '$49.99', period: t.pwYil, badge: t.pwTasarruf });
         }
       }
-      // Ensure yearly first
       built.sort((a, b) => (a.id === 'yearly' ? -1 : 1));
       setPlans(built);
-    } catch {
-      setError('Planlar yüklenemedi. İnternet bağlantınızı kontrol edin.');
+    } catch (e) {
+      console.error('[RevenueCat] getOfferings error:', e);
+      setError(t.pwHataInternet);
     } finally {
       setLoading(false);
     }
@@ -73,12 +89,13 @@ export default function PaywallScreen() {
       setPurchasing(true);
       setError(null);
       await purchasePackage(plan.pkg);
-      Alert.alert('Teşekkürler!', 'Premium üyeliğiniz aktif edildi.', [
-        { text: 'Harika!', onPress: () => router.back() },
+      Alert.alert(t.pwSatinAlindi, t.pwSatinAlindiAcik, [
+        { text: t.pwHarika, onPress: () => router.back() },
       ]);
     } catch (e: any) {
       if (e?.userCancelled) return;
-      setError('Satın alma işlemi başarısız. Lütfen tekrar deneyin.');
+      console.error('[RevenueCat] purchase error:', e);
+      setError(t.pwSatinAlmaBas);
     } finally {
       setPurchasing(false);
     }
@@ -90,14 +107,15 @@ export default function PaywallScreen() {
       setError(null);
       const isPremium = await restorePurchases();
       if (isPremium) {
-        Alert.alert('Başarılı', 'Satın alımlarınız geri yüklendi.', [
-          { text: 'Tamam', onPress: () => router.back() },
+        Alert.alert(t.pwBasarili, t.pwGeriYuklendi, [
+          { text: t.tamam, onPress: () => router.back() },
         ]);
       } else {
-        Alert.alert('Bulunamadı', 'Bu hesaba ait aktif bir satın alım bulunamadı.');
+        Alert.alert(t.pwBulunamadi, t.pwBulunamadıAcik);
       }
-    } catch {
-      setError('Geri yükleme başarısız. Lütfen tekrar deneyin.');
+    } catch (e) {
+      console.error('[RevenueCat] restore error:', e);
+      setError(t.pwGeriYuklemBas);
     } finally {
       setRestoring(false);
     }
@@ -114,12 +132,12 @@ export default function PaywallScreen() {
         </TouchableOpacity>
 
         <Text style={s.crown}>👑</Text>
-        <Text style={s.title}>LumiBaby Premium</Text>
-        <Text style={s.subtitle}>Tüm özelliklerin kilidini aç, bebeğinle daha derin bağ kur.</Text>
+        <Text style={s.title}>{t.pwBaslik}</Text>
+        <Text style={s.subtitle}>{t.pwAltBaslik}</Text>
 
         {/* Features */}
         <View style={s.featureList}>
-          {FEATURES.map(f => (
+          {t.pwOzellikler.map(f => (
             <View key={f} style={s.featureRow}>
               <Text style={s.featureCheck}>✓</Text>
               <Text style={s.featureTxt}>{f}</Text>
@@ -134,7 +152,7 @@ export default function PaywallScreen() {
           <View style={s.errorBox}>
             <Text style={s.errorTxt}>{error}</Text>
             <TouchableOpacity style={s.retryBtn} onPress={loadOfferings}>
-              <Text style={s.retryTxt}>Tekrar Dene</Text>
+              <Text style={s.retryTxt}>{t.pwTekrarDene}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -181,9 +199,13 @@ export default function PaywallScreen() {
           ) : (
             <>
               <Text style={s.ctaTxt}>
-                {selectedPlan ? `${selectedPlan.price} ile Başla` : 'Premium\'a Geç'}
+                {selectedPlan ? t.pwIleBasla(selectedPlan.price) : t.pwUpgradeBtn}
               </Text>
-              <Text style={s.ctaSubTxt}>7 gün ücretsiz deneme — İstediğinde iptal et</Text>
+              <Text style={s.ctaSubTxt}>
+                {trialKullanildi
+                  ? t.pwIptalEt
+                  : `${t.pwDenemeBtn} — ${t.pwIptalEt}`}
+              </Text>
             </>
           )}
         </TouchableOpacity>
@@ -192,26 +214,15 @@ export default function PaywallScreen() {
         <TouchableOpacity style={s.restoreBtn} onPress={handleRestore} disabled={restoring}>
           {restoring
             ? <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
-            : <Text style={s.restoreTxt}>Satın Alımları Geri Yükle</Text>
+            : <Text style={s.restoreTxt}>{t.pwGeriYukle}</Text>
           }
         </TouchableOpacity>
 
-        <Text style={s.legal}>
-          Abonelik otomatik yenilenir. iTunes hesabınızdan ücret alınır. Yenileme döneminin en az 24 saat öncesinde iptal edilmediği sürece abonelik yenilenir.
-        </Text>
+        <Text style={s.legal}>{t.pwYasal}</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-const FEATURES = [
-  'Sınırsız ağlama analizi',
-  'YAMNet AI bebek tespiti',
-  'Sınırsız ninni & uyku müzikleri',
-  'Kolik & ağrı rehberi',
-  'Kişisel ses hikayeleri',
-  'Reklamsız deneyim',
-];
 
 const s = StyleSheet.create({
   root:             { flex: 1, backgroundColor: '#07101e' },

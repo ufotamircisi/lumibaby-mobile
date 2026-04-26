@@ -2,7 +2,7 @@
 import AdBanner from '@/components/AdBanner';
 import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
-import { incrementSleepCount, usePremium } from '@/hooks/usePremium';
+import { usePremium } from '@/hooks/usePremium';
 import { showInterstitialIfReady } from '@/services/adMob';
 import * as audioManager from '@/services/audioManager';
 import { CONFIDENCE_THRESHOLD, CryDetectionEngine, WAV_RECORDING_OPTIONS, type SensitivityLevel } from '@/services/cryDetectionEngine';
@@ -378,13 +378,13 @@ const sabitKolikListesiEN: SesTip[] = [
 ];
 
 export default function Analiz() {
-  const { isTrial, canAccessPremium, detektorHak, analizHak, detektorReklamGoster, analizReklamGoster, detektorKullan, analizKullan, reklamIzleDetektor, reklamIzleAnaliz, premiumAktifEt, sleepLimitDoldu } = usePremium();
+  const { isTrial, canAccessPremium, detektorHak, analizHak, uykuHak, detektorReklamGoster, analizReklamGoster, uykuReklamGoster, detektorKullan, analizKullan, uykuKullan, reklamIzleDetektor, reklamIzleAnaliz, reklamIzleUyku, premiumAktifEt } = usePremium();
   const router = useRouter();
   const { lang, t } = useLang();
   const free = !canAccessPremium;
 
   const [paywallVisible, setPaywallVisible] = useState(false);
-  const [paywallTip, setPaywallTip]         = useState<'detektor' | 'analiz' | 'premium'>('premium');
+  const [paywallTip, setPaywallTip]         = useState<'detektor' | 'analiz' | 'uyku' | 'premium'>('premium');
   const [bebekAdi, setBebekAdi]             = useState('');
 
   const [uyuyorMu, setUyuyorMu]             = useState(false);
@@ -885,14 +885,16 @@ export default function Analiz() {
   }, [cryCevaplar, crySonucHesapla, crySonucuKaydet]);
 
   const bebekUyudu = async () => {
-    const limitDoldu = await sleepLimitDoldu();
-    if (limitDoldu) { router.push('/paywall'); return; }
+    if (free) {
+      if (uykuHak <= 0) { setPaywallTip('uyku'); setPaywallVisible(true); return; }
+      const hakKullanildi = await uykuKullan();
+      if (!hakKullanildi) { setPaywallTip('uyku'); setPaywallVisible(true); return; }
+    }
     // Önceki uyanma penceresi bildirimi varsa iptal et (bebek tekrar uyudu)
     if (wakeWindowNotifIdRef.current) {
       await Notifications.cancelScheduledNotificationAsync(wakeWindowNotifIdRef.current).catch(() => {});
       wakeWindowNotifIdRef.current = null;
     }
-    await incrementSleepCount();
     const yeniKayit: UykuKaydi = { id: Date.now(), baslangic: Date.now(), bitis: null };
     setAktifKayit(yeniKayit); aktifKayitRef.current = yeniKayit;
     setUyuyorMu(true); setSure(0); setDetektorSure(0);
@@ -2171,16 +2173,18 @@ export default function Analiz() {
           isTrial ? undefined
           : paywallTip === 'detektor' && detektorReklamGoster ? async () => { setPaywallVisible(false); await reklamIzleDetektor(lang); }
           : paywallTip === 'analiz'   && analizReklamGoster   ? async () => { setPaywallVisible(false); await reklamIzleAnaliz(lang); }
+          : paywallTip === 'uyku'     && uykuReklamGoster     ? async () => { setPaywallVisible(false); await reklamIzleUyku(lang); }
           : undefined
         }
         limitMesaji={
           !isTrial && (
             (paywallTip === 'detektor' && !detektorReklamGoster) ||
-            (paywallTip === 'analiz'   && !analizReklamGoster)
+            (paywallTip === 'analiz'   && !analizReklamGoster)   ||
+            (paywallTip === 'uyku'     && !uykuReklamGoster)
           ) ? t.gunlukLimit : undefined
         }
-        baslik={paywallTip === 'detektor' ? t.paywallDetektorBaslik : paywallTip === 'analiz' ? t.paywallAnalizBaslik : t.paywallPremiumBaslik}
-        aciklama={paywallTip === 'detektor' ? t.paywallDetektorAcik : paywallTip === 'analiz' ? t.paywallAnalizAcik : t.paywallPremiumAcik}
+        baslik={paywallTip === 'detektor' ? t.paywallDetektorBaslik : paywallTip === 'analiz' ? t.paywallAnalizBaslik : paywallTip === 'uyku' ? t.paywallUykuBaslik : t.paywallPremiumBaslik}
+        aciklama={paywallTip === 'detektor' ? t.paywallDetektorAcik : paywallTip === 'analiz' ? t.paywallAnalizAcik : paywallTip === 'uyku' ? t.paywallUykuAcik : t.paywallPremiumAcik}
       />
     </View>
   );
