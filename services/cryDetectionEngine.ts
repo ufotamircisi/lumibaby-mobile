@@ -199,18 +199,33 @@ export class CryDetectionEngine {
     return Math.min(100, Math.max(0, Math.round(diff * 3)));
   }
 
+  private calculateDbFromPcm(pcm: Float32Array): number {
+    if (!pcm || pcm.length === 0) return -160;
+    let sumSquares = 0;
+    for (let i = 0; i < pcm.length; i++) {
+      sumSquares += pcm[i] * pcm[i];
+    }
+    const rms = Math.sqrt(sumSquares / pcm.length);
+    if (rms === 0) return -160;
+    return 20 * Math.log10(rms);
+  }
+
   // ── WAV'DAN YAMNet ÇIKARIMI ──────────────────────────────────────────────────
   // analiz.tsx burst döngüsünden çağrılır: uri → base64 → PCM → model → skor (0-100)
   async inferFromWav(uri: string): Promise<number> {
     console.log('[YAMNet] inferFromWav çağrıldı, modelLoaded:', this.modelLoaded);
     if (!this.modelLoaded) await this.loadModel();
-    if (!this.model) {
-      console.log('[YAMNet] Model null, 0 dönüyor');
-      return 0;
-    }
     try {
       const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
       const parsed = parseWav(base64);
+      if (parsed) {
+        // Her turda lastDb güncelle — model null olsa bile fallback güncel kalır
+        this.lastDb = this.calculateDbFromPcm(parsed.samples);
+      }
+      if (!this.model) {
+        console.log('[YAMNet] Model null, 0 dönüyor');
+        return 0;
+      }
       if (!parsed) return 0;
       const { samples, sampleRate } = parsed;
       const resampled = resample(samples, sampleRate, YAMNET_RATE);

@@ -841,9 +841,11 @@ export default function Analiz() {
       await kalRec.stopAndUnloadAsync();
       kalRec = null;
       cryEngineRef.current.calibrate(ornekler);
+      console.log('[CryEngine] Kalibrasyon bitti, ambientDb:', (cryEngineRef.current as any).ambientDb);
     } catch (_) {
       if (kalRec) { try { await kalRec.stopAndUnloadAsync(); } catch (__) {} }
       cryEngineRef.current.calibrate([-50]);
+      console.log('[CryEngine] Kalibrasyon hata, ambientDb: -50');
     }
   };
 
