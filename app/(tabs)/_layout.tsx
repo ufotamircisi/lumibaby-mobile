@@ -136,18 +136,30 @@ function PartnerModal({ visible, onClose }: { visible: boolean; onClose: () => v
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [token, c1, bebekAdi_, dogumTarihi_] = await Promise.all([
-      AsyncStorage.getItem(KEY_MY_TOKEN),
-      AsyncStorage.getItem(KEY_ANNE_TOKEN),
-      AsyncStorage.getItem('bebek_adi'),
-      AsyncStorage.getItem('bebek_dogum_tarihi'),
-    ]);
-    setMyToken(token);
-    setBagliCihazlar([c1].filter(Boolean) as string[]);
-    setBebekAdi(bebekAdi_ || '');
-    setDogumTarihi(dogumTarihi_ || '');
-    setLoading(false);
+    try {
+      const [token, c1, bebekAdi_, dogumTarihi_] = await Promise.all([
+        AsyncStorage.getItem(KEY_MY_TOKEN),
+        AsyncStorage.getItem(KEY_ANNE_TOKEN),
+        AsyncStorage.getItem('bebek_adi'),
+        AsyncStorage.getItem('bebek_dogum_tarihi'),
+      ]);
+      setMyToken(token);
+      setBagliCihazlar([c1].filter(Boolean) as string[]);
+      setBebekAdi(bebekAdi_ || '');
+      setDogumTarihi(dogumTarihi_ || '');
+    } catch (e) {
+      console.warn('PartnerModal load hatası:', e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  // 10 saniye zaman aşımı — AsyncStorage erişimi donduğunda spinner takılmasın
+  useEffect(() => {
+    if (!loading) return;
+    const timeout = setTimeout(() => setLoading(false), 10000);
+    return () => clearTimeout(timeout);
+  }, [loading]);
 
   useEffect(() => { if (visible) { setEkran('menu'); load(); } }, [visible]);
 

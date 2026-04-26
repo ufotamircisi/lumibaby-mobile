@@ -130,8 +130,10 @@ function uykuSkoruHesapla(
   // Gündüz >3s → gece kuralları uygula + uyarı ekle
   const toplamSaat = toplamUyku / 3600;
   let isGunduz = isGunduzInput;
+  let reclassified = false;
   if (isGunduz && toplamSaat > 3) {
     isGunduz = false;
+    reclassified = true;
     detaylar.push({
       baslik: lang === 'en'
         ? `Reclassified as night sleep (nap > 3h)`
@@ -207,7 +209,13 @@ function uykuSkoruHesapla(
     let saatPuan = 0;
     let saatBaslik: string;
 
-    if (startMin >= 180 && startMin < 300) {
+    if (reclassified && bSaat < 18) {
+      // Gündüzden yeniden sınıflandırılan uyku: gündüz saatinde başlamış gece uykusu
+      saatPuan = -10;
+      saatBaslik = lang === 'en'
+        ? `Bedtime (${_fmtT(bSaat, bDakika)}, daytime-started sleep)`
+        : `Başlangıç (${_fmtT(bSaat, bDakika)}, gündüz başlatılan uyku)`;
+    } else if (startMin >= 180 && startMin < 300) {
       // 03:00–04:59 exploit koruması: geç gece uykusu başlatma
       saatPuan = -20;
       saatBaslik = lang === 'en'
@@ -469,8 +477,8 @@ export default function Analiz() {
   }, []));
 
   useEffect(() => {
-    AsyncStorage.getItem('anne_ninni_kayit').then(v => { if (v) setAnneNinniUri(JSON.parse(v).uri); });
-    AsyncStorage.getItem('anne_pispis_kayit').then(v => { if (v) setAnnePisPisUri(JSON.parse(v).uri); });
+    AsyncStorage.getItem('anne_ninni_kayit').then(v => { if (v) { try { setAnneNinniUri(JSON.parse(v).uri); } catch (e) { console.warn('anne_ninni_kayit parse hatası:', e); } } });
+    AsyncStorage.getItem('anne_pispis_kayit').then(v => { if (v) { try { setAnnePisPisUri(JSON.parse(v).uri); } catch (e) { console.warn('anne_pispis_kayit parse hatası:', e); } } });
     AsyncStorage.getItem('bebek_adi').then(v => { if (v) setBebekAdi(v); });
     AsyncStorage.getItem('bebek_dogum_tarihi').then(v => { if (v) setDogumTarihi(v); });
     AsyncStorage.getItem(SES_OGRENME_KEY).then(v => {
@@ -936,7 +944,8 @@ export default function Analiz() {
   };
 
   const sesSecildi = async (ses: SesTip) => {
-    const tip = modalTipRef.current!;
+    const tip = modalTipRef.current;
+    if (!tip) { console.warn('sesSecildi: modalTipRef null'); return; }
     setSesListeModal(false);
     if (tip === 'aglama') setSeciliNinni(ses); else setSeciliKolik(ses);
     setSeciliDetektor(tip); aktifSesRef.current = ses; aktifDedektorRef.current = tip;

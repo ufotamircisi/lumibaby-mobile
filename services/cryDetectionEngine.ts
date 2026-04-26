@@ -194,7 +194,11 @@ export class CryDetectionEngine {
   }
 
   getAmplitudeScore(): number {
-    if (this.ambientDb === 0) return 0;
+    // Kalibrasyon henüz yapılmamış (ambientDb varsayılan değerinde):
+    // lastDb -30 dB üzerindeyse muhtemelen ses var, 50 döndür.
+    if (this.ambientDb === 0 || this.ambientDb === -50) {
+      return this.lastDb > -30 ? 50 : 0;
+    }
     const diff = this.lastDb - this.ambientDb;
     return Math.min(100, Math.max(0, Math.round(diff * 3)));
   }
