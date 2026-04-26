@@ -8,7 +8,7 @@
 // analyze(db) çağrısında; YAMNet döngüsü aktifse lastScore, değilse genlik proxy döner.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // ── EXPORTS (analiz.tsx bunları kullanıyor — değiştirme) ──────────────────────
 export const WINDOW_SIZE_MS    = 500;
