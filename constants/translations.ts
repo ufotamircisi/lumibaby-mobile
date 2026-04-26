@@ -2,6 +2,17 @@
 
 export type Lang = 'tr' | 'en';
 
+function _tipLabel(tip: string, lang: 'tr' | 'en'): string {
+  const labels: Record<string, [string, string]> = {
+    sure:      ['uyku süresi', 'sleep duration'],
+    aglama:    ['ağlama',      'crying'],
+    baslangic: ['yatış saati', 'bedtime'],
+    dalma:     ['uykuya dalma süresi', 'sleep-onset time'],
+  };
+  const pair = labels[tip];
+  return pair ? pair[lang === 'tr' ? 0 : 1] : tip;
+}
+
 const tr = {
   // ── GENEL ──────────────────────────────────────────────────────────────────
   tamam:            'Tamam',
@@ -209,24 +220,47 @@ const tr = {
   gecekez:                (n: number) => `${n} kez`,
   detayKilit:             '🔒 Detaylı analiz ve uyku skoru Premium\'da',
   puanDetayBaslik:        '📊 Puan Detayı',
+  enBuyukEtki:            '← EN BÜYÜK ETKİ',
   analizYorumBaslik:      '💬 Analiz',
-  analizYorum:            (score: number, toplamUykuSn: number, aglamaSayisi: number, puanDetay?: { baslik: string; puan: number }[]) => {
-    const dk = Math.floor(toplamUykuSn / 60);
-    if (dk < 5) return '⚠️ Uyku süresi 5 dakikanın altında. Bu kayıt analiz için geçersiz.';
-    const saat = Math.floor(toplamUykuSn / 3600);
-    const kalanDk = Math.floor((toplamUykuSn % 3600) / 60);
-    const sureStr = saat > 0 ? `${saat}s ${kalanDk}dk` : `${kalanDk}dk`;
-    if (score >= 85) return `• Mükemmel bir uyku! Bebek ${aglamaSayisi === 0 ? 'hiç ağlamadı' : aglamaSayisi + ' kez ağladı'}, toplam ${sureStr} uyudu. 🎉`;
-    if (score >= 70) {
-      const worst = puanDetay?.filter(d => d.puan < 0).sort((a, b) => a.puan - b.puan)[0];
-      return worst
-        ? `• İyi bir uyku. En büyük kesinti: ${worst.baslik} (${worst.puan} puan).`
-        : `• İyi bir uyku. Bebek toplam ${sureStr} uyudu.`;
+  analizYorum:            (score: number, toplamUykuSn: number, aglamaSayisi: number, puanDetay?: { baslik: string; puan: number; tip?: string }[]) => {
+    if (toplamUykuSn < 300) return '⚠️ Uyku süresi 5 dakikanın altında. Bu kayıt analiz için geçersiz.';
+    const s = Math.floor(toplamUykuSn / 3600);
+    const m = Math.floor((toplamUykuSn % 3600) / 60);
+    const sureStr = s > 0 ? `${s}s ${m}dk` : `${m}dk`;
+    const totalLoss = 100 - score;
+    if (totalLoss <= 0) return `🌟 Mükemmel uyku! Bebek hiç ağlamadı, toplam ${sureStr} uyudu.`;
+
+    // Kriterlere göre kayıp payları
+    const lossMap: Record<string, number> = { sure: 0, aglama: 0, baslangic: 0, dalma: 0 };
+    puanDetay?.forEach(d => { if (d.tip && d.puan < 0 && d.tip in lossMap) lossMap[d.tip] = Math.abs(d.puan); });
+    const sorted = (Object.entries(lossMap) as [string, number][]).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
+
+    if (sorted.length === 0) return `• Bebeğiniz ${sureStr} uyudu. Genel olarak iyi bir uyku.`;
+
+    const [topTip, topVal] = sorted[0];
+    const topShare = topVal / totalLoss;
+
+    // Tek kriter %50+ ise sadece onu anlat
+    if (topShare >= 0.5) {
+      if (topTip === 'sure')     return `• Bebeğiniz ${sureStr} uyudu; bu yaş grubu için önerilen sürenin altında. Daha erken yatırma veya gündüz nap'lerini düzenleme faydalı olabilir.`;
+      if (topTip === 'baslangic') return `• Geç yatış uyku süresini kısalttı. Uyku rutinini daha erken saatlere çekmeyi deneyin.`;
+      if (topTip === 'aglama')   return `• ${aglamaSayisi} kez ağlama uyku kalitesini önemli ölçüde düşürdü. Uyku ortamı ve yatış rutini gözden geçirilebilir.`;
+      if (topTip === 'dalma')    return `• Uykuya dalma süresi uzun. Yatış öncesi sakin bir rutin (kitap, hafif müzik) deneyebilirsiniz.`;
     }
-    const worst = puanDetay?.filter(d => d.puan < 0).sort((a, b) => a.puan - b.puan)[0];
-    if (worst) return `• En büyük kesinti: ${worst.baslik} (${worst.puan} puan). Uyku rutinini gözden geçirin.`;
-    if (dk < 60) return `• Uyku süresi yetersiz (${sureStr}). Bebeğin uyku ihtiyacı karşılanmadı.`;
-    return `• Zorlu bir uyku. Bebek ${aglamaSayisi} kez ağladı ve uyku süresi kısaydı. Uyku rutini gözden geçirilmeli.`;
+
+    // İki kriter her biri %30+ ise birlikte anlat
+    if (sorted.length >= 2 && sorted[1][1] / totalLoss >= 0.3) {
+      const [secTip] = sorted[1];
+      if ((topTip === 'sure' && secTip === 'baslangic') || (topTip === 'baslangic' && secTip === 'sure')) {
+        return `• Geç yatış (${_tipLabel('baslangic', 'tr')}) ve kısa uyku süresi birlikte etkiledi. Rutini öne çekmeyi deneyin.`;
+      }
+      return `• Uyku kalitesini düşüren iki ana etken: uyku süresi ve ${_tipLabel(secTip, 'tr')}. Uyku rutinini gözden geçirin.`;
+    }
+
+    // Genel
+    if (score >= 70) return `• İyi bir uyku. Küçük iyileştirmelerle skor artırılabilir.`;
+    if (score >= 50) return `• Orta kaliteli uyku. Bebek ${aglamaSayisi === 0 ? 'hiç ağlamadı' : aglamaSayisi + ' kez ağladı'}, toplam ${sureStr} uyudu.`;
+    return `• Zorlu bir uyku. Uyku ortamı ve rutinin gözden geçirilmesi önerilir.`;
   },
   dunleKarsilastirma:     '📈 Dünle Karşılaştırma',
   uyku:                   'Uyku Süresi',
@@ -741,24 +775,43 @@ const en = {
   gecekez:                (n: number) => `${n} time${n !== 1 ? 's' : ''}`,
   detayKilit:             '🔒 Detailed analysis & sleep score in Premium',
   puanDetayBaslik:        '📊 Score Details',
+  enBuyukEtki:            '← BIGGEST IMPACT',
   analizYorumBaslik:      '💬 Analysis',
-  analizYorum:            (score: number, toplamUykuSn: number, aglamaSayisi: number, puanDetay?: { baslik: string; puan: number }[]) => {
-    const dk = Math.floor(toplamUykuSn / 60);
-    if (dk < 5) return '⚠️ Sleep duration is under 5 minutes. This record is invalid for analysis.';
+  analizYorum:            (score: number, toplamUykuSn: number, aglamaSayisi: number, puanDetay?: { baslik: string; puan: number; tip?: string }[]) => {
+    if (toplamUykuSn < 300) return '⚠️ Sleep duration is under 5 minutes. This record is invalid for analysis.';
     const h = Math.floor(toplamUykuSn / 3600);
     const m = Math.floor((toplamUykuSn % 3600) / 60);
     const sureStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
-    if (score >= 85) return `• Excellent sleep! Baby ${aglamaSayisi === 0 ? 'did not cry at all' : `cried ${aglamaSayisi} time${aglamaSayisi !== 1 ? 's' : ''}`} and slept ${sureStr} total. 🎉`;
-    if (score >= 70) {
-      const worst = puanDetay?.filter(d => d.puan < 0).sort((a, b) => a.puan - b.puan)[0];
-      return worst
-        ? `• Good sleep. Biggest deduction: ${worst.baslik} (${worst.puan} pts).`
-        : `• Good sleep. Baby slept ${sureStr} total.`;
+    const totalLoss = 100 - score;
+    if (totalLoss <= 0) return `🌟 Perfect sleep! Baby did not cry, slept ${sureStr} total.`;
+
+    const lossMap: Record<string, number> = { sure: 0, aglama: 0, baslangic: 0, dalma: 0 };
+    puanDetay?.forEach(d => { if (d.tip && d.puan < 0 && d.tip in lossMap) lossMap[d.tip] = Math.abs(d.puan); });
+    const sorted = (Object.entries(lossMap) as [string, number][]).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
+
+    if (sorted.length === 0) return `• Baby slept ${sureStr}. Generally a good night.`;
+
+    const [topTip, topVal] = sorted[0];
+    const topShare = topVal / totalLoss;
+
+    if (topShare >= 0.5) {
+      if (topTip === 'sure')      return `• Baby slept ${sureStr}, below the recommended amount for this age group. Try an earlier bedtime or adjusting daytime naps.`;
+      if (topTip === 'baslangic') return `• Late bedtime reduced total sleep. Try shifting the sleep routine to an earlier time.`;
+      if (topTip === 'aglama')    return `• Crying ${aglamaSayisi} time${aglamaSayisi !== 1 ? 's' : ''} significantly impacted sleep quality. Review the sleep environment and routine.`;
+      if (topTip === 'dalma')     return `• Long sleep-onset time. A calm pre-sleep routine (reading, soft music) may help.`;
     }
-    const worst = puanDetay?.filter(d => d.puan < 0).sort((a, b) => a.puan - b.puan)[0];
-    if (worst) return `• Biggest deduction: ${worst.baslik} (${worst.puan} pts). Consider reviewing the sleep routine.`;
-    if (dk < 60) return `• Insufficient sleep duration (${sureStr}). Baby's sleep needs were not met.`;
-    return `• Difficult sleep. Baby cried ${aglamaSayisi} time${aglamaSayisi !== 1 ? 's' : ''} and sleep duration was short. Review sleep routine and environment.`;
+
+    if (sorted.length >= 2 && sorted[1][1] / totalLoss >= 0.3) {
+      const [secTip] = sorted[1];
+      if ((topTip === 'sure' && secTip === 'baslangic') || (topTip === 'baslangic' && secTip === 'sure')) {
+        return `• Late bedtime and short sleep duration combined for the main impact. Try shifting the routine earlier.`;
+      }
+      return `• Two main factors: sleep duration and ${_tipLabel(secTip, 'en')}. Consider reviewing the sleep routine.`;
+    }
+
+    if (score >= 70) return `• Good sleep. Small improvements could boost the score further.`;
+    if (score >= 50) return `• Fair quality sleep. Baby ${aglamaSayisi === 0 ? 'did not cry' : `cried ${aglamaSayisi} time${aglamaSayisi !== 1 ? 's' : ''}`}, slept ${sureStr}.`;
+    return `• Difficult sleep. Reviewing the sleep environment and routine is recommended.`;
   },
   dunleKarsilastirma:     '📈 Compared to Yesterday',
   uyku:                   'Sleep Duration',
