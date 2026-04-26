@@ -119,7 +119,7 @@ const tr = {
 
   // ── ANALİZ ─────────────────────────────────────────────────────────────────
   geceModu:               '🌙 Uyku Modu',
-  nasılCalisirLink:       'Nasıl Çalışır?',
+  nasılCalisirLink:       'Nasıl?',
   uykuRehberiNasılIsler:  'Nasıl işler?',
   nasılCalisirBaslik:     'Uyku Modu Nasıl Çalışır?',
   nasılCalisirB1Baslik:   '🌙 Uyku Modunu Başlat',
@@ -131,7 +131,7 @@ const tr = {
   nasılCalisirB4Baslik:   '📊 Uyku Raporu',
   nasılCalisirB4Metin:    "'Bebek Uyandı' butonuna basın. Uyku süresi, ağlama sayısı ve uyku skoru otomatik hesaplanır.",
   nasılCalisirNot:        '⚠️ Not: Dedektör aktifken uygulamayı kapatmayın. Ekran kapalı kalabilir, uygulama arka planda çalışmaya devam eder.',
-  gecePremiumSinirsiz:    '👑 Premium ile sınırsız',
+  gecePremiumSinirsiz:    '👑',
   bebekUyanik:            (isim: string | null) => isim ? `👀 ${isim} uyanık` : '👀 Bebeğim uyanık',
   bebekUyuyor:            (isim: string | null) => isim ? `😴 ${isim} uyuyor` : '😴 Bebeğim uyuyor',
   ninnlCalıyor:           '🎵 Ninni çalıyor...',
@@ -703,7 +703,7 @@ const en = {
 
   // ── ASSISTANT (ANALİZ) ─────────────────────────────────────────────────────
   geceModu:               '🌙 Sleep Mode',
-  nasılCalisirLink:       'How does it work?',
+  nasılCalisirLink:       'How?',
   uykuRehberiNasılIsler:  'How it works?',
   nasılCalisirBaslik:     'How does Sleep Mode work?',
   nasılCalisirB1Baslik:   '🌙 Start Sleep Mode',
@@ -715,7 +715,7 @@ const en = {
   nasılCalisirB4Baslik:   '📊 Sleep Report',
   nasılCalisirB4Metin:    "Tap 'Baby Awake' when baby wakes up. Sleep duration, cry count and sleep score are calculated automatically.",
   nasılCalisirNot:        '⚠️ Note: Do not close the app while the detector is active. The screen can stay off, the app will continue running in the background.',
-  gecePremiumSinirsiz:    '👑 Unlimited with Premium',
+  gecePremiumSinirsiz:    '👑',
   bebekUyanik:            (isim: string | null) => isim ? `👀 ${isim} is awake` : '👀 Baby is awake',
   bebekUyuyor:            (isim: string | null) => isim ? `😴 ${isim} is sleeping` : '😴 Baby is sleeping',
   ninnlCalıyor:           '🎵 Lullaby playing...',

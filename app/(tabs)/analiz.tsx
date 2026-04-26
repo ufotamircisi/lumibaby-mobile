@@ -1258,9 +1258,13 @@ export default function Analiz() {
         {/* UYKU KARTI */}
         <View style={styles.sleepCard}>
           <View style={styles.sleepCardUst}>
-            <Text style={styles.sleepCardBaslik}>{t.geceModu}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              {free && <View style={styles.premiumMiniRozet}><Text style={styles.premiumMiniRozetYazi}>{t.gecePremiumSinirsiz}</Text></View>}
+            <Text style={styles.sleepCardBaslik} numberOfLines={1}>{t.geceModu}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {free && (
+                <TouchableOpacity onPress={() => { setPaywallTip('premium'); setPaywallVisible(true); }}>
+                  <Text style={styles.premiumMiniRozetYazi}>{t.gecePremiumSinirsiz}</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity onPress={() => setNasılCalisirModal(true)}>
                 <Text style={styles.nasılCalisirLink}>{t.nasılCalisirLink}</Text>
               </TouchableOpacity>
@@ -2212,8 +2216,7 @@ const styles = StyleSheet.create({
   sleepBtn:               { backgroundColor: 'rgba(157,140,239,0.25)', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(157,140,239,0.4)', width: '100%', alignItems: 'center' },
   sleepBtnUyaniyor:       { backgroundColor: 'rgba(74,222,128,0.2)', borderColor: 'rgba(74,222,128,0.4)' },
   sleepBtnText:           { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  premiumMiniRozet:       { backgroundColor: 'rgba(157,140,239,0.15)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(157,140,239,0.3)' },
-  premiumMiniRozetYazi:   { color: '#b8a8f8', fontSize: 10, fontWeight: 'bold' },
+  premiumMiniRozetYazi:   { fontSize: 16 },
   hakBilgi:               { backgroundColor: 'rgba(157,140,239,0.1)', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(157,140,239,0.2)', alignSelf: 'center', marginBottom: 8 },
   hakBilgiYazi:           { color: '#b8a8f8', fontSize: 12 },
   dedektorSection:        { marginBottom: 20 },
