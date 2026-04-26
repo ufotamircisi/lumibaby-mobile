@@ -787,24 +787,6 @@ export default function Analiz() {
     });
   }, []);
 
-  // ── WAKE WINDOW: bildirim gönder (günde max 3) ───────────────────────────
-  const wakeWindowBildirimGonder = useCallback(async (mesaj: string) => {
-    try {
-      const bugun = new Date().toDateString();
-      const data = await AsyncStorage.getItem(WAKE_WINDOW_BILDIRIM_KEY);
-      const obj = data ? JSON.parse(data) : {};
-      const bugunSayisi = obj[bugun] || 0;
-      if (bugunSayisi >= 3) return;
-      const { status } = await Notifications.getPermissionsAsync();
-      if (status !== 'granted') return;
-      await Notifications.scheduleNotificationAsync({
-        content: { title: 'LumiBaby ⏰', body: mesaj, sound: true },
-        trigger: null,
-      });
-      obj[bugun] = bugunSayisi + 1;
-      await AsyncStorage.setItem(WAKE_WINDOW_BILDIRIM_KEY, JSON.stringify(obj));
-    } catch {}
-  }, []);
 
   const kaydiDurdur = async () => {
     if (pollIntervalRef.current) { clearTimeout(pollIntervalRef.current as unknown as ReturnType<typeof setTimeout>); pollIntervalRef.current = null; }

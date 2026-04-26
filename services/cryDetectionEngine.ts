@@ -16,10 +16,12 @@ export const DETECTION_WINDOWS = 6;
 export const COOLDOWN_MS       = 8000;
 export const MIN_CRY_WINDOWS   = 3;
 
+// CONFIDENCE_THRESHOLD: güven çubuğu renk eşikleri — YAMNET_CRY_THRESHOLD ile eşleştirildi
+// Bar kırmızıya döndüğünde tetik de aynı noktada ateşlenir; kullanıcıyı yanıltmaz.
 export const CONFIDENCE_THRESHOLD = {
-  high:     60,
-  balanced: 72,
-  strict:   85,
+  high:     25,
+  balanced: 40,
+  strict:   60,
 } as const;
 
 // YAMNet ham skor eşikleri (0-100 aralığı)
