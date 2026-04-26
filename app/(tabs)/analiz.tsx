@@ -62,7 +62,7 @@ type UykuKaydi = { id: number; baslangic: number; bitis: number | null; };
 type GeceRaporu = {
   id: number; tarih: string; toplamUyku: number; aglamaSayisi: number;
   baslangic: number; bitis: number; uykulaDalma: number; enUzunUyku: number;
-  uykuKalitesi: number; puanDetay: { baslik: string; puan: number; pozitif: boolean }[];
+  uykuKalitesi: number; puanDetay: { baslik: string; puan: number; pozitif: boolean | null }[];
 };
 
 const BAR_MAX_HEIGHT = 106;
@@ -88,12 +88,14 @@ function uykuSkoruHesapla(
   toplamUyku: number,
   aglamaSayisi: number,
   baslangicSaat: number,
+  uykulaDalma: number,
+  isGunduz: boolean,
   t: any
-): { toplam: number; detaylar: { baslik: string; puan: number; pozitif: boolean }[] } {
+): { toplam: number; detaylar: { baslik: string; puan: number; pozitif: boolean | null }[] } {
   const lang = t.grafikGunler[0] === 'Sun' ? 'en' : 'tr';
-  const detaylar: { baslik: string; puan: number; pozitif: boolean }[] = [];
+  const detaylar: { baslik: string; puan: number; pozitif: boolean | null }[] = [];
 
-  // < 5 dakika → geçersiz kayıt, skor 0
+  // < 5 dk → geçersiz kayıt
   if (toplamUyku < 300) {
     detaylar.push({ baslik: lang === 'en' ? 'Invalid record (< 5 min)' : 'Geçersiz kayıt (< 5 dk)', puan: 0, pozitif: false });
     return { toplam: 0, detaylar };
@@ -101,23 +103,43 @@ function uykuSkoruHesapla(
 
   let toplam = 0;
 
-  // Uyku süresi puanı
-  if (toplamUyku >= 32400)      { detaylar.push({ baslik: lang === 'en' ? 'Long sleep (9h+)' : 'Uzun uyku süresi (9s+)',  puan: 50, pozitif: true });  toplam += 50; }
-  else if (toplamUyku >= 25200) { detaylar.push({ baslik: lang === 'en' ? 'Good sleep (7h+)' : 'İyi uyku süresi (7s+)',   puan: 35, pozitif: true });  toplam += 35; }
-  else if (toplamUyku >= 18000) { detaylar.push({ baslik: lang === 'en' ? 'Fair sleep (5h+)' : 'Orta uyku süresi (5s+)',  puan: 20, pozitif: true });  toplam += 20; }
-  else                          { detaylar.push({ baslik: lang === 'en' ? 'Short sleep' : 'Kısa uyku süresi',             puan: -10, pozitif: false }); toplam -= 10; }
+  // ── SÜRE PUANI — gündüz/gece ayrımı ─────────────────────────────────────────
+  if (isGunduz) {
+    // Gündüz nap: ideal 1–3 saat
+    if (toplamUyku >= 3600 && toplamUyku <= 10800) { detaylar.push({ baslik: lang === 'en' ? 'Ideal nap (1–3h)'     : 'İdeal gündüz uykusu (1–3s)', puan: 40,  pozitif: true  }); toplam += 40; }
+    else if (toplamUyku > 10800)                   { detaylar.push({ baslik: lang === 'en' ? 'Long nap (3h+)'       : 'Uzun gündüz uykusu (3s+)',   puan: 10,  pozitif: null  }); toplam += 10; }
+    else                                            { detaylar.push({ baslik: lang === 'en' ? 'Short nap (< 1h)'    : 'Kısa gündüz uykusu (< 1s)',  puan: -10, pozitif: false }); toplam -= 10; }
+  } else {
+    // Gece: ideal 8–12 saat
+    if (toplamUyku >= 36000)      { detaylar.push({ baslik: lang === 'en' ? 'Long sleep (10h+)'   : 'Uzun uyku süresi (10s+)',  puan: 50,  pozitif: true  }); toplam += 50; }
+    else if (toplamUyku >= 28800) { detaylar.push({ baslik: lang === 'en' ? 'Good sleep (8h+)'    : 'İyi uyku süresi (8s+)',    puan: 35,  pozitif: true  }); toplam += 35; }
+    else if (toplamUyku >= 18000) { detaylar.push({ baslik: lang === 'en' ? 'Fair sleep (5h+)'    : 'Orta uyku süresi (5s+)',   puan: 15,  pozitif: null  }); toplam += 15; }
+    else                          { detaylar.push({ baslik: lang === 'en' ? 'Short sleep (< 5h)'  : 'Kısa uyku süresi (< 5s)', puan: -20, pozitif: false }); toplam -= 20; }
+  }
 
-  // Ağlama puanı: 0→+20, 1→+5, 2→-10, 3-4→-20, 5+→-30
-  if (aglamaSayisi === 0)      { detaylar.push({ baslik: lang === 'en' ? 'Did not cry at all' : 'Hiç ağlamadı',                                         puan: 20,  pozitif: true  }); toplam += 20; }
-  else if (aglamaSayisi === 1) { detaylar.push({ baslik: lang === 'en' ? 'Cried once' : '1 kez ağladı',                                                 puan: 5,   pozitif: false }); toplam += 5;  }
-  else if (aglamaSayisi === 2) { detaylar.push({ baslik: lang === 'en' ? 'Cried twice' : '2 kez ağladı',                                                puan: -10, pozitif: false }); toplam -= 10; }
-  else if (aglamaSayisi <= 4)  { detaylar.push({ baslik: lang === 'en' ? `Cried ${aglamaSayisi} times` : `${aglamaSayisi} kez ağladı`,                  puan: -20, pozitif: false }); toplam -= 20; }
-  else                         { detaylar.push({ baslik: lang === 'en' ? `Cried ${aglamaSayisi} times (frequent)` : `${aglamaSayisi} kez ağladı (sık)`, puan: -30, pozitif: false }); toplam -= 30; }
+  // ── AĞLAMA PUANI ─────────────────────────────────────────────────────────────
+  if (aglamaSayisi === 0)      { detaylar.push({ baslik: lang === 'en' ? 'Did not cry'                                             : 'Hiç ağlamadı',                     puan: 20,  pozitif: true  }); toplam += 20; }
+  else if (aglamaSayisi === 1) { detaylar.push({ baslik: lang === 'en' ? 'Cried once'                                              : '1 kez ağladı',                     puan: 5,   pozitif: true  }); toplam += 5;  }
+  else if (aglamaSayisi === 2) { detaylar.push({ baslik: lang === 'en' ? 'Cried twice'                                             : '2 kez ağladı',                     puan: -10, pozitif: false }); toplam -= 10; }
+  else if (aglamaSayisi <= 4)  { detaylar.push({ baslik: lang === 'en' ? `Cried ${aglamaSayisi} times`                            : `${aglamaSayisi} kez ağladı`,       puan: -20, pozitif: false }); toplam -= 20; }
+  else                         { detaylar.push({ baslik: lang === 'en' ? `Cried ${aglamaSayisi} times (frequent)`                 : `${aglamaSayisi} kez ağladı (sık)`, puan: -30, pozitif: false }); toplam -= 30; }
 
-  // Uyku saati puanı
+  // ── UYKU SAATİ PUANI — gündüz/gece ayrımı ───────────────────────────────────
   const saat = new Date(baslangicSaat).getHours();
-  if (saat >= 19 && saat <= 21) { detaylar.push({ baslik: lang === 'en' ? 'Regular bedtime' : 'Düzenli uyku saati', puan: 20, pozitif: true  }); toplam += 20; }
-  else                           { detaylar.push({ baslik: lang === 'en' ? 'Late bedtime'    : 'Geç uyku saati',    puan: 0,  pozitif: false }); }
+  if (isGunduz) {
+    if (saat >= 6 && saat < 15)       { detaylar.push({ baslik: lang === 'en' ? 'Appropriate nap time'       : 'Uygun gündüz uykusu saati',   puan: 10,  pozitif: true  }); toplam += 10; }
+    else if (saat >= 15 && saat < 20) { detaylar.push({ baslik: lang === 'en' ? 'Late nap (after 15:00)'     : 'Geç gündüz uykusu (15:00+)',  puan: -10, pozitif: false }); toplam -= 10; }
+    else                               { detaylar.push({ baslik: lang === 'en' ? 'Unusual nap time'            : 'Alışılmadık gündüz saati',    puan: 0,   pozitif: null  }); }
+  } else {
+    if (saat >= 19 && saat <= 21)     { detaylar.push({ baslik: lang === 'en' ? 'Regular bedtime (19–21)'    : 'Düzenli uyku saati (19–21)',   puan: 10,  pozitif: true  }); toplam += 10; }
+    else if (saat >= 17 && saat < 19) { detaylar.push({ baslik: lang === 'en' ? 'Early bedtime'               : 'Biraz erken uyku saati',       puan: 0,   pozitif: null  }); }
+    else                               { detaylar.push({ baslik: lang === 'en' ? 'Late bedtime (after 22:00)' : 'Geç uyku saati (22:00+)',       puan: -15, pozitif: false }); toplam -= 15; }
+  }
+
+  // ── UYKUYA DALMA SÜRESİ ──────────────────────────────────────────────────────
+  if (uykulaDalma <= 900)       { detaylar.push({ baslik: lang === 'en' ? 'Fell asleep easily (< 15 min)'       : 'Kolay uykuya daldı (< 15 dk)',       puan: 10,  pozitif: true  }); toplam += 10; }
+  else if (uykulaDalma <= 1800) { detaylar.push({ baslik: lang === 'en' ? 'Normal sleep onset (15–30 min)'      : 'Normal uykuya dalma (15–30 dk)',      puan: 0,   pozitif: null  }); }
+  else                          { detaylar.push({ baslik: lang === 'en' ? 'Difficulty falling asleep (30+ min)' : 'Uykuya dalmakta güçlük (30+ dk)',     puan: -15, pozitif: false }); toplam -= 15; }
 
   return { toplam: Math.max(0, Math.min(100, toplam)), detaylar };
 }
@@ -506,9 +528,13 @@ export default function Analiz() {
   };
 
   // ── GÜNDÜZ / GECE AYRIMI ──────────────────────────────────────────────────
-  const raporGunduMu = useCallback((baslangic: number) => {
+  // 06:00–19:59 → gündüz (nap); 20:00–05:59 → gece.
+  // 5 saatten uzun "gündüz" kaydı otomatik gece olarak sınıflandırılır.
+  const raporGunduMu = useCallback((baslangic: number, toplamUyku = 0) => {
     const saat = new Date(baslangic).getHours();
-    return saat >= 6 && saat < 20;
+    const gunduSaati = saat >= 6 && saat < 20;
+    if (gunduSaati && toplamUyku > 5 * 3600) return false;
+    return gunduSaati;
   }, []);
 
   // ── DOĞUM TARİHİ → HAFTA ─────────────────────────────────────────────────
@@ -978,7 +1004,8 @@ export default function Analiz() {
     const toplamUyku  = Math.max(0, Math.min(Math.floor((bitis - baslangic) / 1000), 24 * 3600));
     const uykulaDalma = ilkAglamaZamaniRef.current ? Math.max(120, Math.floor((ilkAglamaZamaniRef.current - baslangic) / 1000)) : Math.max(120, Math.floor(toplamUyku * 0.05));
     const enUzunUyku  = aglamaSayisiRef.current === 0 ? toplamUyku : Math.floor(toplamUyku / (aglamaSayisiRef.current + 1));
-    const skorSonuc   = uykuSkoruHesapla(toplamUyku, aglamaSayisiRef.current, baslangic, t);
+    const isGunduz    = raporGunduMu(baslangic, toplamUyku);
+    const skorSonuc   = uykuSkoruHesapla(toplamUyku, aglamaSayisiRef.current, baslangic, uykulaDalma, isGunduz, t);
     const tarihStr    = formatTarih(baslangic);
     const rapor: GeceRaporu = { id: Date.now(), tarih: tarihStr, toplamUyku, aglamaSayisi: aglamaSayisiRef.current, baslangic, bitis, uykulaDalma, enUzunUyku, uykuKalitesi: skorSonuc.toplam, puanDetay: skorSonuc.detaylar };
     setGeceRaporlari(prev => {
@@ -1519,7 +1546,7 @@ export default function Analiz() {
             {sonRapor && (
               <View style={styles.raporModalKutu}>
                 <Text style={styles.raporModalBaslik}>
-                  {raporGunduMu(sonRapor.baslangic) ? t.gunduzRaporuBaslik : t.geceRaporuTamBaslik}
+                  {raporGunduMu(sonRapor.baslangic, sonRapor.toplamUyku) ? t.gunduzRaporuBaslik : t.geceRaporuTamBaslik}
                 </Text>
                 <Text style={styles.raporModalTarih}>{formatTarihGuzel(sonRapor.baslangic)}</Text>
 
@@ -1586,7 +1613,7 @@ export default function Analiz() {
                       <Text style={styles.puanDetayBaslik}>{t.puanDetayBaslik}</Text>
                       {sonRapor.puanDetay.map((d, i) => (
                         <View key={i} style={styles.puanDetaySatir}>
-                          <Text style={styles.puanDetayIkon}>{d.pozitif ? '✅' : '❌'}</Text>
+                          <Text style={styles.puanDetayIkon}>{d.pozitif === null ? '➖' : d.pozitif ? '✅' : '❌'}</Text>
                           <Text style={styles.puanDetayYazi}>{d.baslik}</Text>
                           <Text style={[styles.puanDetayPuan, { color: d.puan > 0 ? '#4ade80' : d.puan < 0 ? '#f87171' : 'rgba(255,255,255,0.4)' }]}>
                             {d.puan > 0 ? '+' + d.puan : '' + d.puan}
@@ -1784,7 +1811,7 @@ export default function Analiz() {
             {seciliRapor && (
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalBaslik}>
-                  {raporGunduMu(seciliRapor.baslangic) ? t.gunduzRaporuBaslik : t.geceRaporuTamBaslik}
+                  {raporGunduMu(seciliRapor.baslangic, seciliRapor.toplamUyku) ? t.gunduzRaporuBaslik : t.geceRaporuTamBaslik}
                 </Text>
                 <Text style={styles.modalAltBaslik}>{formatTarihGuzel(seciliRapor.baslangic)}</Text>
                 <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
@@ -1814,7 +1841,7 @@ export default function Analiz() {
                     <Text style={styles.puanDetayBaslik}>{t.puanDetayBaslik}</Text>
                     {seciliRapor.puanDetay.map((d, i) => (
                       <View key={i} style={styles.puanDetaySatir}>
-                        <Text style={styles.puanDetayIkon}>{d.pozitif ? '✅' : '❌'}</Text>
+                        <Text style={styles.puanDetayIkon}>{d.pozitif === null ? '➖' : d.pozitif ? '✅' : '❌'}</Text>
                         <Text style={styles.puanDetayYazi}>{d.baslik}</Text>
                         <Text style={[styles.puanDetayPuan, { color: d.puan > 0 ? '#4ade80' : d.puan < 0 ? '#f87171' : 'rgba(255,255,255,0.4)' }]}>
                           {d.puan > 0 ? '+' + d.puan : '' + d.puan}
