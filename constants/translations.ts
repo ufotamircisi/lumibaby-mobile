@@ -119,7 +119,8 @@ const tr = {
 
   // ── ANALİZ ─────────────────────────────────────────────────────────────────
   geceModu:               '🌙 Uyku Modu',
-  nasılCalisirLink:       'Nasıl?',
+  nasılCalisirLink:       'Nasıl işler?',
+  gecePremiumSinirsiz:    'Sınırsız',
   uykuRehberiNasılIsler:  'Nasıl işler?',
   nasılCalisirBaslik:     'Uyku Modu Nasıl Çalışır?',
   nasılCalisirB1Baslik:   '🌙 Uyku Modunu Başlat',
@@ -131,7 +132,6 @@ const tr = {
   nasılCalisirB4Baslik:   '📊 Uyku Raporu',
   nasılCalisirB4Metin:    "'Bebek Uyandı' butonuna basın. Uyku süresi, ağlama sayısı ve uyku skoru otomatik hesaplanır.",
   nasılCalisirNot:        '⚠️ Not: Dedektör aktifken uygulamayı kapatmayın. Ekran kapalı kalabilir, uygulama arka planda çalışmaya devam eder.',
-  gecePremiumSinirsiz:    '👑',
   bebekUyanik:            (isim: string | null) => isim ? `👀 ${isim} uyanık` : '👀 Bebeğim uyanık',
   bebekUyuyor:            (isim: string | null) => isim ? `😴 ${isim} uyuyor` : '😴 Bebeğim uyuyor',
   ninnlCalıyor:           '🎵 Ninni çalıyor...',
@@ -294,7 +294,7 @@ const tr = {
   // ── PAYWALL EKRANI ─────────────────────────────────────────────────────────
   pwBaslik:               'LumiBaby Premium',
   pwAltBaslik:            'Tüm özelliklerin kilidini aç, bebeğinle daha derin bağ kur.',
-  pwOzellikler:           ['Sınırsız ağlama analizi', 'Sınırsız uyku dedektörü', 'YAMNet AI bebek tespiti', 'Sınırsız ninni & uyku müzikleri', 'Kişisel ses hikayeleri', 'Reklamsız deneyim', 'Detaylı uyku raporları'] as string[],
+  pwOzellikler:           ['Sınırsız ağlama analizi', 'Sınırsız uyku dedektörü', 'YAMNet AI bebek tespiti', 'Kişisel ses hikayeleri', 'Reklamsız deneyim', 'Detaylı uyku raporları'] as string[],
   pwAylik:                'Aylık Plan',
   pwYillik:               'Yıllık Plan',
   pwAy:                   'ay',
@@ -703,7 +703,8 @@ const en = {
 
   // ── ASSISTANT (ANALİZ) ─────────────────────────────────────────────────────
   geceModu:               '🌙 Sleep Mode',
-  nasılCalisirLink:       'How?',
+  nasılCalisirLink:       'How does it work?',
+  gecePremiumSinirsiz:    'Unlimited',
   uykuRehberiNasılIsler:  'How it works?',
   nasılCalisirBaslik:     'How does Sleep Mode work?',
   nasılCalisirB1Baslik:   '🌙 Start Sleep Mode',
@@ -715,7 +716,6 @@ const en = {
   nasılCalisirB4Baslik:   '📊 Sleep Report',
   nasılCalisirB4Metin:    "Tap 'Baby Awake' when baby wakes up. Sleep duration, cry count and sleep score are calculated automatically.",
   nasılCalisirNot:        '⚠️ Note: Do not close the app while the detector is active. The screen can stay off, the app will continue running in the background.',
-  gecePremiumSinirsiz:    '👑',
   bebekUyanik:            (isim: string | null) => isim ? `👀 ${isim} is awake` : '👀 Baby is awake',
   bebekUyuyor:            (isim: string | null) => isim ? `😴 ${isim} is sleeping` : '😴 Baby is sleeping',
   ninnlCalıyor:           '🎵 Lullaby playing...',
@@ -874,7 +874,7 @@ const en = {
   // ── PAYWALL SCREEN ─────────────────────────────────────────────────────────
   pwBaslik:               'LumiBaby Premium',
   pwAltBaslik:            'Unlock all features, build a deeper bond with your baby.',
-  pwOzellikler:           ['Unlimited cry analysis', 'Unlimited sleep detector', 'YAMNet AI baby detection', 'Unlimited lullabies & sleep music', 'Personal audio stories', 'Ad-free experience', 'Detailed sleep reports'] as string[],
+  pwOzellikler:           ['Unlimited cry analysis', 'Unlimited sleep detector', 'YAMNet AI baby detection', 'Personal audio stories', 'Ad-free experience', 'Detailed sleep reports'] as string[],
   pwAylik:                'Monthly Plan',
   pwYillik:               'Yearly Plan',
   pwAy:                   'mo',

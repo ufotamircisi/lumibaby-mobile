@@ -45,7 +45,11 @@ export default function PaywallScreen() {
   async function checkTrialStatus() {
     try {
       const info = await Purchases.getCustomerInfo();
-      setTrialKullanildi(info.entitlements.all[ENTITLEMENT_ID] !== undefined);
+      const hadPurchase = info.allPurchasedProductIdentifiers.length > 0 ||
+        Object.values(info.entitlements.all).some(
+          (e: any) => e.periodType === 'trial' || e.periodType === 'normal',
+        );
+      setTrialKullanildi(hadPurchase);
     } catch (e) {
       console.warn('[RevenueCat] trial check failed:', e);
     }

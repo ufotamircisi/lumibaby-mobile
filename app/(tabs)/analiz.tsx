@@ -1258,10 +1258,14 @@ export default function Analiz() {
         {/* UYKU KARTI */}
         <View style={styles.sleepCard}>
           <View style={styles.sleepCardUst}>
-            <Text style={styles.sleepCardBaslik} numberOfLines={1}>{t.geceModu}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={styles.sleepCardBaslik}>{t.geceModu}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               {free && (
-                <TouchableOpacity onPress={() => { setPaywallTip('premium'); setPaywallVisible(true); }}>
+                <TouchableOpacity
+                  style={styles.premiumMiniRozet}
+                  onPress={() => { setPaywallTip('premium'); setPaywallVisible(true); }}
+                >
+                  <Text style={{ fontSize: 12 }}>👑</Text>
                   <Text style={styles.premiumMiniRozetYazi}>{t.gecePremiumSinirsiz}</Text>
                 </TouchableOpacity>
               )}
@@ -1710,19 +1714,17 @@ export default function Analiz() {
             <Text style={styles.modalAltBaslik}>{modalTip === 'aglama' ? t.ninniSecAlt : t.kolikSecAlt}</Text>
             <ScrollView style={{ maxHeight: 400 }} nestedScrollEnabled>
               {sesList.map((ses) => {
-                const secili  = modalTip === 'aglama' ? seciliNinni?.id === ses.id : seciliKolik?.id === ses.id;
-                const anneMi  = ses.id >= 998;
-                const kilitli = anneMi && free;
+                const secili = modalTip === 'aglama' ? seciliNinni?.id === ses.id : seciliKolik?.id === ses.id;
+                const anneMi = ses.id >= 998;
                 return (
                   <TouchableOpacity
                     key={ses.id}
-                    style={[styles.sesBtn, secili && styles.sesBtnSecili, anneMi && styles.sesBtnAnne, kilitli && { opacity: 0.6 }]}
-                    onPress={() => { if (kilitli) { router.push('/paywall'); return; } sesSecildi(ses); }}
+                    style={[styles.sesBtn, secili && styles.sesBtnSecili, anneMi && styles.sesBtnAnne]}
+                    onPress={() => sesSecildi(ses)}
                   >
                     <Text style={styles.sesIkon}>{ses.icon}</Text>
                     <Text style={styles.sesAdi}>{ses.name}</Text>
-                    {kilitli && <Text style={{ fontSize: 16 }}>🔒</Text>}
-                    {secili && !kilitli && <Text style={styles.sesTik}>✓</Text>}
+                    {secili && <Text style={styles.sesTik}>✓</Text>}
                   </TouchableOpacity>
                 );
               })}
@@ -2216,7 +2218,8 @@ const styles = StyleSheet.create({
   sleepBtn:               { backgroundColor: 'rgba(157,140,239,0.25)', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(157,140,239,0.4)', width: '100%', alignItems: 'center' },
   sleepBtnUyaniyor:       { backgroundColor: 'rgba(74,222,128,0.2)', borderColor: 'rgba(74,222,128,0.4)' },
   sleepBtnText:           { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  premiumMiniRozetYazi:   { fontSize: 16 },
+  premiumMiniRozet:       { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(157,140,239,0.15)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(157,140,239,0.3)' },
+  premiumMiniRozetYazi:   { color: '#b8a8f8', fontSize: 11, fontWeight: '600' },
   hakBilgi:               { backgroundColor: 'rgba(157,140,239,0.1)', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(157,140,239,0.2)', alignSelf: 'center', marginBottom: 8 },
   hakBilgiYazi:           { color: '#b8a8f8', fontSize: 12 },
   dedektorSection:        { marginBottom: 20 },
