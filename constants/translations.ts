@@ -360,7 +360,7 @@ const tr = {
   // ── SESİM ──────────────────────────────────────────────────────────────────
   sesimHeaderBaslik:    'Anne Sesi Kaydı',
   sesimHeaderAcik:      'Sesinizi kaydedin. Bebeğiniz ağladığında sizin sesiniz onu sakinleştirsin.',
-  sesimPremiumBanner:   '👑 Bu özellik Premium\'a özeldir — 7 gün ücretsiz deneyin!',
+  sesimPremiumBanner:   '👑 Bu özellik Premium\'a özeldir.',
   sesimPremiumBtn:      'Premiuma Geç',
   kayitliRozet:         '✓ Kayıtlı',
   kilitRozet:           '🔒 Premium',
@@ -940,7 +940,7 @@ const en = {
   // ── MY VOICE ───────────────────────────────────────────────────────────────
   sesimHeaderBaslik:    "Mom's Voice Recording",
   sesimHeaderAcik:      "Record your voice. When baby cries, your voice will soothe them.",
-  sesimPremiumBanner:   '👑 This feature requires Premium — try free for 7 days!',
+  sesimPremiumBanner:   '👑 This feature requires Premium.',
   sesimPremiumBtn:      'Go Premium',
   kayitliRozet:         '✓ Recorded',
   kilitRozet:           '🔒 Premium',

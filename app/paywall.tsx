@@ -1,4 +1,4 @@
-import { getOfferings, purchasePackage, restorePurchases, ENTITLEMENT_ID } from '@/services/revenuecat';
+import { getOfferings, purchasePackage, restorePurchases } from '@/services/revenuecat';
 import { s as rsp } from '@/constants/responsive';
 import { useLang } from '@/hooks/useLang';
 import { router } from 'expo-router';
@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Purchases from 'react-native-purchases';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type PlanId = 'monthly' | 'yearly';
@@ -35,25 +34,10 @@ export default function PaywallScreen() {
   const [purchasing, setPurchasing]     = useState(false);
   const [restoring, setRestoring]       = useState(false);
   const [error, setError]               = useState<string | null>(null);
-  const [trialKullanildi, setTrialKullanildi] = useState(false);
 
   useEffect(() => {
     loadOfferings();
-    checkTrialStatus();
   }, []);
-
-  async function checkTrialStatus() {
-    try {
-      const info = await Purchases.getCustomerInfo();
-      const hadPurchase = info.allPurchasedProductIdentifiers.length > 0 ||
-        Object.values(info.entitlements.all).some(
-          (e: any) => e.periodType === 'trial' || e.periodType === 'normal',
-        );
-      setTrialKullanildi(hadPurchase);
-    } catch (e) {
-      console.warn('[RevenueCat] trial check failed:', e);
-    }
-  }
 
   async function loadOfferings() {
     try {
@@ -205,11 +189,7 @@ export default function PaywallScreen() {
               <Text style={s.ctaTxt}>
                 {selectedPlan ? t.pwIleBasla(selectedPlan.price) : t.pwUpgradeBtn}
               </Text>
-              <Text style={s.ctaSubTxt}>
-                {trialKullanildi
-                  ? t.pwIptalEt
-                  : `${t.pwDenemeBtn} — ${t.pwIptalEt}`}
-              </Text>
+              <Text style={s.ctaSubTxt}>{t.pwIptalEt}</Text>
             </>
           )}
         </TouchableOpacity>

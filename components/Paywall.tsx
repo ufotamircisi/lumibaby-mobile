@@ -1,5 +1,4 @@
 import { useLang } from '@/hooks/useLang';
-import { usePremium } from '@/hooks/usePremium';
 import React from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,7 +14,6 @@ interface PaywallProps {
 }
 
 export default function Paywall({ visible, onClose, onPremium, onReklam, limitMesaji, baslik, aciklama }: PaywallProps) {
-  const { isTrial } = usePremium();
   const { lang, t } = useLang();
   const insets = useSafeAreaInsets();
 
@@ -32,7 +30,6 @@ export default function Paywall({ visible, onClose, onPremium, onReklam, limitMe
 
           <TouchableOpacity style={s.premiumBtn} onPress={onPremium}>
             <Text style={s.premiumBtnYazi}>{t.premiulaGec}</Text>
-            {isTrial && <Text style={s.premiumBtnAlt}>{t.premiumTrialBanner}</Text>}
           </TouchableOpacity>
 
           {onReklam ? (
@@ -71,7 +68,6 @@ const s = StyleSheet.create({
   aciklama:       { color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 24, paddingHorizontal: 16 },
   premiumBtn:     { backgroundColor: '#9d8cef', borderRadius: 16, paddingVertical: 16, width: '100%', alignItems: 'center', gap: 4, marginBottom: 8 },
   premiumBtnYazi: { color: 'white', fontSize: 17, fontWeight: 'bold' },
-  premiumBtnAlt:  { color: 'rgba(255,255,255,0.7)', fontSize: 12 },
   ayrac:          { flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%', marginVertical: 12 },
   ayracCizgi:     { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
   ayracYazi:      { color: 'rgba(255,255,255,0.3)', fontSize: 12 },
