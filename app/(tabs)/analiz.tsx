@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Animated, AppState, Modal, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendAlertToAll } from './_layout';
+import { hesaplaSleepScore, type PuanDetayItem, type SleepScoreInput } from '@/utils/sleepScore';
 
 // ── STORAGE KEYS ─────────────────────────────────────────────────────────────
 const SES_OGRENME_KEY          = 'lumibaby_ses_ogrenme';
@@ -59,15 +60,19 @@ const CRY_SCORES: Record<number, Record<number, Record<CryKategori, number>>> = 
 
 type SesTip   = { id: number; name: string; icon: string; file: any; };
 type UykuKaydi = { id: number; baslangic: number; bitis: number | null; };
-type PuanDetayItem = { baslik: string; puan: number; pozitif: boolean | null; tip?: string };
 type GeceRaporu = {
   id: number; tarih: string; toplamUyku: number; aglamaSayisi: number;
   baslangic: number; bitis: number; uykulaDalma: number; enUzunUyku: number;
   uykuKalitesi: number; puanDetay: PuanDetayItem[];
+  // yeni alanlar (eski kayıtlarda bulunmayabilir)
+  yorumEmoji?: string;
+  yorumMesaj?: string;
+  enBuyukEtki?: { baslik: string; potansiyelKazanc: number } | null;
+  aksiyonlar?: string[];
 };
 
 const BAR_MAX_HEIGHT = 106;
-const HASSASIYET_KEY = 'lumibaby_hassasiyet';
+const HASSASIYET_KEY  = 'lumibaby_hassasiyet';
 type DedektorTip = 'aglama' | 'kolik';
 
 function kaliteRenk(puan: number): string {
@@ -83,211 +88,6 @@ function skorRenk(puan: number): string {
   if (puan >= 50) return '#FFC107';
   if (puan >= 30) return '#FF9800';
   return '#F44336';
-}
-
-// ── SKOR HESAPLAMA YARDIMCI FONKSİYONLARI ────────────────────────────────────
-function _fmtH(saat: number, lang: 'tr' | 'en'): string {
-  const s = Math.floor(saat);
-  const dk = Math.round((saat - s) * 60);
-  if (lang === 'en') return dk === 0 ? `${s}h` : `${s}h ${dk}m`;
-  return dk === 0 ? `${s}s` : `${s}s ${dk}dk`;
-}
-function _fmtT(h: number, m: number): string {
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-// ── UYKU SKORU (100'den düşen sistem) ────────────────────────────────────────
-// MIN_SCORE = 10 — final skor asla 10'un altına düşmez.
-const _MIN_SCORE = 10;
-
-function _gunduzHedef(haftasi: number | null): { min: number; max: number } {
-  if (haftasi === null)   return { min: 1, max: 3 };
-  if (haftasi <= 12)      return { min: 6, max: 8 };
-  if (haftasi <= 26)      return { min: 4, max: 5 };
-  if (haftasi <= 52)      return { min: 3, max: 4 };
-  if (haftasi <= 78)      return { min: 2, max: 3 };
-  if (haftasi <= 156)     return { min: 1, max: 2 };
-  return { min: 0, max: 1 };
-}
-
-function _geceMin(haftasi: number | null): number {
-  if (haftasi === null)   return 10;
-  if (haftasi <= 12)      return 8;
-  if (haftasi <= 26)      return 9;
-  if (haftasi <= 52)      return 10;
-  if (haftasi <= 156)     return 10;
-  return 9;
-}
-
-function uykuSkoruHesapla(
-  toplamUyku: number,
-  aglamaSayisi: number,
-  baslangicSaat: number,
-  uykulaDalma: number,
-  isGunduzInput: boolean,
-  t: any,
-  bebekHaftasi: number | null,
-): { toplam: number; detaylar: PuanDetayItem[] } {
-  const lang: 'tr' | 'en' = t.grafikGunler[0] === 'Sun' ? 'en' : 'tr';
-  const detaylar: PuanDetayItem[] = [];
-
-  if (toplamUyku < 300) {
-    detaylar.push({ baslik: lang === 'en' ? 'Invalid record (< 5 min)' : 'Geçersiz kayıt (< 5 dk)', puan: 0, pozitif: null, tip: 'note' });
-    return { toplam: 0, detaylar };
-  }
-
-  detaylar.push({ baslik: lang === 'en' ? 'Starting score: 100' : 'Başlangıç: 100', puan: 0, pozitif: null, tip: 'note' });
-  let toplam = 100;
-
-  // ── GÜNDÜZ/GECE SINIFLANDIRMASI ──────────────────────────────────────────────
-  // Gündüz >3s → gece kuralları uygula + uyarı ekle
-  const toplamSaat = toplamUyku / 3600;
-  let isGunduz = isGunduzInput;
-  let reclassified = false;
-  if (isGunduz && toplamSaat > 3) {
-    isGunduz = false;
-    reclassified = true;
-    detaylar.push({
-      baslik: lang === 'en'
-        ? `Reclassified as night sleep (nap > 3h)`
-        : `Gece uykusu olarak yeniden sınıflandırıldı (3s+)`,
-      puan: 0, pozitif: null, tip: 'note',
-    });
-  }
-
-  // ── SÜRE KESINTISI (yumuşatılmış) ────────────────────────────────────────────
-  // Gece: İlk 2s eksik -10/s, sonraki -5/s, max -50
-  // Gündüz: eksik aynı formül; fazla 0<f≤1s -5, f>1s -15
-  let surePuan = 0;
-  let sureBaslik: string;
-  if (isGunduz) {
-    const hedef = _gunduzHedef(bebekHaftasi);
-    const fazla = Math.max(0, toplamSaat - hedef.max);
-    const eksik = Math.max(0, hedef.min - toplamSaat);
-    const hedefStr = `${hedef.min}–${hedef.max}`;
-    if (eksik > 0) {
-      const p1 = Math.min(eksik, 2) * 10;
-      const p2 = Math.max(0, eksik - 2) * 5;
-      surePuan = -Math.min(50, Math.round(p1 + p2));
-      sureBaslik = lang === 'en'
-        ? `Nap (target ${hedefStr}h, slept ${_fmtH(toplamSaat, lang)}, ${_fmtH(eksik, lang)} short)`
-        : `Gündüz süresi (hedef ${hedefStr}s, ${_fmtH(toplamSaat, lang)} uyudu, ${_fmtH(eksik, lang)} eksik)`;
-    } else if (fazla > 0) {
-      surePuan = fazla <= 1 ? -5 : -15;
-      sureBaslik = lang === 'en'
-        ? `Nap (target ${hedefStr}h, ${_fmtH(toplamSaat, lang)}, ${_fmtH(fazla, lang)} over)`
-        : `Gündüz süresi (hedef ${hedefStr}s, ${_fmtH(toplamSaat, lang)}, ${_fmtH(fazla, lang)} fazla)`;
-    } else {
-      sureBaslik = lang === 'en'
-        ? `Nap (target ${hedefStr}h, ${_fmtH(toplamSaat, lang)} ✓)`
-        : `Gündüz süresi (hedef ${hedefStr}s, ${_fmtH(toplamSaat, lang)} ✓)`;
-    }
-  } else {
-    const minGece = _geceMin(bebekHaftasi);
-    const eksik = Math.max(0, minGece - toplamSaat);
-    if (eksik > 0) {
-      const p1 = Math.min(eksik, 2) * 10;
-      const p2 = Math.max(0, eksik - 2) * 5;
-      surePuan = -Math.min(50, Math.round(p1 + p2));
-      sureBaslik = lang === 'en'
-        ? `Duration (min ${minGece}h, slept ${_fmtH(toplamSaat, lang)}, ${_fmtH(eksik, lang)} short)`
-        : `Süre (min ${minGece}s, ${_fmtH(toplamSaat, lang)} uyudu, ${_fmtH(eksik, lang)} eksik)`;
-    } else {
-      sureBaslik = lang === 'en'
-        ? `Duration (${_fmtH(toplamSaat, lang)}, meets ${minGece}h min ✓)`
-        : `Süre (${_fmtH(toplamSaat, lang)}, min ${minGece}s karşılandı ✓)`;
-    }
-  }
-  toplam += surePuan;
-  detaylar.push({ baslik: sureBaslik, puan: surePuan, pozitif: surePuan < 0 ? false : null, tip: 'sure' });
-
-  // ── AĞLAMA KESINTISI ──────────────────────────────────────────────────────────
-  let aglamaPuan = 0;
-  let aglamaBaslik: string;
-  if      (aglamaSayisi === 0) { aglamaBaslik = lang === 'en' ? 'Crying (0 times)'                       : 'Ağlama (0 kez)'; }
-  else if (aglamaSayisi === 1) { aglamaPuan = -5;  aglamaBaslik = lang === 'en' ? 'Crying (1 time)'      : 'Ağlama (1 kez)'; }
-  else if (aglamaSayisi === 2) { aglamaPuan = -10; aglamaBaslik = lang === 'en' ? 'Crying (2 times)'     : 'Ağlama (2 kez)'; }
-  else if (aglamaSayisi <= 4)  { aglamaPuan = -20; aglamaBaslik = lang === 'en' ? `Crying (${aglamaSayisi} times)`          : `Ağlama (${aglamaSayisi} kez)`; }
-  else                         { aglamaPuan = -30; aglamaBaslik = lang === 'en' ? `Crying (${aglamaSayisi} times, frequent)` : `Ağlama (${aglamaSayisi} kez, sık)`; }
-  toplam += aglamaPuan;
-  detaylar.push({ baslik: aglamaBaslik, puan: aglamaPuan, pozitif: aglamaPuan < 0 ? false : null, tip: 'aglama' });
-
-  // ── BAŞLANGIÇ SAATİ KESINTISI (sadece gece) ───────────────────────────────────
-  // Gündüz nap'te saat cezası uygulanmaz.
-  // 03:00-04:59: exploit koruması → sabit -20
-  // Gece yaşa göre ideal pencere:
-  //   0-12 ay: 19:00-21:00 | 1-3 yaş: 20:00-21:30 | 3+ yaş: 20:30-22:00
-  if (!isGunduz) {
-    const bSaat   = new Date(baslangicSaat).getHours();
-    const bDakika = new Date(baslangicSaat).getMinutes();
-    const startMin = bSaat * 60 + bDakika;
-    let saatPuan = 0;
-    let saatBaslik: string;
-
-    if (reclassified && bSaat < 18) {
-      // Gündüzden yeniden sınıflandırılan uyku: gündüz saatinde başlamış gece uykusu
-      saatPuan = -10;
-      saatBaslik = lang === 'en'
-        ? `Bedtime (${_fmtT(bSaat, bDakika)}, daytime-started sleep)`
-        : `Başlangıç (${_fmtT(bSaat, bDakika)}, gündüz başlatılan uyku)`;
-    } else if (startMin >= 180 && startMin < 300) {
-      // 03:00–04:59 exploit koruması: geç gece uykusu başlatma
-      saatPuan = -20;
-      saatBaslik = lang === 'en'
-        ? `Bedtime (${_fmtT(bSaat, bDakika)}, late-night session)`
-        : `Başlangıç (${_fmtT(bSaat, bDakika)}, geç gece uykusu)`;
-    } else {
-      // Yaşa göre ideal bitiş (gece uykusu geç başlatılırsa ceza)
-      // Pencere bitiş saatleri (dakika cinsinden):
-      let idealEndMin = 21 * 60; // 0-12 ay: 21:00
-      if (bebekHaftasi !== null) {
-        if (bebekHaftasi > 156)     idealEndMin = 22 * 60;      // 3+ yaş: 22:00
-        else if (bebekHaftasi > 52) idealEndMin = 21 * 60 + 30; // 1-3 yaş: 21:30
-      }
-      // 00:00-02:59 → gece yarısından sonra, normalize ederek karşılaştır
-      const normStart = startMin < 300 ? startMin + 1440 : startMin;
-      const normEnd   = idealEndMin;
-      const lateByMin = Math.max(0, normStart - normEnd);
-
-      if (lateByMin === 0) {
-        saatBaslik = lang === 'en'
-          ? `Bedtime (${_fmtT(bSaat, bDakika)}, ideal)`
-          : `Başlangıç (${_fmtT(bSaat, bDakika)}, ideal)`;
-      } else if (lateByMin <= 30) {
-        saatPuan = -5;
-        saatBaslik = lang === 'en'
-          ? `Bedtime (${_fmtT(bSaat, bDakika)}, 30 min late)`
-          : `Başlangıç (${_fmtT(bSaat, bDakika)}, 30 dk geç)`;
-      } else if (lateByMin <= 60) {
-        saatPuan = -10;
-        saatBaslik = lang === 'en'
-          ? `Bedtime (${_fmtT(bSaat, bDakika)}, 1h late)`
-          : `Başlangıç (${_fmtT(bSaat, bDakika)}, 1s geç)`;
-      } else {
-        saatPuan = -20;
-        saatBaslik = lang === 'en'
-          ? `Bedtime (${_fmtT(bSaat, bDakika)}, 2h+ late)`
-          : `Başlangıç (${_fmtT(bSaat, bDakika)}, 2s+ geç)`;
-      }
-    }
-    toplam += saatPuan;
-    detaylar.push({ baslik: saatBaslik, puan: saatPuan, pozitif: saatPuan < 0 ? false : null, tip: 'baslangic' });
-  }
-
-  // ── UYKUYA DALMA SÜRESİ KESINTISI ────────────────────────────────────────────
-  // 0-10dk: 0 | 10-20dk: -3 | 20-30dk: -5 | 30-60dk: -15 | 60+dk: -25
-  const dalmaDk = Math.round(uykulaDalma / 60);
-  let dalmaPuan = 0;
-  let dalmaBaslik: string;
-  if      (uykulaDalma <= 600)  { dalmaBaslik = lang === 'en' ? `Sleep onset (${dalmaDk} min, < 10 min)`  : `Uykuya dalma (${dalmaDk} dk, < 10 dk)`;  }
-  else if (uykulaDalma <= 1200) { dalmaPuan = -3;  dalmaBaslik = lang === 'en' ? `Sleep onset (${dalmaDk} min, 10–20 min)` : `Uykuya dalma (${dalmaDk} dk, 10–20 dk)`; }
-  else if (uykulaDalma <= 1800) { dalmaPuan = -5;  dalmaBaslik = lang === 'en' ? `Sleep onset (${dalmaDk} min, 20–30 min)` : `Uykuya dalma (${dalmaDk} dk, 20–30 dk)`; }
-  else if (uykulaDalma <= 3600) { dalmaPuan = -15; dalmaBaslik = lang === 'en' ? `Sleep onset (${dalmaDk} min, 30–60 min)` : `Uykuya dalma (${dalmaDk} dk, 30–60 dk)`; }
-  else                          { dalmaPuan = -25; dalmaBaslik = lang === 'en' ? `Sleep onset (${dalmaDk} min, 60+ min)`   : `Uykuya dalma (${dalmaDk} dk, 60+ dk)`;   }
-  toplam += dalmaPuan;
-  detaylar.push({ baslik: dalmaBaslik, puan: dalmaPuan, pozitif: dalmaPuan < 0 ? false : null, tip: 'dalma' });
-
-  return { toplam: Math.max(_MIN_SCORE, Math.min(100, toplam)), detaylar };
 }
 
 function _isGunduzRapor(r: GeceRaporu): boolean {
@@ -1187,9 +987,25 @@ export default function Analiz() {
     const uykulaDalma = ilkAglamaZamaniRef.current ? Math.max(120, Math.floor((ilkAglamaZamaniRef.current - baslangic) / 1000)) : Math.max(120, Math.floor(toplamUyku * 0.05));
     const enUzunUyku  = aglamaSayisiRef.current === 0 ? toplamUyku : Math.floor(toplamUyku / (aglamaSayisiRef.current + 1));
     const isGunduz    = raporGunduMu(baslangic, toplamUyku);
-    const skorSonuc   = uykuSkoruHesapla(toplamUyku, aglamaSayisiRef.current, baslangic, uykulaDalma, isGunduz, t, bebekHaftasiHesapla());
+    const skorInput: SleepScoreInput = {
+      toplamUyku, baslangicTs: baslangic, isGunduz,
+      bebekHaftasi: bebekHaftasiHesapla(),
+      aglamaSayisi: aglamaSayisiRef.current,
+      lang,
+    };
+    const skorSonuc   = hesaplaSleepScore(skorInput);
     const tarihStr    = formatTarih(baslangic);
-    const rapor: GeceRaporu = { id: Date.now(), tarih: tarihStr, toplamUyku, aglamaSayisi: aglamaSayisiRef.current, baslangic, bitis, uykulaDalma, enUzunUyku, uykuKalitesi: skorSonuc.toplam, puanDetay: skorSonuc.detaylar };
+    const rapor: GeceRaporu = {
+      id: Date.now(), tarih: tarihStr, toplamUyku,
+      aglamaSayisi: aglamaSayisiRef.current,
+      baslangic, bitis, uykulaDalma, enUzunUyku,
+      uykuKalitesi: skorSonuc.toplam,
+      puanDetay: skorSonuc.detaylar,
+      yorumEmoji: skorSonuc.yorumEmoji,
+      yorumMesaj: skorSonuc.yorumMesaj,
+      enBuyukEtki: skorSonuc.enBuyukEtki,
+      aksiyonlar: skorSonuc.aksiyonlar,
+    };
     setGeceRaporlari(prev => {
       const yeni = [rapor, ...prev];
       AsyncStorage.setItem(GECE_RAPORLARI_KEY, JSON.stringify(yeni)).catch(() => {});
@@ -2016,6 +1832,15 @@ export default function Analiz() {
                 </Text>
                 <Text style={styles.modalAltBaslik}>{formatTarihGuzel(seciliRapor.baslangic)}</Text>
                 <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
+
+                  {/* 1. Özet cümle */}
+                  {seciliRapor.yorumEmoji ? (
+                    <View style={styles.yorumBanner}>
+                      <Text style={styles.yorumBannerText}>{seciliRapor.yorumEmoji}  {seciliRapor.yorumMesaj}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* 2. Skor dairesi */}
                   <View style={styles.skorDaireKutu}>
                     <View style={[styles.skorDaire, { borderColor: kaliteRenk(seciliRapor.uykuKalitesi) }]}>
                       <Text style={[styles.skorDaireSayi, { color: kaliteRenk(seciliRapor.uykuKalitesi) }]}>{seciliRapor.uykuKalitesi}</Text>
@@ -2026,6 +1851,23 @@ export default function Analiz() {
                     <View style={[styles.progressFill, { width: (seciliRapor.uykuKalitesi + '%') as any, backgroundColor: kaliteRenk(seciliRapor.uykuKalitesi) }]} />
                   </View>
                   <Text style={[styles.progressYazi, { color: kaliteRenk(seciliRapor.uykuKalitesi) }]}>{'%' + seciliRapor.uykuKalitesi + ' — ' + kaliteEtiket(seciliRapor.uykuKalitesi)}</Text>
+
+                  {/* 3. En büyük etki kartı */}
+                  {seciliRapor.enBuyukEtki ? (
+                    <View style={styles.enBuyukEtkiKart}>
+                      <Text style={styles.enBuyukEtkiKartBaslik}>
+                        {lang === 'en' ? '✨ Biggest impact' : '✨ En büyük etki'}
+                      </Text>
+                      <Text style={styles.enBuyukEtkiKartMetin} numberOfLines={2}>{seciliRapor.enBuyukEtki.baslik}</Text>
+                      <Text style={styles.enBuyukEtkiKartPuan}>
+                        {lang === 'en'
+                          ? `~+${seciliRapor.enBuyukEtki.potansiyelKazanc} pts potential gain`
+                          : `~+${seciliRapor.enBuyukEtki.potansiyelKazanc} puan potansiyel kazanç`}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {/* 4. İstatistik kartları */}
                   <View style={styles.gridRow}>
                     <View style={styles.gridKart}><Text style={styles.gridDeger}>{formatSure(seciliRapor.toplamUyku)}</Text><Text style={styles.gridEtiket}>{t.toplamUyku}</Text></View>
                     <View style={styles.gridKart}><Text style={styles.gridDeger}>{t.gecekez(seciliRapor.aglamaSayisi)}</Text><Text style={styles.gridEtiket}>{t.aglama}</Text></View>
@@ -2038,24 +1880,43 @@ export default function Analiz() {
                     <View style={styles.gridKart}><Text style={styles.gridDeger}>{formatSaat(seciliRapor.baslangic)}</Text><Text style={styles.gridEtiket}>{t.uykuBaslangici}</Text></View>
                     <View style={styles.gridKart}><Text style={styles.gridDeger}>{formatSaat(seciliRapor.bitis)}</Text><Text style={styles.gridEtiket}>{t.uyanma}</Text></View>
                   </View>
+
+                  {/* 5. Puan detayı */}
                   <View style={styles.puanDetayKutu}>
                     <Text style={styles.puanDetayBaslik}>{t.puanDetayBaslik}</Text>
-                    {(() => {
-                      let minP = 0, enBuyukIdx = -1;
-                      seciliRapor.puanDetay.forEach((d, i) => { if (d.puan < minP) { minP = d.puan; enBuyukIdx = i; } });
-                      return seciliRapor.puanDetay.map((d, i) => (
-                        <View key={i} style={styles.puanDetaySatir}>
-                          <Text style={styles.puanDetayIkon}>{d.puan < 0 ? '⚠️' : '✅'}</Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.puanDetayYazi, { flex: 0 }]}>{d.baslik}</Text>
-                            {i === enBuyukIdx && <Text style={styles.enBuyukEtiket}>{t.enBuyukEtki}</Text>}
-                          </View>
-                          <Text style={[styles.puanDetayPuan, { color: d.puan > 0 ? '#4ade80' : d.puan < 0 ? '#f87171' : 'rgba(255,255,255,0.4)' }]}>
-                            {d.puan > 0 ? '+' + d.puan : '' + d.puan}
-                          </Text>
+                    {seciliRapor.puanDetay.map((d, i) => (
+                      <View key={i} style={styles.puanDetaySatir}>
+                        <Text style={styles.puanDetayIkon}>{d.puan < 0 ? '⚠️' : '✅'}</Text>
+                        <Text style={[styles.puanDetayYazi, { flex: 1 }]}>{d.baslik}</Text>
+                        <Text style={[styles.puanDetayPuan, { color: d.puan > 0 ? '#4ade80' : d.puan < 0 ? '#f87171' : 'rgba(255,255,255,0.4)' }]}>
+                          {d.puan > 0 ? '+' + d.puan : '' + d.puan}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* 6. Aksiyonlar */}
+                  {seciliRapor.aksiyonlar && seciliRapor.aksiyonlar.length > 0 ? (
+                    <View style={styles.aksiyonlarKutu}>
+                      <Text style={styles.aksiyonlarBaslik}>
+                        {lang === 'en' ? '💡 What you can do' : '💡 Ne yapabilirsiniz'}
+                      </Text>
+                      {seciliRapor.aksiyonlar.map((a, i) => (
+                        <View key={i} style={styles.aksiyonSatir}>
+                          <Text style={styles.aksiyonOk}>→</Text>
+                          <Text style={styles.aksiyonMetin}>{a}</Text>
                         </View>
-                      ));
-                    })()}
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {/* 7. Dedektör hatırlatıcısı */}
+                  <View style={styles.detektorHatirlatici}>
+                    <Text style={styles.detektorHatirlaticiMetin}>
+                      {lang === 'en'
+                        ? '🎙 Use the cry detector during sleep for more accurate scoring.'
+                        : '🎙 Daha doğru puanlama için uyku sırasında ağlama dedektörünü kullanın.'}
+                    </Text>
                   </View>
                 </ScrollView>
                 <TouchableOpacity style={[styles.raporModalBtn, { marginTop: 12 }]} onPress={() => setDetayModal(false)}>
@@ -2480,4 +2341,19 @@ const styles = StyleSheet.create({
   ikiliGeceSure:          { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 1 },
   ikiliPuanCizgi:         { width: 3, height: 12, borderRadius: 1.5 },
   ikiliPuanYazi:          { fontSize: 11, fontWeight: 'bold' },
+
+  // ── YENİ RAPOR MODAL STİLLERİ ────────────────────────────────────────────────
+  yorumBanner:            { backgroundColor: 'rgba(157,140,239,0.12)', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(157,140,239,0.25)', alignItems: 'center' },
+  yorumBannerText:        { color: 'white', fontSize: 15, fontWeight: '600', textAlign: 'center' },
+  enBuyukEtkiKart:        { backgroundColor: 'rgba(245,166,35,0.1)', borderRadius: 12, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(245,166,35,0.3)', gap: 4 },
+  enBuyukEtkiKartBaslik:  { color: '#F5A623', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 },
+  enBuyukEtkiKartMetin:   { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 18 },
+  enBuyukEtkiKartPuan:    { color: '#4ade80', fontSize: 12, fontWeight: '600' },
+  aksiyonlarKutu:         { backgroundColor: 'rgba(74,222,128,0.06)', borderRadius: 12, padding: 12, marginTop: 8, borderWidth: 1, borderColor: 'rgba(74,222,128,0.15)', gap: 8 },
+  aksiyonlarBaslik:       { color: '#4ade80', fontSize: 13, fontWeight: 'bold', marginBottom: 4 },
+  aksiyonSatir:           { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  aksiyonOk:              { color: '#4ade80', fontSize: 13, fontWeight: 'bold', lineHeight: 20 },
+  aksiyonMetin:           { color: 'rgba(255,255,255,0.7)', fontSize: 13, lineHeight: 20, flex: 1 },
+  detektorHatirlatici:    { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 10, marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  detektorHatirlaticiMetin: { color: 'rgba(255,255,255,0.35)', fontSize: 11, textAlign: 'center', lineHeight: 16 },
 });
