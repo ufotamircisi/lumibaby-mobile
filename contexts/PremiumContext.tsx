@@ -1,7 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { Alert } from 'react-native';
-import { showRewarded } from '@/services/adMob';
 import { ENTITLEMENT_ID } from '@/services/revenuecat';
 
 function getRCPurchases() {
@@ -14,49 +12,11 @@ function getPAYWALL_RESULT() {
   try { return require('react-native-purchases-ui').PAYWALL_RESULT; } catch { return {}; }
 }
 
-const KEYS = {
-  TRIAL_START:    'lumibaby_trial_start',
-  DETEKTOR_DAILY: 'detectorDailyUsage',
-  ANALIZ_DAILY:   'cryHelperDailyUsage',
-  UYKU_DAILY:     'uykuDedektorDailyUsage',
-};
-
-const TRIAL_GUN         = 7;
+const TRIAL_START_KEY   = 'lumibaby_trial_start';
 const PREMIUM_CACHE_KEY = 'lumibaby_rc_premium_cache';
+const TRIAL_GUN         = 7;
 
 export type PremiumDurum = 'trial' | 'premium' | 'free';
-
-interface DailyUsage {
-  date: string;
-  normalHakKullanildi: boolean;
-  reklamHakKullanildi: boolean;
-  kullanilmis: number;
-}
-
-function bugunTarih(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
-async function getDailyUsage(key: string): Promise<DailyUsage> {
-  const today = bugunTarih();
-  try {
-    const data = await AsyncStorage.getItem(key);
-    if (data) {
-      const parsed: DailyUsage = JSON.parse(data);
-      if (parsed.date === today) return parsed;
-    }
-  } catch {}
-  return { date: today, normalHakKullanildi: false, reklamHakKullanildi: false, kullanilmis: 0 };
-}
-
-async function saveDailyUsage(key: string, usage: DailyUsage): Promise<void> {
-  await AsyncStorage.setItem(key, JSON.stringify(usage));
-}
-
-function computeHak(usage: DailyUsage): number {
-  const earned = 1 + (usage.reklamHakKullanildi ? 1 : 0);
-  return Math.max(0, earned - usage.kullanilmis);
-}
 
 async function rcIsPremium(): Promise<boolean> {
   try {
@@ -86,21 +46,9 @@ export interface PremiumContextValue {
   showTeaserOnly: boolean;
   isLockedFeature: boolean;
   trialKalanGun: number;
-  detektorHak: number;
-  analizHak: number;
-  detektorReklamGoster: boolean;
-  analizReklamGoster: boolean;
-  detektorKullan: () => Promise<boolean>;
-  analizKullan: () => Promise<boolean>;
-  uykuKullan: () => Promise<boolean>;
-  reklamIzleDetektor: (lang?: string) => Promise<void>;
-  reklamIzleAnaliz: (lang?: string) => Promise<void>;
-  reklamIzleUyku: (lang?: string) => Promise<void>;
   premiumAktifEt: () => Promise<boolean>;
   presentPaywall: () => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
-  uykuHak: number;
-  uykuReklamGoster: boolean;
   yukle: () => Promise<void>;
   yuklendi: boolean;
 }
@@ -108,25 +56,19 @@ export interface PremiumContextValue {
 const PremiumContext = createContext<PremiumContextValue | null>(null);
 
 export function PremiumProvider({ children }: { children: React.ReactNode }) {
-  const [durum, setDurum]                               = useState<PremiumDurum>('trial');
-  const [trialKalanGun, setTrialKalanGun]               = useState(TRIAL_GUN);
-  const [detektorHak, setDetektorHak]                   = useState(1);
-  const [analizHak, setAnalizHak]                       = useState(1);
-  const [uykuHak, setUykuHak]                           = useState(1);
-  const [detektorReklamGoster, setDetektorReklamGoster] = useState(true);
-  const [analizReklamGoster, setAnalizReklamGoster]     = useState(true);
-  const [uykuReklamGoster, setUykuReklamGoster]         = useState(true);
-  const [yuklendi, setYuklendi]                         = useState(false);
+  const [durum, setDurum]             = useState<PremiumDurum>('trial');
+  const [trialKalanGun, setTrialKalanGun] = useState(TRIAL_GUN);
+  const [yuklendi, setYuklendi]       = useState(false);
 
   const yukle = useCallback(async () => {
     const rcPremium      = await rcIsPremium();
     const partnerPremium = (await AsyncStorage.getItem('partner_premium')) === 'true';
     const isPremium      = rcPremium || partnerPremium;
 
-    let trialStart = await AsyncStorage.getItem(KEYS.TRIAL_START);
+    let trialStart = await AsyncStorage.getItem(TRIAL_START_KEY);
     if (!trialStart) {
       trialStart = Date.now().toString();
-      await AsyncStorage.setItem(KEYS.TRIAL_START, trialStart);
+      await AsyncStorage.setItem(TRIAL_START_KEY, trialStart);
     }
     const trialGecenGun = Math.floor((Date.now() - parseInt(trialStart)) / (1000 * 60 * 60 * 24));
     const trialBitti    = trialGecenGun >= TRIAL_GUN;
@@ -138,28 +80,6 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
 
     setDurum(yeniDurum);
     setTrialKalanGun(kalanGun);
-
-    if (yeniDurum !== 'free') {
-      setDetektorHak(999);
-      setAnalizHak(999);
-      setUykuHak(999);
-      setDetektorReklamGoster(false);
-      setAnalizReklamGoster(false);
-      setUykuReklamGoster(false);
-    } else {
-      const detUsage = await getDailyUsage(KEYS.DETEKTOR_DAILY);
-      setDetektorHak(computeHak(detUsage));
-      setDetektorReklamGoster(!detUsage.reklamHakKullanildi);
-
-      const anizUsage = await getDailyUsage(KEYS.ANALIZ_DAILY);
-      setAnalizHak(computeHak(anizUsage));
-      setAnalizReklamGoster(!anizUsage.reklamHakKullanildi);
-
-      const uykuUsage = await getDailyUsage(KEYS.UYKU_DAILY);
-      setUykuHak(computeHak(uykuUsage));
-      setUykuReklamGoster(!uykuUsage.reklamHakKullanildi);
-    }
-
     setYuklendi(true);
   }, []);
 
@@ -198,84 +118,6 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     }
   }, [yukle]);
 
-  const detektorKullan = useCallback(async (): Promise<boolean> => {
-    if (durum !== 'free') return true;
-    if (detektorHak <= 0) return false;
-    const usage = await getDailyUsage(KEYS.DETEKTOR_DAILY);
-    usage.kullanilmis += 1;
-    usage.normalHakKullanildi = true;
-    await saveDailyUsage(KEYS.DETEKTOR_DAILY, usage);
-    setDetektorHak(prev => prev - 1);
-    return true;
-  }, [durum, detektorHak]);
-
-  const analizKullan = useCallback(async (): Promise<boolean> => {
-    if (durum !== 'free') return true;
-    if (analizHak <= 0) return false;
-    const usage = await getDailyUsage(KEYS.ANALIZ_DAILY);
-    usage.kullanilmis += 1;
-    usage.normalHakKullanildi = true;
-    await saveDailyUsage(KEYS.ANALIZ_DAILY, usage);
-    setAnalizHak(prev => prev - 1);
-    return true;
-  }, [durum, analizHak]);
-
-  const reklamIzleDetektor = useCallback(async (lang: string = 'tr') => {
-    if (durum !== 'free') return;
-    const result = await showRewarded();
-    if (result === 'unavailable') {
-      Alert.alert(lang === 'en' ? "Ad couldn't load, please try again" : 'Reklam şu an yüklenemedi, lütfen tekrar deneyin');
-      return;
-    }
-    if (result !== 'earned') return;
-    const usage = await getDailyUsage(KEYS.DETEKTOR_DAILY);
-    usage.reklamHakKullanildi = true;
-    await saveDailyUsage(KEYS.DETEKTOR_DAILY, usage);
-    setDetektorHak(prev => prev + 1);
-    setDetektorReklamGoster(false);
-  }, [durum]);
-
-  const reklamIzleAnaliz = useCallback(async (lang: string = 'tr') => {
-    if (durum !== 'free') return;
-    const result = await showRewarded();
-    if (result === 'unavailable') {
-      Alert.alert(lang === 'en' ? "Ad couldn't load, please try again" : 'Reklam şu an yüklenemedi, lütfen tekrar deneyin');
-      return;
-    }
-    if (result !== 'earned') return;
-    const usage = await getDailyUsage(KEYS.ANALIZ_DAILY);
-    usage.reklamHakKullanildi = true;
-    await saveDailyUsage(KEYS.ANALIZ_DAILY, usage);
-    setAnalizHak(prev => prev + 1);
-    setAnalizReklamGoster(false);
-  }, [durum]);
-
-  const uykuKullan = useCallback(async (): Promise<boolean> => {
-    if (durum !== 'free') return true;
-    if (uykuHak <= 0) return false;
-    const usage = await getDailyUsage(KEYS.UYKU_DAILY);
-    usage.kullanilmis += 1;
-    usage.normalHakKullanildi = true;
-    await saveDailyUsage(KEYS.UYKU_DAILY, usage);
-    setUykuHak(prev => prev - 1);
-    return true;
-  }, [durum, uykuHak]);
-
-  const reklamIzleUyku = useCallback(async (lang: string = 'tr') => {
-    if (durum !== 'free') return;
-    const result = await showRewarded();
-    if (result === 'unavailable') {
-      Alert.alert(lang === 'en' ? "Ad couldn't load, please try again" : 'Reklam şu an yüklenemedi, lütfen tekrar deneyin');
-      return;
-    }
-    if (result !== 'earned') return;
-    const usage = await getDailyUsage(KEYS.UYKU_DAILY);
-    usage.reklamHakKullanildi = true;
-    await saveDailyUsage(KEYS.UYKU_DAILY, usage);
-    setUykuHak(prev => prev + 1);
-    setUykuReklamGoster(false);
-  }, [durum]);
-
   const value: PremiumContextValue = {
     durum,
     isPremium:        durum === 'premium',
@@ -286,18 +128,6 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     showTeaserOnly:   durum === 'free',
     isLockedFeature:  durum === 'free',
     trialKalanGun,
-    detektorHak,
-    analizHak,
-    uykuHak,
-    detektorReklamGoster,
-    analizReklamGoster,
-    uykuReklamGoster,
-    detektorKullan,
-    analizKullan,
-    uykuKullan,
-    reklamIzleDetektor,
-    reklamIzleAnaliz,
-    reklamIzleUyku,
     premiumAktifEt: presentPaywall,
     presentPaywall,
     restorePurchases,

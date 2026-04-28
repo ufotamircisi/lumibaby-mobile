@@ -3,7 +3,7 @@ import AdBanner from '@/components/AdBanner';
 import Paywall from '@/components/Paywall';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
-import { showInterstitialIfReady } from '@/services/adMob';
+import { showInterstitialIfReady, showRewarded } from '@/services/adMob';
 import * as audioManager from '@/services/audioManager';
 import { CONFIDENCE_THRESHOLD, CryDetectionEngine, WAV_RECORDING_OPTIONS, type SensitivityLevel } from '@/services/cryDetectionEngine';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,17 +11,18 @@ import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, AppState, Modal, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, AppState, Modal, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, Vibration, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendAlertToAll } from './_layout';
 import { hesaplaSleepScore, type PuanDetayItem, type SleepScoreInput } from '@/utils/sleepScore';
+import * as DL from '@/utils/detectorLimit';
+import { isItemPremium, canStartDetector, canViewDetailedReport } from '@/utils/permissions';
 
 // ── STORAGE KEYS ─────────────────────────────────────────────────────────────
 const SES_OGRENME_KEY          = 'lumibaby_ses_ogrenme';
 const GECE_RAPORLARI_KEY       = 'lumibaby_gece_raporlari';
 const WAKE_WINDOW_BILDIRIM_KEY = 'lumibaby_wake_window_bildirim';
 const SLEEP_START_KEY          = 'lumibaby_sleep_start';
-const DETEKTOR_BITIS_KEY       = 'lumibaby_detektor_bitis';
 type SesOgrenmeKayit = { sesId: number; sesAdi: string; kalisSaniye: number; ts: number };
 // Wonder Weeks: hafta numaraları
 const WONDER_WEEKS = [5, 8, 12, 19, 26, 37, 46, 55];
@@ -67,7 +68,9 @@ type GeceRaporu = {
   // yeni alanlar (eski kayıtlarda bulunmayabilir)
   yorumEmoji?: string;
   yorumMesaj?: string;
-  enBuyukEtki?: { baslik: string; potansiyelKazanc: number } | null;
+  ozetCumle?: string;
+  buGeceIcin?: string;
+  enBuyukEtki?: { baslik: string; penalty?: number; potansiyelKazanc: number } | null;
   aksiyonlar?: string[];
 };
 
@@ -178,13 +181,12 @@ const sabitKolikListesiEN: SesTip[] = [
 ];
 
 export default function Analiz() {
-  const { isTrial, canAccessPremium, detektorHak, analizHak, uykuHak, detektorReklamGoster, analizReklamGoster, uykuReklamGoster, detektorKullan, analizKullan, uykuKullan, reklamIzleDetektor, reklamIzleAnaliz, reklamIzleUyku, premiumAktifEt } = usePremium();
+  const { isTrial, canAccessPremium, premiumAktifEt } = usePremium();
   const router = useRouter();
   const { lang, t } = useLang();
   const free = !canAccessPremium;
 
   const [paywallVisible, setPaywallVisible] = useState(false);
-  const [paywallTip, setPaywallTip]         = useState<'detektor' | 'analiz' | 'uyku' | 'premium'>('premium');
   const [bebekAdi, setBebekAdi]             = useState('');
 
   const [uyuyorMu, setUyuyorMu]             = useState(false);
@@ -211,6 +213,8 @@ export default function Analiz() {
   const [anneNinniUri, setAnneNinniUri]     = useState<string | null>(null);
   const [annePisPisUri, setAnnePisPisUri]   = useState<string | null>(null);
   const [detektorSure, setDetektorSure]     = useState(0);
+  const [detState, setDetState]             = useState<DL.DetectorState | null>(null);
+  const [sureDolduVisible, setSureDolduVisible] = useState(false);
   // Ağlama yardımcısı
   const [cryHelperAdim, setCryHelperAdim]   = useState<'giris' | 'soru' | 'sonuc'>('giris');
   const [cryCevaplar, setCryCevaplar]       = useState<number[]>([]);
@@ -260,7 +264,8 @@ export default function Analiz() {
 
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
   const detektorTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
-  const detektorBitisRef   = useRef<number>(0); // timestamp: bitiş zamanı (ms)
+  const detStateRef        = useRef<DL.DetectorState | null>(null);
+  const detektorKritikRef  = useRef(false);
   const dinlemeRef         = useRef(false);
   const caliyorRef         = useRef(false);
   const geceBaslangicRef   = useRef<number>(0);
@@ -365,31 +370,15 @@ export default function Analiz() {
       }, 1000);
     });
 
-    // Arka planda süresi dolmamış dedektör varsa geri yükle
-    AsyncStorage.getItem(DETEKTOR_BITIS_KEY).then(v => {
-      if (!v) return;
-      const bitis = parseInt(v, 10);
-      const kalan = bitis - Date.now();
-      if (kalan <= 0) {
-        // Arka planda süresi doldu — temizle
-        AsyncStorage.removeItem(DETEKTOR_BITIS_KEY).catch(() => {});
-        return;
+    // Dedektör günlük limit durumunu yükle; aktif oturum varsa sayacı geri yükle
+    DL.loadDetectorState().then(state => {
+      detStateRef.current = state;
+      setDetState(state);
+      if (DL.isDetectorSessionActive(state)) {
+        setDetektorSure(DL.detectorKalanSaniye(state));
+        bashlatDetektorTimer(state.sessionStart!);
       }
-      detektorBitisRef.current = bitis;
-      setDetektorSure(Math.ceil(kalan / 1000));
-      if (detektorTimerRef.current) clearInterval(detektorTimerRef.current);
-      detektorTimerRef.current = setInterval(() => {
-        const kalanMs = detektorBitisRef.current - Date.now();
-        if (kalanMs <= 0) {
-          clearInterval(detektorTimerRef.current!); detektorTimerRef.current = null;
-          setDetektorSure(0); detektorBitisRef.current = 0;
-          AsyncStorage.removeItem(DETEKTOR_BITIS_KEY).catch(() => {});
-          herSeyiDurdur(); setSeciliDetektor(null); setPaywallTip('detektor'); setPaywallVisible(true);
-        } else {
-          setDetektorSure(Math.ceil(kalanMs / 1000));
-        }
-      }, 500);
-    });
+    }).catch(() => {});
   }, []);
 
   // AppState: arka plandan geri dönünce sayaçları hemen güncelle
@@ -399,13 +388,8 @@ export default function Analiz() {
       if (geceBaslangicRef.current > 0) {
         setSure(Math.min(Math.floor((Date.now() - geceBaslangicRef.current) / 1000), 24 * 3600));
       }
-      if (detektorBitisRef.current > 0) {
-        const kalanMs = detektorBitisRef.current - Date.now();
-        if (kalanMs <= 0) {
-          setDetektorSure(0);
-        } else {
-          setDetektorSure(Math.ceil(kalanMs / 1000));
-        }
+      if (detStateRef.current?.sessionStart) {
+        setDetektorSure(DL.detectorKalanSaniye(detStateRef.current));
       }
     });
     return () => sub.remove();
@@ -630,7 +614,7 @@ export default function Analiz() {
   const herSeyiDurdur = async () => {
     dinlemeRef.current = false; caliyorRef.current = false;
     if (timerRef.current) clearInterval(timerRef.current);
-    if (detektorTimerRef.current) clearInterval(detektorTimerRef.current);
+    if (detektorTimerRef.current) { clearInterval(detektorTimerRef.current); detektorTimerRef.current = null; }
     if (cooldownTimerRef.current) { clearInterval(cooldownTimerRef.current); cooldownTimerRef.current = null; }
     probeTimerTemizle();
     await kaydiDurdur();
@@ -639,8 +623,49 @@ export default function Analiz() {
     setConfidenceScore(0);
     setCooldownKalan(0);
     AsyncStorage.removeItem(SLEEP_START_KEY).catch(() => {});
-    AsyncStorage.removeItem(DETEKTOR_BITIS_KEY).catch(() => {});
-    detektorBitisRef.current = 0;
+  };
+
+  const bashlatDetektorTimer = (sessionStart: number) => {
+    if (detektorTimerRef.current) { clearInterval(detektorTimerRef.current); detektorTimerRef.current = null; }
+    detektorKritikRef.current = false;
+    const tick = () => {
+      const kalan = DL.detectorKalanSaniye(detStateRef.current ?? { freeUsed: true, adUsed: false, sessionStart });
+      setDetektorSure(kalan);
+      if (kalan > 0 && kalan <= 600 && !detektorKritikRef.current) {
+        detektorKritikRef.current = true;
+        Vibration.vibrate([0, 200, 100, 200]);
+      }
+      if (kalan <= 0) {
+        if (detektorTimerRef.current) clearInterval(detektorTimerRef.current);
+        detektorTimerRef.current = null;
+        DL.detectorEndSession().catch(() => {});
+        if (detStateRef.current) {
+          const ended = { ...detStateRef.current, sessionStart: null };
+          detStateRef.current = ended;
+          setDetState(ended);
+        }
+        herSeyiDurdur();
+        setSeciliDetektor(null);
+        setSureDolduVisible(true);
+      }
+    };
+    tick();
+    detektorTimerRef.current = setInterval(tick, 500);
+  };
+
+  const handleDetektorReklam = async () => {
+    const adResult = await showRewarded();
+    if (adResult === 'unavailable') {
+      Alert.alert(lang === 'en' ? 'Ad unavailable, please try again' : 'Reklam şu an yüklenemedi, lütfen tekrar deneyin');
+      return;
+    }
+    if (adResult !== 'earned') return;
+    const current = detStateRef.current ?? await DL.loadDetectorState();
+    const newState = await DL.detectorStartAdSession(current);
+    detStateRef.current = newState;
+    setDetState(newState);
+    setSureDolduVisible(false);
+    bashlatDetektorTimer(newState.sessionStart!);
   };
 
   // ── AĞLAMA YARDIMCISI ────────────────────────────────────────────────────────
@@ -662,14 +687,9 @@ export default function Analiz() {
     });
   }, []);
 
-  const cryHelperBaslat = useCallback(async () => {
-    if (free) {
-      if (analizHak <= 0) { setPaywallTip('analiz'); setPaywallVisible(true); return; }
-      const hakKullanildi = await analizKullan();
-      if (!hakKullanildi) { setPaywallTip('analiz'); setPaywallVisible(true); return; }
-    }
+  const cryHelperBaslat = useCallback(() => {
     setCryCevaplar([]); setCrySonuc([]); setCryHelperAdim('soru');
-  }, [free, analizHak, analizKullan]);
+  }, []);
 
   const cryCevapSec = useCallback(async (secenekIdx: number) => {
     const yeniCevaplar = [...cryCevaplar, secenekIdx];
@@ -685,11 +705,7 @@ export default function Analiz() {
   }, [cryCevaplar, crySonucHesapla, crySonucuKaydet]);
 
   const bebekUyudu = async () => {
-    if (free) {
-      if (uykuHak <= 0) { setPaywallTip('uyku'); setPaywallVisible(true); return; }
-      const hakKullanildi = await uykuKullan();
-      if (!hakKullanildi) { setPaywallTip('uyku'); setPaywallVisible(true); return; }
-    }
+    // canManualTrack() → her zaman true; premium kontrolü yok
     // Önceki uyanma penceresi bildirimi varsa iptal et (bebek tekrar uyudu)
     if (wakeWindowNotifIdRef.current) {
       await Notifications.cancelScheduledNotificationAsync(wakeWindowNotifIdRef.current).catch(() => {});
@@ -742,25 +758,17 @@ export default function Analiz() {
 
   const dedektoraBasildi = async (tip: DedektorTip) => {
     if (free) {
-      if (detektorHak <= 0) { setPaywallTip('detektor'); setPaywallVisible(true); return; }
-      const hakKullanildi = await detektorKullan();
-      if (!hakKullanildi) { setPaywallTip('detektor'); setPaywallVisible(true); return; }
-      const endTime = Date.now() + 60 * 60 * 1000;
-      detektorBitisRef.current = endTime;
-      setDetektorSure(3600);
-      AsyncStorage.setItem(DETEKTOR_BITIS_KEY, String(endTime)).catch(() => {});
-      if (detektorTimerRef.current) clearInterval(detektorTimerRef.current);
-      detektorTimerRef.current = setInterval(() => {
-        const kalanMs = detektorBitisRef.current - Date.now();
-        if (kalanMs <= 0) {
-          clearInterval(detektorTimerRef.current!); detektorTimerRef.current = null;
-          setDetektorSure(0); detektorBitisRef.current = 0;
-          AsyncStorage.removeItem(DETEKTOR_BITIS_KEY).catch(() => {});
-          herSeyiDurdur(); setSeciliDetektor(null); setPaywallTip('detektor'); setPaywallVisible(true);
-        } else {
-          setDetektorSure(Math.ceil(kalanMs / 1000));
-        }
-      }, 500);
+      const current = detStateRef.current ?? await DL.loadDetectorState();
+      if (!canStartDetector(false, current)) {
+        setSureDolduVisible(true); return;
+      }
+      const { result, state: newState } = await DL.detectorTryStart(current);
+      detStateRef.current = newState;
+      setDetState(newState);
+      if (result === 'need_ad' || result === 'exhausted') {
+        setSureDolduVisible(true); return;
+      }
+      bashlatDetektorTimer(newState.sessionStart!);
     }
     const izin = await Audio.requestPermissionsAsync();
     if (!izin.granted) { alert(t.mikrofonIzni); return; }
@@ -1003,6 +1011,8 @@ export default function Analiz() {
       puanDetay: skorSonuc.detaylar,
       yorumEmoji: skorSonuc.yorumEmoji,
       yorumMesaj: skorSonuc.yorumMesaj,
+      ozetCumle:  skorSonuc.ozetCumle,
+      buGeceIcin: skorSonuc.buGeceIcin,
       enBuyukEtki: skorSonuc.enBuyukEtki,
       aksiyonlar: skorSonuc.aksiyonlar,
     };
@@ -1027,7 +1037,7 @@ export default function Analiz() {
   };
 
   const raporDetayAc = (rapor: GeceRaporu) => {
-    if (free) { router.push('/paywall'); return; }
+    if (!canViewDetailedReport(canAccessPremium)) { router.push('/paywall'); return; }
     setSeciliRapor(rapor); setDetayModal(true);
   };
 
@@ -1079,7 +1089,7 @@ export default function Analiz() {
               {free && (
                 <TouchableOpacity
                   style={styles.premiumMiniRozet}
-                  onPress={() => { setPaywallTip('premium'); setPaywallVisible(true); }}
+                  onPress={() => setPaywallVisible(true)}
                 >
                   <Text style={{ fontSize: 12 }}>👑</Text>
                   <Text style={styles.premiumMiniRozetYazi}>{t.gecePremiumSinirsiz}</Text>
@@ -1107,7 +1117,7 @@ export default function Analiz() {
               {seciliDetektor === 'aglama' && seciliNinni && <Text style={styles.aktifSesText}>{seciliNinni.icon + ' ' + seciliNinni.name}</Text>}
               {seciliDetektor === 'kolik'  && seciliKolik  && <Text style={styles.aktifSesText}>{seciliKolik.icon + ' '  + seciliKolik.name}</Text>}
               {aglamaSayisi > 0 && <Text style={styles.aglamaSayisiText}>{t.agladiSayisi(aglamaSayisi)}</Text>}
-              {free && detektorSure > 0 && <Text style={styles.sureBilgi}>{t.kalanSure(formatSayac(detektorSure))}</Text>}
+              {free && detektorSure > 0 && <Text style={[styles.sureBilgi, detektorSure <= 600 && styles.sureBilgiKritik]}>{t.kalanSure(formatSayac(detektorSure))}</Text>}
               {/* Güven skoru çubuğu */}
               {dinleniyor && !caliniyor && cooldownKalan === 0 && (
                 <View style={styles.confidenceRow}>
@@ -1138,7 +1148,15 @@ export default function Analiz() {
         {uyuyorMu && (
           <View style={styles.dedektorSection}>
             <Text style={styles.dedektorBaslik}>{t.geceModuSec}</Text>
-            {free && <View style={styles.hakBilgi}><Text style={styles.hakBilgiYazi}>{t.bugunDetektor(detektorHak)}</Text></View>}
+            {free && detektorSure === 0 && (
+              <View style={styles.hakBilgi}>
+                <Text style={styles.hakBilgiYazi}>{t.bugunDetektor(
+                  detState
+                    ? (detState.freeUsed ? 0 : 1) + (detState.adUsed ? 0 : 1)
+                    : 1
+                )}</Text>
+              </View>
+            )}
             <View style={styles.dedektorRow}>
               <View style={styles.dedektorKolumn}>
                 <TouchableOpacity style={[styles.dedektorKart, seciliDetektor === 'aglama' && styles.dedektorKartAktif]} onPress={() => dedektoraBasildi('aglama')}>
@@ -1436,9 +1454,6 @@ export default function Analiz() {
             <>
               <Text style={styles.cryHelperBaslik}>{t.cryHelperBaslik}</Text>
               <Text style={styles.cryHelperAcik}>{t.cryHelperAcik}</Text>
-              {free && analizHak > 0 && (
-                <View style={styles.hakBilgi}><Text style={styles.hakBilgiYazi}>{t.cryHelperHak(analizHak)}</Text></View>
-              )}
               <TouchableOpacity style={styles.cryHelperBaslatBtn} onPress={cryHelperBaslat}>
                 <Text style={styles.cryHelperBaslatBtnYazi}>{t.cryHelperBaslat}</Text>
               </TouchableOpacity>
@@ -1531,7 +1546,7 @@ export default function Analiz() {
             <ScrollView style={{ maxHeight: 400 }} nestedScrollEnabled>
               {sesList.map((ses) => {
                 const secili = modalTip === 'aglama' ? seciliNinni?.id === ses.id : seciliKolik?.id === ses.id;
-                const anneMi = ses.id >= 998;
+                const anneMi = isItemPremium(ses);
                 return (
                   <TouchableOpacity
                     key={ses.id}
@@ -1833,14 +1848,18 @@ export default function Analiz() {
                 <Text style={styles.modalAltBaslik}>{formatTarihGuzel(seciliRapor.baslangic)}</Text>
                 <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
 
-                  {/* 1. Özet cümle */}
-                  {seciliRapor.yorumEmoji ? (
+                  {/* 1. Dinamik özet cümle */}
+                  {seciliRapor.ozetCumle ? (
+                    <View style={styles.yorumBanner}>
+                      <Text style={styles.yorumBannerText}>{seciliRapor.ozetCumle}</Text>
+                    </View>
+                  ) : seciliRapor.yorumEmoji ? (
                     <View style={styles.yorumBanner}>
                       <Text style={styles.yorumBannerText}>{seciliRapor.yorumEmoji}  {seciliRapor.yorumMesaj}</Text>
                     </View>
                   ) : null}
 
-                  {/* 2. Skor dairesi */}
+                  {/* 2. Skor dairesi + yorum mesajı */}
                   <View style={styles.skorDaireKutu}>
                     <View style={[styles.skorDaire, { borderColor: kaliteRenk(seciliRapor.uykuKalitesi) }]}>
                       <Text style={[styles.skorDaireSayi, { color: kaliteRenk(seciliRapor.uykuKalitesi) }]}>{seciliRapor.uykuKalitesi}</Text>
@@ -1850,7 +1869,15 @@ export default function Analiz() {
                   <View style={styles.progressBg}>
                     <View style={[styles.progressFill, { width: (seciliRapor.uykuKalitesi + '%') as any, backgroundColor: kaliteRenk(seciliRapor.uykuKalitesi) }]} />
                   </View>
-                  <Text style={[styles.progressYazi, { color: kaliteRenk(seciliRapor.uykuKalitesi) }]}>{'%' + seciliRapor.uykuKalitesi + ' — ' + kaliteEtiket(seciliRapor.uykuKalitesi)}</Text>
+                  {seciliRapor.yorumMesaj ? (
+                    <Text style={[styles.progressYazi, { color: kaliteRenk(seciliRapor.uykuKalitesi) }]}>
+                      {seciliRapor.yorumEmoji}  {seciliRapor.yorumMesaj}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.progressYazi, { color: kaliteRenk(seciliRapor.uykuKalitesi) }]}>
+                      {'%' + seciliRapor.uykuKalitesi + ' — ' + kaliteEtiket(seciliRapor.uykuKalitesi)}
+                    </Text>
+                  )}
 
                   {/* 3. En büyük etki kartı */}
                   {seciliRapor.enBuyukEtki ? (
@@ -1886,31 +1913,38 @@ export default function Analiz() {
                     <Text style={styles.puanDetayBaslik}>{t.puanDetayBaslik}</Text>
                     {seciliRapor.puanDetay.map((d, i) => (
                       <View key={i} style={styles.puanDetaySatir}>
-                        <Text style={styles.puanDetayIkon}>{d.puan < 0 ? '⚠️' : '✅'}</Text>
+                        <Text style={styles.puanDetayIkon}>{d.puan < 0 ? '⚠️' : d.puan > 0 ? '✅' : '•'}</Text>
                         <Text style={[styles.puanDetayYazi, { flex: 1 }]}>{d.baslik}</Text>
                         <Text style={[styles.puanDetayPuan, { color: d.puan > 0 ? '#4ade80' : d.puan < 0 ? '#f87171' : 'rgba(255,255,255,0.4)' }]}>
-                          {d.puan > 0 ? '+' + d.puan : '' + d.puan}
+                          {d.puan !== 0 ? (d.puan > 0 ? '+' + d.puan : '' + d.puan) : '—'}
                         </Text>
                       </View>
                     ))}
                   </View>
 
-                  {/* 6. Aksiyonlar */}
+                  {/* 6. Ne yapmalıyım? */}
                   {seciliRapor.aksiyonlar && seciliRapor.aksiyonlar.length > 0 ? (
                     <View style={styles.aksiyonlarKutu}>
                       <Text style={styles.aksiyonlarBaslik}>
-                        {lang === 'en' ? '💡 What you can do' : '💡 Ne yapabilirsiniz'}
+                        {lang === 'en' ? '💡 What to do next?' : '💡 Ne yapmalıyım?'}
                       </Text>
                       {seciliRapor.aksiyonlar.map((a, i) => (
-                        <View key={i} style={styles.aksiyonSatir}>
-                          <Text style={styles.aksiyonOk}>→</Text>
-                          <Text style={styles.aksiyonMetin}>{a}</Text>
-                        </View>
+                        <Text key={i} style={styles.aksiyonMetin}>{a}</Text>
                       ))}
                     </View>
                   ) : null}
 
-                  {/* 7. Dedektör hatırlatıcısı */}
+                  {/* 7. Bu gece için */}
+                  {seciliRapor.buGeceIcin ? (
+                    <View style={styles.buGeceIcinKutu}>
+                      <Text style={styles.buGeceIcinBaslik}>
+                        {lang === 'en' ? '🌙 Tonight' : '🌙 Bu gece için'}
+                      </Text>
+                      <Text style={styles.buGeceIcinMetin}>{seciliRapor.buGeceIcin}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* 8. Dedektör hatırlatıcısı */}
                   <View style={styles.detektorHatirlatici}>
                     <Text style={styles.detektorHatirlaticiMetin}>
                       {lang === 'en'
@@ -2036,22 +2070,18 @@ export default function Analiz() {
         visible={paywallVisible}
         onClose={() => setPaywallVisible(false)}
         onPremium={() => { setPaywallVisible(false); premiumAktifEt(); }}
-        onReklam={
-          isTrial ? undefined
-          : paywallTip === 'detektor' && detektorReklamGoster ? async () => { setPaywallVisible(false); await reklamIzleDetektor(lang); }
-          : paywallTip === 'analiz'   && analizReklamGoster   ? async () => { setPaywallVisible(false); await reklamIzleAnaliz(lang); }
-          : paywallTip === 'uyku'     && uykuReklamGoster     ? async () => { setPaywallVisible(false); await reklamIzleUyku(lang); }
-          : undefined
-        }
-        limitMesaji={
-          !isTrial && (
-            (paywallTip === 'detektor' && !detektorReklamGoster) ||
-            (paywallTip === 'analiz'   && !analizReklamGoster)   ||
-            (paywallTip === 'uyku'     && !uykuReklamGoster)
-          ) ? t.gunlukLimit : undefined
-        }
-        baslik={paywallTip === 'detektor' ? t.paywallDetektorBaslik : paywallTip === 'analiz' ? t.paywallAnalizBaslik : paywallTip === 'uyku' ? t.paywallUykuBaslik : t.paywallPremiumBaslik}
-        aciklama={paywallTip === 'detektor' ? t.paywallDetektorAcik : paywallTip === 'analiz' ? t.paywallAnalizAcik : paywallTip === 'uyku' ? t.paywallUykuAcik : t.paywallPremiumAcik}
+        baslik={t.paywallPremiumBaslik}
+        aciklama={t.paywallPremiumAcik}
+      />
+
+      {/* DEDEKTÖR SÜRE DOLDU MODAL */}
+      <Paywall
+        visible={sureDolduVisible}
+        onClose={() => setSureDolduVisible(false)}
+        onPremium={() => { setSureDolduVisible(false); router.push('/paywall'); }}
+        onReklam={!detState?.adUsed ? handleDetektorReklam : undefined}
+        baslik={t.detSureDoldu}
+        aciklama={!detState?.adUsed ? t.detReklamKazan : t.detGunlukBitti}
       />
     </View>
   );
@@ -2071,6 +2101,7 @@ const styles = StyleSheet.create({
   aktifSesText:           { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
   aglamaSayisiText:       { color: '#f59e0b', fontSize: 12 },
   sureBilgi:              { color: '#fb923c', fontSize: 12, fontWeight: '600' },
+  sureBilgiKritik:        { color: '#ef4444', fontSize: 13 },
   confidenceRow:          { alignItems: 'center', gap: 4, width: '100%', paddingHorizontal: 8, marginTop: 4 },
   confidenceBarBg:        { width: '100%', height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' },
   confidenceBarFill:      { height: '100%', borderRadius: 3 },
@@ -2349,11 +2380,14 @@ const styles = StyleSheet.create({
   enBuyukEtkiKartBaslik:  { color: '#F5A623', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 },
   enBuyukEtkiKartMetin:   { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 18 },
   enBuyukEtkiKartPuan:    { color: '#4ade80', fontSize: 12, fontWeight: '600' },
-  aksiyonlarKutu:         { backgroundColor: 'rgba(74,222,128,0.06)', borderRadius: 12, padding: 12, marginTop: 8, borderWidth: 1, borderColor: 'rgba(74,222,128,0.15)', gap: 8 },
+  aksiyonlarKutu:         { backgroundColor: 'rgba(74,222,128,0.06)', borderRadius: 12, padding: 12, marginTop: 8, borderWidth: 1, borderColor: 'rgba(74,222,128,0.15)', gap: 6 },
   aksiyonlarBaslik:       { color: '#4ade80', fontSize: 13, fontWeight: 'bold', marginBottom: 4 },
   aksiyonSatir:           { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   aksiyonOk:              { color: '#4ade80', fontSize: 13, fontWeight: 'bold', lineHeight: 20 },
-  aksiyonMetin:           { color: 'rgba(255,255,255,0.7)', fontSize: 13, lineHeight: 20, flex: 1 },
+  aksiyonMetin:           { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 20 },
+  buGeceIcinKutu:         { backgroundColor: 'rgba(157,140,239,0.08)', borderRadius: 12, padding: 12, marginTop: 8, borderWidth: 1, borderColor: 'rgba(157,140,239,0.2)' },
+  buGeceIcinBaslik:       { color: '#b8a8f8', fontSize: 13, fontWeight: 'bold', marginBottom: 6 },
+  buGeceIcinMetin:        { color: 'rgba(255,255,255,0.7)', fontSize: 13, lineHeight: 20 },
   detektorHatirlatici:    { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 10, marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   detektorHatirlaticiMetin: { color: 'rgba(255,255,255,0.35)', fontSize: 11, textAlign: 'center', lineHeight: 16 },
 });

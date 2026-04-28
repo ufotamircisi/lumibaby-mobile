@@ -3,6 +3,7 @@ import AdBanner from '@/components/AdBanner';
 import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import * as audioManager from '@/services/audioManager';
+import { isItemPremium } from '@/utils/permissions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -134,7 +135,7 @@ export default function Kolik() {
     Math.floor(saniye / 60) + ':' + (saniye % 60).toString().padStart(2, '0');
 
   const toggleSes = async (file: any, id: number) => {
-    if (id === 999 && free) { router.push('/paywall'); return; }
+    if (free && isItemPremium({ id })) { router.push('/paywall'); return; }
     if (!file) return;
     if (calananId === id) {
       await audioManager.stop();

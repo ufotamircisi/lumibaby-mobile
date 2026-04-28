@@ -1,3 +1,6 @@
+// utils/sleepScore.ts — v3 (sıfırdan yeniden yazıldı)
+// Tamamen unit-testable pure functions. Dışarıdan import: hesaplaSleepScore.
+
 export type PuanDetayItem = {
   baslik: string;
   puan: number;
@@ -6,306 +9,511 @@ export type PuanDetayItem = {
 };
 
 export interface SleepScoreInput {
-  toplamUyku: number;       // saniye
-  baslangicTs: number;      // timestamp ms
+  toplamUyku: number;      // saniye
+  baslangicTs: number;     // ms timestamp
   isGunduz: boolean;
   bebekHaftasi: number | null;
   aglamaSayisi: number;
-  aglamaSuresi?: number;    // saniye (opsiyonel)
-  napSayisi?: number;       // gün içi şekerleme sayısı (opsiyonel)
-  sonNapBitisTs?: number;   // son şekerleme bitiş timestamp ms (opsiyonel)
+  aglamaSuresi?: number;   // saniye (opsiyonel)
+  napSayisi?: number;
+  sonNapBitisTs?: number;  // ms (opsiyonel)
   lang: 'tr' | 'en';
 }
 
 export interface SleepScoreResult {
-  toplam: number;           // 40–100 (geçersiz kayıt: 0)
+  toplam: number;          // 40–100 arası (geçersiz kayıt: 0)
   geceCeza: number;
   gunduzCeza: number;
+  sureOrani: number;       // gerçek / hedef (0–∞)
+  skorTavani: number | null;
   detaylar: PuanDetayItem[];
-  enBuyukEtki: { baslik: string; potansiyelKazanc: number } | null;
+  enBuyukEtki: {
+    baslik: string;
+    penalty: number;
+    potansiyelKazanc: number;
+  } | null;
   aksiyonlar: string[];
   yorumEmoji: string;
   yorumMesaj: string;
+  ozetCumle: string;
+  buGeceIcin: string;
 }
 
-// ── HELPERS ───────────────────────────────────────────────────────────────────
+// ── SÜRE FORMATLAMA ───────────────────────────────────────────────────────────
+// Bug fix: saat=0 ise "0s 24dk" yerine "24 dk" yaz
 
-function _fmtH(saat: number, lang: 'tr' | 'en'): string {
-  const s = Math.floor(saat);
-  const dk = Math.round((saat - s) * 60);
-  if (lang === 'en') return dk === 0 ? `${s}h` : `${s}h ${dk}m`;
+function _fmtH(saatKesirsiz: number, lang: 'tr' | 'en'): string {
+  const s  = Math.floor(saatKesirsiz);
+  const dk = Math.round((saatKesirsiz - s) * 60);
+  if (lang === 'en') {
+    if (s === 0) return `${dk}m`;
+    return dk === 0 ? `${s}h` : `${s}h ${dk}m`;
+  }
+  if (s === 0) return `${dk} dk`;
   return dk === 0 ? `${s}s` : `${s}s ${dk}dk`;
 }
 
-function _fmtT(h: number, m: number): string {
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+function _fmtT(saat: number, dakika: number): string {
+  return `${String(saat).padStart(2, '0')}:${String(dakika).padStart(2, '0')}`;
 }
+
+// ── YAŞ BAZLI HEDEFLER ────────────────────────────────────────────────────────
 
 function _geceHedef(haftasi: number | null): number {
   if (haftasi === null) return 10;
-  if (haftasi <= 12)   return 8;
-  if (haftasi <= 26)   return 9;
-  return 10;
+  if (haftasi <= 13)   return 8.5;  // 0-3 ay: 8-9s (orta)
+  return 10.5;                      // 4 ay+: 10-11s (orta)
+}
+
+function _gunduzHedef(haftasi: number | null): number {
+  if (haftasi === null) return 2;
+  if (haftasi <= 13)   return 7;    // 0-3 ay: 6-8s
+  if (haftasi <= 26)   return 3.5;  // 4-6 ay: 3-4s
+  if (haftasi <= 52)   return 2.5;  // 7-12 ay: 2-3s
+  if (haftasi <= 78)   return 1.75; // 13-18 ay: 1.5-2s
+  if (haftasi <= 104)  return 1.25; // 19-24 ay: 1-1.5s
+  return 1;                         // 2-3 yaş: 1s
 }
 
 function _napHedefAralik(haftasi: number | null): [number, number] {
   if (haftasi === null) return [2, 3];
-  if (haftasi <= 12)   return [4, 5];
+  if (haftasi <= 13)   return [4, 5];
   if (haftasi <= 26)   return [3, 3];
   if (haftasi <= 52)   return [2, 2];
   if (haftasi <= 78)   return [1, 2];
   if (haftasi <= 104)  return [1, 1];
-  if (haftasi <= 156)  return [0, 1];
-  return [0, 0];
+  return [0, 1];
 }
 
-function _yorumHesapla(toplam: number, lang: 'tr' | 'en'): { yorumEmoji: string; yorumMesaj: string } {
-  if (toplam >= 85) return { yorumEmoji: '🌟', yorumMesaj: lang === 'en' ? 'Excellent sleep!' : 'Harika bir uyku!' };
-  if (toplam >= 70) return { yorumEmoji: '😊', yorumMesaj: lang === 'en' ? 'Good sleep.' : 'İyi bir uyku.' };
-  if (toplam >= 55) return { yorumEmoji: '😐', yorumMesaj: lang === 'en' ? 'Sleep could be better.' : 'Uyku biraz daha iyi olabilirdi.' };
-  return { yorumEmoji: '😓', yorumMesaj: lang === 'en' ? 'Sleep needs improvement.' : 'Uyku iyileştirme gerektiriyor.' };
+// ── SÜRE BAZLI TAVAN ──────────────────────────────────────────────────────────
+// Tüm diğer hesaplamalardan ÖNCE okunur, SONRA uygulanır.
+// %60-90+ arası → tavan yok (null döner)
+
+function _skorTavani(oran: number): number | null {
+  if (oran < 0.15) return 45;
+  if (oran < 0.30) return 55;
+  if (oran < 0.60) return 65;
+  return null;
 }
 
-function _enBuyukEtkiHesapla(detaylar: PuanDetayItem[]): { baslik: string; potansiyelKazanc: number } | null {
+// ── YORUM KATMANI ─────────────────────────────────────────────────────────────
+
+function _yorum(toplam: number, lang: 'tr' | 'en'): { yorumEmoji: string; yorumMesaj: string } {
+  if (toplam >= 85) return {
+    yorumEmoji: '🌟',
+    yorumMesaj: lang === 'en'
+      ? 'Balance is great — small tweaks for perfection.'
+      : 'Denge iyi, küçük dokunuşlarla mükemmele yakın.',
+  };
+  if (toplam >= 70) return {
+    yorumEmoji: '💛',
+    yorumMesaj: lang === 'en'
+      ? 'Generally good, but 1–2 critical points need attention.'
+      : 'Genel iyi ama 1-2 kritik nokta var.',
+  };
+  if (toplam >= 50) return {
+    yorumEmoji: '⚠️',
+    yorumMesaj: lang === 'en'
+      ? 'Sleep pattern is inconsistent — intervention needed.'
+      : 'Uyku düzeni kararsız, müdahale gerekli.',
+  };
+  return {
+    yorumEmoji: '🔴',
+    yorumMesaj: lang === 'en'
+      ? 'Serious irregularity — systematic correction required.'
+      : 'Ciddi düzensizlik, sistematik düzeltme şart.',
+  };
+}
+
+// ── DİNAMİK ÖZET CÜMLE ───────────────────────────────────────────────────────
+// Süre + ağlama kombinasyonuna göre üretilir
+
+function _ozetCumle(
+  sureOrani: number,
+  aglamaSayisi: number,
+  isGunduz: boolean,
+  lang: 'tr' | 'en',
+): string {
+  if (isGunduz) {
+    if (sureOrani >= 0.9) return lang === 'en' ? 'Nap duration was excellent ✨'               : 'Şekerleme süresi mükemmeldi ✨';
+    if (sureOrani >= 0.6) return lang === 'en' ? 'Decent nap, close to target 💛'             : 'Yeterli şekerleme, hedefe yakın 💛';
+    return                       lang === 'en' ? 'Short nap — watch for fussiness tonight ⚠️' : 'Kısa şekerleme — akşam huzursuzluk olabilir ⚠️';
+  }
+  const sureIyi   = sureOrani >= 0.75;
+  const aglamaIyi = aglamaSayisi <= 2;
+  if  (sureIyi  && aglamaIyi)  return lang === 'en' ? 'Good sleep and calm night 🌟'             : 'İyi uyku, sakin bir gece 🌟';
+  if  (sureIyi  && !aglamaIyi) return lang === 'en' ? 'Good duration but frequent waking 💛'     : 'Süre yeterli ama sık uyandı 💛';
+  if  (!sureIyi && aglamaIyi)  return lang === 'en' ? 'Short sleep but no crying — improving 💚' : 'Uyku süresi düşük ama ağlama yok — iyiye gidiyorsunuz 💚';
+  return                              lang === 'en' ? 'Short sleep, may wake more tonight ⚠️'    : 'Az uyudu, bu gece daha sık uyanabilir ⚠️';
+}
+
+// ── BU GECE İÇİN ─────────────────────────────────────────────────────────────
+// Gündüz raporu için boş string döner
+
+function _buGeceIcin(
+  sureOrani: number,
+  aglamaSayisi: number,
+  isGunduz: boolean,
+  lang: 'tr' | 'en',
+): string {
+  if (isGunduz) return '';
+  if (sureOrani < 0.6) {
+    return lang === 'en'
+      ? 'Short sleep — baby may wake more often. Keep the detector on for a faster response.'
+      : 'Az uyuduğu için bu gece daha sık uyanabilir. Dedektörü açık bırak.';
+  }
+  if (sureOrani >= 0.9 && aglamaSayisi <= 2) {
+    return lang === 'en'
+      ? 'Excellent night — restful sleep expected tonight too 🌙'
+      : 'Harika bir gece geçirdi, bu gece de rahat uyuması bekleniyor 🌙';
+  }
+  return lang === 'en'
+    ? 'Average night. Keep the evening routine consistent for improvement.'
+    : 'Ortalama bir gece. İyileştirmek için akşam rutinini düzenli tut.';
+}
+
+// ── EN BÜYÜK ETKİ ─────────────────────────────────────────────────────────────
+// detaylar içinde en büyük cezayı bul; potansiyelKazanc = |penalty| × 0.8
+
+function _enBuyukEtki(
+  detaylar: PuanDetayItem[],
+): SleepScoreResult['enBuyukEtki'] {
   let minPuan = 0;
   let bestIdx = -1;
-  detaylar.forEach((d, i) => { if (d.puan < minPuan) { minPuan = d.puan; bestIdx = i; } });
+  for (let i = 0; i < detaylar.length; i++) {
+    if (detaylar[i].puan < minPuan) { minPuan = detaylar[i].puan; bestIdx = i; }
+  }
   if (bestIdx < 0) return null;
-  return { baslik: detaylar[bestIdx].baslik, potansiyelKazanc: Math.round(Math.abs(minPuan) * 0.8) };
+  return {
+    baslik:           detaylar[bestIdx].baslik,
+    penalty:          minPuan,
+    potansiyelKazanc: Math.round(Math.abs(minPuan) * 0.8),
+  };
 }
 
-function _aksiyonlarUret(detaylar: PuanDetayItem[], input: SleepScoreInput): string[] {
-  const { lang, bebekHaftasi } = input;
-  const aksiyonlar: string[] = [];
-  for (const d of detaylar) {
-    if (d.puan >= 0) continue;
+// ── AKSİYON ÜRETİCİ ──────────────────────────────────────────────────────────
+// Aktif cezalara göre somut, saat içeren öneriler — genel laf YASAK
+
+function _aksiyonlar(
+  detaylar: PuanDetayItem[],
+  lang: 'tr' | 'en',
+  bebekHaftasi: number | null,
+): string[] {
+  const aktif = detaylar.filter(d => d.puan < 0 && d.tip !== 'note');
+  if (aktif.length === 0) {
+    return [lang === 'en' ? '✅ Keep the routine — great work!' : '✅ Rutini koru, harika gidiyorsunuz!'];
+  }
+  const set = new Set<string>();
+  for (const d of aktif) {
     switch (d.tip) {
       case 'sure':
-        aksiyonlar.push(lang === 'en'
-          ? `Target night sleep: ${_geceHedef(bebekHaftasi)}h. Try an earlier bedtime to reach the target.`
-          : `Hedef gece uykusu: ${_geceHedef(bebekHaftasi)} saat. Hedefi karşılamak için daha erken yatırmayı deneyin.`);
+        set.add(lang === 'en'
+          ? "👉 Try bedtime before 21:00 tonight to reach the sleep target."
+          : "👉 Bu gece 21:00'dan önce yatır.");
         break;
       case 'baslangic':
-        aksiyonlar.push(lang === 'en'
-          ? 'Aim for bedtime before 21:00. Start the evening routine (bath, lullaby) around 20:00–20:30.'
-          : 'Saat 21:00\'den önce yatırmayı hedefleyin. Akşam rutinini (banyo, ninni) 20:00–20:30 arasında başlatın.');
+        set.add(lang === 'en'
+          ? "👉 Start the bedtime routine at 20:00–20:30 (bath, dim lights, lullaby)."
+          : "👉 Akşam rutinini 20:00–20:30'da başlat (banyo, ışık kısma, ninni).");
         break;
       case 'aglama':
-        aksiyonlar.push(lang === 'en'
-          ? 'Frequent crying breaks sleep. Check the sleep environment (temperature, noise, light) and use calming sounds.'
-          : 'Sık ağlama uykuyu bölüyor. Uyku ortamını (ısı, ses, ışık) kontrol edin ve beyaz gürültü/ninni kullanın.');
+        set.add(lang === 'en'
+          ? '👉 Keep the sleep detector on tonight to respond faster to crying.'
+          : '👉 Gece dedektörünü açık bırak.');
         break;
       case 'aglamaSure':
-        aksiyonlar.push(lang === 'en'
-          ? 'Long crying periods indicate discomfort. Respond early to prevent overtiredness.'
-          : 'Uzun ağlama süreleri rahatsızlığa işaret ediyor. Aşırı yorgunluğu önlemek için erken müdahale edin.');
+        set.add(lang === 'en'
+          ? '👉 Respond quickly when baby cries — aim for under 5 minutes.'
+          : '👉 Ağlayınca 5 dakika içinde müdahale et.');
         break;
       case 'napSure':
-        aksiyonlar.push(lang === 'en'
-          ? 'Keep nap duration between 30 min and 2.5h for optimal night sleep.'
-          : 'Gece uykusunu optimize etmek için şekerleme süresini 30 dk ile 2.5 saat arasında tutun.');
+        set.add(lang === 'en'
+          ? '👉 Keep naps between 30 min and 2.5h for better nights.'
+          : '👉 Şekerlemeyi 30 dk ile 2,5 saat arasında tut.');
         break;
       case 'napSayi': {
         const [napMin, napMax] = _napHedefAralik(bebekHaftasi);
-        aksiyonlar.push(lang === 'en'
-          ? `Ideal nap count for this age: ${napMin === napMax ? napMin : `${napMin}–${napMax}`} per day.`
-          : `Bu yaş için ideal şekerleme sayısı: günde ${napMin === napMax ? napMin : `${napMin}–${napMax}`}.`);
+        const hedef = napMin === napMax ? `${napMin}` : `${napMin}–${napMax}`;
+        set.add(lang === 'en'
+          ? `👉 Aim for ${hedef} nap${napMax !== 1 ? 's' : ''} per day for this age.`
+          : `👉 Bu yaş için günde ${hedef} şekerleme hedefle.`);
         break;
       }
       case 'sonNap':
-        aksiyonlar.push(lang === 'en'
-          ? 'End the last nap before 16:30 so baby is ready for night sleep.'
-          : 'Son şekerlemeyi 16:30\'dan önce bitirin, böylece bebek gece uykusuna hazır olsun.');
+        set.add(lang === 'en'
+          ? "👉 End the last nap before 16:30."
+          : "👉 Son nap'i 16:30'dan önce bitir.");
         break;
     }
   }
-  return [...new Set(aksiyonlar)];
+  return [...set].slice(0, 3);
 }
 
-// ── ANA HESAPLAMA ─────────────────────────────────────────────────────────────
-// Final = 100 - min(geceCeza × 0.70 + gündüzCeza × 0.30, 60), min=40
-// Geçersiz kayıt (< 5 dk): toplam = 0
+// ── ANA FONKSİYON ─────────────────────────────────────────────────────────────
+// Tek rapor: ağırlık 1.0.
+// İkili rapor (gece + gündüz): caller geceCeza×0.70 + gündüzCeza×0.30 uygular.
 
 export function hesaplaSleepScore(input: SleepScoreInput): SleepScoreResult {
   const {
     toplamUyku, baslangicTs, isGunduz, bebekHaftasi,
     aglamaSayisi, aglamaSuresi, napSayisi, sonNapBitisTs, lang,
   } = input;
-  const detaylar: PuanDetayItem[] = [];
 
+  // Geçersiz kayıt (< 5 dakika)
   if (toplamUyku < 300) {
-    detaylar.push({ baslik: lang === 'en' ? 'Invalid record (< 5 min)' : 'Geçersiz kayıt (< 5 dk)', puan: 0, pozitif: null, tip: 'note' });
-    return { toplam: 0, geceCeza: 0, gunduzCeza: 0, detaylar, enBuyukEtki: null, aksiyonlar: [], yorumEmoji: '❓', yorumMesaj: '' };
+    const d: PuanDetayItem = {
+      baslik: lang === 'en' ? 'Invalid record (< 5 min)' : 'Geçersiz kayıt (< 5 dk)',
+      puan: 0, pozitif: null, tip: 'note',
+    };
+    return {
+      toplam: 0, geceCeza: 0, gunduzCeza: 0, sureOrani: 0, skorTavani: null,
+      detaylar: [d], enBuyukEtki: null, aksiyonlar: [],
+      yorumEmoji: '❓', yorumMesaj: '', ozetCumle: '', buGeceIcin: '',
+    };
   }
 
-  let geceCeza = 0;
+  const toplamSaat = toplamUyku / 3600;
+  const hedefSaat  = isGunduz ? _gunduzHedef(bebekHaftasi) : _geceHedef(bebekHaftasi);
+  const sureOrani  = toplamSaat / hedefSaat;
+
+  // Tavan hesabı (en önce): %60'ın altında tavan var
+  const tavani = _skorTavani(sureOrani);
+
+  const detaylar: PuanDetayItem[] = [];
+  let geceCeza   = 0;
   let gunduzCeza = 0;
 
   if (isGunduz) {
-    // ── GÜNDÜZ CEZALARI ───────────────────────────────────────────────────────
+    // ──────────────────────────────── GÜNDÜZ CEZALARI ──────────────────────────
 
-    // 1. Şekerleme süresi
-    const saat = toplamUyku / 3600;
-    let napDurPenalty = 0;
+    // 1. Nap süresi
+    let napDurCeza = 0;
     let napDurBaslik: string;
-    if (saat < 0.5) {
-      napDurPenalty = 8;
+    if (toplamSaat < 0.5) {
+      napDurCeza = 8;
       napDurBaslik = lang === 'en'
-        ? `Nap too short (${_fmtH(saat, lang)}, < 30 min)`
-        : `Şekerleme çok kısa (${_fmtH(saat, lang)}, < 30 dk)`;
-    } else if (saat > 2.5) {
-      napDurPenalty = 12;
+        ? `Nap too short (${_fmtH(toplamSaat, lang)}, < 30 min)`
+        : `Şekerleme çok kısa (${_fmtH(toplamSaat, lang)}, < 30 dk)`;
+    } else if (toplamSaat > 2.5) {
+      napDurCeza = 12;
       napDurBaslik = lang === 'en'
-        ? `Nap too long (${_fmtH(saat, lang)}, > 2.5h)`
-        : `Şekerleme çok uzun (${_fmtH(saat, lang)}, > 2.5s)`;
+        ? `Nap too long (${_fmtH(toplamSaat, lang)}, > 2.5h)`
+        : `Şekerleme çok uzun (${_fmtH(toplamSaat, lang)}, > 2.5s)`;
     } else {
       napDurBaslik = lang === 'en'
-        ? `Nap duration (${_fmtH(saat, lang)} ✓)`
-        : `Şekerleme süresi (${_fmtH(saat, lang)} ✓)`;
+        ? `Nap duration (${_fmtH(toplamSaat, lang)} ✓)`
+        : `Şekerleme süresi (${_fmtH(toplamSaat, lang)} ✓)`;
     }
-    gunduzCeza += napDurPenalty;
-    detaylar.push({ baslik: napDurBaslik, puan: -napDurPenalty, pozitif: napDurPenalty === 0 ? null : false, tip: 'napSure' });
+    gunduzCeza += napDurCeza;
+    detaylar.push({ baslik: napDurBaslik, puan: -napDurCeza, pozitif: napDurCeza === 0 ? null : false, tip: 'napSure' });
 
-    // 2. Şekerleme sayısı (opsiyonel)
+    // 2. Nap sayısı (varsa)
     if (napSayisi !== undefined) {
       const [napMin, napMax] = _napHedefAralik(bebekHaftasi);
-      const inRange = napSayisi >= napMin && napSayisi <= napMax;
-      const diffFromRange = inRange ? 0 : Math.min(Math.abs(napSayisi - napMin), Math.abs(napSayisi - napMax));
-      let napCntPenalty = 0;
-      const rangeStr = napMin === napMax ? `${napMin}` : `${napMin}–${napMax}`;
-      let napCntBaslik: string;
-      if (diffFromRange === 0) {
-        napCntBaslik = lang === 'en' ? `Nap count (${napSayisi}, ideal ${rangeStr})` : `Şekerleme sayısı (${napSayisi}, ideal ${rangeStr})`;
-      } else if (diffFromRange === 1) {
-        napCntPenalty = 5;
-        napCntBaslik = lang === 'en' ? `Nap count (${napSayisi}, ±1 from ideal ${rangeStr})` : `Şekerleme sayısı (${napSayisi}, idealden ±1)`;
+      const inRange   = napSayisi >= napMin && napSayisi <= napMax;
+      const fark      = inRange ? 0 : Math.min(
+        Math.abs(napSayisi - napMin),
+        Math.abs(napSayisi - napMax),
+      );
+      const aralikStr = napMin === napMax ? `${napMin}` : `${napMin}–${napMax}`;
+      let napSayiCeza = 0;
+      let napSayiBaslik: string;
+      if (fark === 0) {
+        napSayiBaslik = lang === 'en'
+          ? `Nap count (${napSayisi}, ideal ${aralikStr} ✓)`
+          : `Şekerleme sayısı (${napSayisi}, ideal ${aralikStr} ✓)`;
+      } else if (fark === 1) {
+        napSayiCeza = 5;
+        napSayiBaslik = lang === 'en'
+          ? `Nap count (${napSayisi}, ±1 from ideal ${aralikStr})`
+          : `Şekerleme sayısı (${napSayisi}, idealden ±1)`;
       } else {
-        napCntPenalty = 10;
-        napCntBaslik = lang === 'en' ? `Nap count (${napSayisi}, ±2+ from ideal ${rangeStr})` : `Şekerleme sayısı (${napSayisi}, idealden ±2+)`;
+        napSayiCeza = 10;
+        napSayiBaslik = lang === 'en'
+          ? `Nap count (${napSayisi}, ±2+ from ideal ${aralikStr})`
+          : `Şekerleme sayısı (${napSayisi}, idealden ±2+)`;
       }
-      gunduzCeza += napCntPenalty;
-      detaylar.push({ baslik: napCntBaslik, puan: -napCntPenalty, pozitif: napCntPenalty === 0 ? null : false, tip: 'napSayi' });
+      gunduzCeza += napSayiCeza;
+      detaylar.push({ baslik: napSayiBaslik, puan: -napSayiCeza, pozitif: napSayiCeza === 0 ? null : false, tip: 'napSayi' });
     }
 
-    // 3. Son şekerleme bitiş saati (opsiyonel)
+    // 3. Son nap bitiş saati (varsa)
     if (sonNapBitisTs !== undefined) {
-      const endH = new Date(sonNapBitisTs).getHours();
-      const endM = new Date(sonNapBitisTs).getMinutes();
-      const endMin = endH * 60 + endM;
-      let lastNapPenalty = 0;
-      let lastNapBaslik: string;
-      if (endMin < 16 * 60 + 30) {
-        lastNapBaslik = lang === 'en' ? `Last nap end (${_fmtT(endH, endM)}, ideal)` : `Son şekerleme bitiş (${_fmtT(endH, endM)}, ideal)`;
-      } else if (endMin < 17 * 60 + 30) {
-        lastNapPenalty = 5;
-        lastNapBaslik = lang === 'en' ? `Last nap end (${_fmtT(endH, endM)}, slightly late)` : `Son şekerleme bitiş (${_fmtT(endH, endM)}, biraz geç)`;
+      const bitisDate = new Date(sonNapBitisTs);
+      const bitisDk   = bitisDate.getHours() * 60 + bitisDate.getMinutes();
+      const timeStr   = _fmtT(bitisDate.getHours(), bitisDate.getMinutes());
+      let sonNapCeza = 0;
+      let sonNapBaslik: string;
+      if (bitisDk < 16 * 60 + 30) {
+        sonNapBaslik = lang === 'en'
+          ? `Last nap end (${timeStr}, ideal ✓)`
+          : `Son şekerleme bitiş (${timeStr}, ideal ✓)`;
+      } else if (bitisDk < 17 * 60 + 30) {
+        sonNapCeza = 5;
+        sonNapBaslik = lang === 'en'
+          ? `Last nap end (${timeStr}, slightly late)`
+          : `Son şekerleme bitiş (${timeStr}, biraz geç)`;
       } else {
-        lastNapPenalty = 10;
-        lastNapBaslik = lang === 'en' ? `Last nap end (${_fmtT(endH, endM)}, too late)` : `Son şekerleme bitiş (${_fmtT(endH, endM)}, çok geç)`;
+        sonNapCeza = 10;
+        sonNapBaslik = lang === 'en'
+          ? `Last nap end (${timeStr}, too late)`
+          : `Son şekerleme bitiş (${timeStr}, çok geç)`;
       }
-      gunduzCeza += lastNapPenalty;
-      detaylar.push({ baslik: lastNapBaslik, puan: -lastNapPenalty, pozitif: lastNapPenalty === 0 ? null : false, tip: 'sonNap' });
+      gunduzCeza += sonNapCeza;
+      detaylar.push({ baslik: sonNapBaslik, puan: -sonNapCeza, pozitif: sonNapCeza === 0 ? null : false, tip: 'sonNap' });
     }
 
   } else {
-    // ── GECE CEZALARI ─────────────────────────────────────────────────────────
+    // ──────────────────────────────── GECE CEZALARI ────────────────────────────
 
-    // 1. Süre (hedefin yüzdesi)
-    const toplamSaat = toplamUyku / 3600;
-    const hedefSaat  = _geceHedef(bebekHaftasi);
-    const yuzdesi    = (toplamSaat / hedefSaat) * 100;
-    let durPenalty = 0;
-    let durBaslik: string;
-    if (yuzdesi >= 90) {
-      durBaslik = lang === 'en'
-        ? `Duration (${_fmtH(toplamSaat, lang)}, ≥90% of ${hedefSaat}h target ✓)`
-        : `Süre (${_fmtH(toplamSaat, lang)}, ${hedefSaat}s hedefin ≥%90'ı ✓)`;
-    } else if (yuzdesi >= 75) {
-      durPenalty = 15;
-      durBaslik = lang === 'en'
-        ? `Duration (${_fmtH(toplamSaat, lang)}, 75–89% of ${hedefSaat}h target)`
-        : `Süre (${_fmtH(toplamSaat, lang)}, ${hedefSaat}s hedefin %75–89'u)`;
-    } else if (yuzdesi >= 60) {
-      durPenalty = 25;
-      durBaslik = lang === 'en'
-        ? `Duration (${_fmtH(toplamSaat, lang)}, 60–74% of ${hedefSaat}h target)`
-        : `Süre (${_fmtH(toplamSaat, lang)}, ${hedefSaat}s hedefin %60–74'ü)`;
+    const yuzde = sureOrani * 100;
+
+    // 1. Süre cezası
+    let sureCeza: number;
+    let sureBaslik: string;
+    const sureFmt = `${_fmtH(toplamSaat, lang)} / ${_fmtH(hedefSaat, lang)}`;
+    if (yuzde >= 90) {
+      sureCeza = 0;
+      sureBaslik = lang === 'en'
+        ? `Duration (${sureFmt}, ≥90% ✓)`
+        : `Süre (${sureFmt}, ≥%90 ✓)`;
+    } else if (yuzde >= 75) {
+      sureCeza = 15;
+      sureBaslik = lang === 'en'
+        ? `Duration (${sureFmt}, 75–89%)`
+        : `Süre (${sureFmt}, %75–89)`;
+    } else if (yuzde >= 60) {
+      sureCeza = 25;
+      sureBaslik = lang === 'en'
+        ? `Duration (${sureFmt}, 60–74%)`
+        : `Süre (${sureFmt}, %60–74)`;
     } else {
-      durPenalty = 35;
-      durBaslik = lang === 'en'
-        ? `Duration (${_fmtH(toplamSaat, lang)}, < 60% of ${hedefSaat}h target)`
-        : `Süre (${_fmtH(toplamSaat, lang)}, ${hedefSaat}s hedefin <%60'ı)`;
+      sureCeza = 35;
+      sureBaslik = lang === 'en'
+        ? `Duration (${sureFmt}, < 60%)`
+        : `Süre (${sureFmt}, <%60)`;
     }
 
-    // 2. Uyku başlangıç saati
-    const bSaat    = new Date(baslangicTs).getHours();
-    const bDakika  = new Date(baslangicTs).getMinutes();
-    const startMin = bSaat * 60 + bDakika;
-    // gece yarısından sonrasını normalize et (00:00–02:59 → 24:00–26:59)
-    const normStart = startMin < 300 ? startMin + 1440 : startMin;
-    let bedtimePenalty = 0;
-    let bedtimeBaslik: string;
+    // 2. Yatma saati cezası
+    const bDate    = new Date(baslangicTs);
+    const bSaat    = bDate.getHours();
+    const bDak     = bDate.getMinutes();
+    const startMin = bSaat * 60 + bDak;
+    // 00:00–04:59 → gece yarısından sonra → +1440 dk ile normalize et
+    const normStart  = startMin < 5 * 60 ? startMin + 1440 : startMin;
+    const startStr   = _fmtT(bSaat, bDak);
+    let yatmaCeza: number;
+    let yatmaBaslik: string;
     if (normStart < 21 * 60) {
-      bedtimeBaslik = lang === 'en' ? `Bedtime (${_fmtT(bSaat, bDakika)}, ideal)` : `Uyku saati (${_fmtT(bSaat, bDakika)}, ideal)`;
+      yatmaCeza = 0;
+      yatmaBaslik = lang === 'en'
+        ? `Bedtime (${startStr}, ideal ✓)`
+        : `Uyku saati (${startStr}, ideal ✓)`;
     } else if (normStart < 22 * 60) {
-      bedtimePenalty = 5;
-      bedtimeBaslik = lang === 'en' ? `Bedtime (${_fmtT(bSaat, bDakika)}, slightly late)` : `Uyku saati (${_fmtT(bSaat, bDakika)}, biraz geç)`;
+      yatmaCeza = 5;
+      yatmaBaslik = lang === 'en'
+        ? `Bedtime (${startStr}, slightly late)`
+        : `Uyku saati (${startStr}, biraz geç)`;
     } else {
-      bedtimePenalty = 10;
-      bedtimeBaslik = lang === 'en' ? `Bedtime (${_fmtT(bSaat, bDakika)}, late)` : `Uyku saati (${_fmtT(bSaat, bDakika)}, geç)`;
+      yatmaCeza = 10;
+      yatmaBaslik = lang === 'en'
+        ? `Bedtime (${startStr}, late)`
+        : `Uyku saati (${startStr}, geç)`;
     }
 
-    // Çift ceza kontrolü: hem uyku saati hem süre cezalandırılıyorsa süre ×0.50
-    if (bedtimePenalty > 0 && durPenalty > 0) {
-      durPenalty = Math.round(durPenalty * 0.5);
-      durBaslik += lang === 'en' ? ' (halved: late bedtime)' : ' (yarıya indirildi: geç yatış)';
+    // Çifte ceza önleme: SADECE %60–89 bandında çalışır (<%60 durumunda UYGULANMAZ)
+    if (yatmaCeza > 0 && yuzde >= 60 && yuzde < 90 && sureCeza > 0) {
+      sureCeza = Math.round(sureCeza * 0.5);
+      sureBaslik += lang === 'en' ? ' (halved — late bedtime)' : ' (yarıya indirildi — geç yatış)';
     }
 
-    geceCeza += durPenalty;
-    geceCeza += bedtimePenalty;
-    detaylar.push({ baslik: durBaslik, puan: -durPenalty, pozitif: durPenalty === 0 ? null : false, tip: 'sure' });
-    detaylar.push({ baslik: bedtimeBaslik, puan: -bedtimePenalty, pozitif: bedtimePenalty === 0 ? null : false, tip: 'baslangic' });
+    geceCeza += sureCeza;
+    geceCeza += yatmaCeza;
+    detaylar.push({ baslik: sureBaslik,  puan: -sureCeza,  pozitif: sureCeza === 0  ? null : false, tip: 'sure'      });
+    detaylar.push({ baslik: yatmaBaslik, puan: -yatmaCeza, pozitif: yatmaCeza === 0 ? null : false, tip: 'baslangic' });
 
     // 3. Ağlama sayısı
-    let cryCntPenalty = 0;
-    let cryCntBaslik: string;
+    let aglamaSayiCeza: number;
+    let aglamaSayiBaslik: string;
     if (aglamaSayisi <= 2) {
-      cryCntBaslik = lang === 'en' ? `Crying (${aglamaSayisi}×, good)` : `Ağlama (${aglamaSayisi} kez, iyi)`;
+      aglamaSayiCeza = 0;
+      aglamaSayiBaslik = lang === 'en'
+        ? `Crying (${aglamaSayisi}×, calm ✓)`
+        : `Ağlama (${aglamaSayisi} kez, sakin ✓)`;
     } else if (aglamaSayisi <= 5) {
-      cryCntPenalty = 8;
-      cryCntBaslik = lang === 'en' ? `Crying (${aglamaSayisi}×)` : `Ağlama (${aglamaSayisi} kez)`;
+      aglamaSayiCeza = 8;
+      aglamaSayiBaslik = lang === 'en'
+        ? `Crying (${aglamaSayisi}×, moderate)`
+        : `Ağlama (${aglamaSayisi} kez, orta)`;
     } else {
-      cryCntPenalty = 15;
-      cryCntBaslik = lang === 'en' ? `Crying (${aglamaSayisi}×, frequent)` : `Ağlama (${aglamaSayisi} kez, sık)`;
+      aglamaSayiCeza = 15;
+      aglamaSayiBaslik = lang === 'en'
+        ? `Crying (${aglamaSayisi}×, frequent)`
+        : `Ağlama (${aglamaSayisi} kez, sık)`;
     }
-    geceCeza += cryCntPenalty;
-    detaylar.push({ baslik: cryCntBaslik, puan: -cryCntPenalty, pozitif: cryCntPenalty === 0 ? null : false, tip: 'aglama' });
+    geceCeza += aglamaSayiCeza;
+    detaylar.push({ baslik: aglamaSayiBaslik, puan: -aglamaSayiCeza, pozitif: aglamaSayiCeza === 0 ? null : false, tip: 'aglama' });
 
     // 4. Ağlama süresi (opsiyonel)
     if (aglamaSuresi !== undefined) {
-      const aglamaDk = aglamaSuresi / 60;
-      let cryDurPenalty = 0;
-      let cryDurBaslik: string;
+      const aglamaDk    = aglamaSuresi / 60;
+      const aglamaDkStr = Math.round(aglamaDk);
+      let aglamaSureCeza: number;
+      let aglamaSureBaslik: string;
       if (aglamaDk < 10) {
-        cryDurBaslik = lang === 'en' ? `Crying duration (${Math.round(aglamaDk)} min, < 10 min ✓)` : `Ağlama süresi (${Math.round(aglamaDk)} dk, < 10 dk ✓)`;
+        aglamaSureCeza = 0;
+        aglamaSureBaslik = lang === 'en'
+          ? `Crying duration (${aglamaDkStr} min, < 10 min ✓)`
+          : `Ağlama süresi (${aglamaDkStr} dk, < 10 dk ✓)`;
       } else if (aglamaDk < 20) {
-        cryDurPenalty = 5;
-        cryDurBaslik = lang === 'en' ? `Crying duration (${Math.round(aglamaDk)} min, 10–20 min)` : `Ağlama süresi (${Math.round(aglamaDk)} dk, 10–20 dk)`;
+        aglamaSureCeza = 5;
+        aglamaSureBaslik = lang === 'en'
+          ? `Crying duration (${aglamaDkStr} min, 10–20 min)`
+          : `Ağlama süresi (${aglamaDkStr} dk, 10–20 dk)`;
       } else {
-        cryDurPenalty = 12;
-        cryDurBaslik = lang === 'en' ? `Crying duration (${Math.round(aglamaDk)} min, 20+ min)` : `Ağlama süresi (${Math.round(aglamaDk)} dk, 20+ dk)`;
+        aglamaSureCeza = 12;
+        aglamaSureBaslik = lang === 'en'
+          ? `Crying duration (${aglamaDkStr} min, 20+ min)`
+          : `Ağlama süresi (${aglamaDkStr} dk, 20+ dk)`;
       }
-      geceCeza += cryDurPenalty;
-      detaylar.push({ baslik: cryDurBaslik, puan: -cryDurPenalty, pozitif: cryDurPenalty === 0 ? null : false, tip: 'aglamaSure' });
+      geceCeza += aglamaSureCeza;
+      detaylar.push({ baslik: aglamaSureBaslik, puan: -aglamaSureCeza, pozitif: aglamaSureCeza === 0 ? null : false, tip: 'aglamaSure' });
     }
   }
 
-  const penaltyTotal = geceCeza * 0.70 + gunduzCeza * 0.30;
-  const toplam = Math.max(40, Math.round(100 - Math.min(penaltyTotal, 60)));
+  // ── FİNAL SKOR ────────────────────────────────────────────────────────────────
+  // 1. Ham ceza (tek rapor ağırlığı: 1.0)
+  const hamCeza = isGunduz ? gunduzCeza : geceCeza;
 
-  const enBuyukEtki  = _enBuyukEtkiHesapla(detaylar);
-  const aksiyonlar   = _aksiyonlarUret(detaylar, input);
-  const { yorumEmoji, yorumMesaj } = _yorumHesapla(toplam, lang);
+  // 2. Maksimum -60 ceza → minimum skor 40
+  let toplam = Math.max(40, Math.round(100 - Math.min(hamCeza, 60)));
 
-  return { toplam, geceCeza, gunduzCeza, detaylar, enBuyukEtki, aksiyonlar, yorumEmoji, yorumMesaj };
+  // 3. Süre tavanı son aşamada uygulanır — final skoru geçemez
+  if (tavani !== null) toplam = Math.min(toplam, tavani);
+
+  const enBuyukEtki = _enBuyukEtki(detaylar);
+  const aksiyonlar  = _aksiyonlar(detaylar, lang, bebekHaftasi);
+  const { yorumEmoji, yorumMesaj } = _yorum(toplam, lang);
+  const ozetCumle   = _ozetCumle(sureOrani, aglamaSayisi, isGunduz, lang);
+  const buGeceIcin  = _buGeceIcin(sureOrani, aglamaSayisi, isGunduz, lang);
+
+  return {
+    toplam, geceCeza, gunduzCeza, sureOrani, skorTavani: tavani,
+    detaylar, enBuyukEtki, aksiyonlar,
+    yorumEmoji, yorumMesaj, ozetCumle, buGeceIcin,
+  };
+}
+
+// ── KOMBİNE SKOR (gece + gündüz aynı günde) ──────────────────────────────────
+// geceCeza × 0.70 + gündüzCeza × 0.30; tavan her ikisinin minimu olarak uygulanır
+
+export function hesaplaKombineSkor(
+  gece: SleepScoreResult,
+  gunduz: SleepScoreResult,
+): number {
+  const hamCeza  = gece.geceCeza * 0.70 + gunduz.gunduzCeza * 0.30;
+  let toplam     = Math.max(40, Math.round(100 - Math.min(hamCeza, 60)));
+  const tavani   = [gece.skorTavani, gunduz.skorTavani].filter((t): t is number => t !== null);
+  if (tavani.length > 0) toplam = Math.min(toplam, Math.min(...tavani));
+  return toplam;
 }
