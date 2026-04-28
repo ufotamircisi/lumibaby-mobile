@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendAlertToAll } from './_layout';
 import { hesaplaSleepScore, type PuanDetayItem, type SleepScoreInput } from '@/utils/sleepScore';
 import * as DL from '@/utils/detectorLimit';
-import { isItemPremium, canStartDetector, canViewDetailedReport } from '@/utils/permissions';
+import { isItemPremium, canViewDetailedReport } from '@/utils/permissions';
 
 // ── STORAGE KEYS ─────────────────────────────────────────────────────────────
 const SES_OGRENME_KEY          = 'lumibaby_ses_ogrenme';
@@ -759,9 +759,6 @@ export default function Analiz() {
   const dedektoraBasildi = async (tip: DedektorTip) => {
     if (free) {
       const current = detStateRef.current ?? await DL.loadDetectorState();
-      if (!canStartDetector(false, current)) {
-        setSureDolduVisible(true); return;
-      }
       const { result, state: newState } = await DL.detectorTryStart(current);
       detStateRef.current = newState;
       setDetState(newState);
