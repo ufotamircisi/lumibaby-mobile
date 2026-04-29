@@ -79,7 +79,7 @@ type GeceRaporu = {
   aksiyonlar?: string[];
 };
 
-const BAR_MAX_HEIGHT = 106;
+const BAR_MAX_HEIGHT = 160;
 const HASSASIYET_KEY  = 'lumibaby_hassasiyet';
 type DedektorTip = 'aglama' | 'kolik';
 
@@ -104,6 +104,13 @@ function skorGradient(puan: number | null): [string, string] {
   if (puan >= 70) return ['#86efac', '#4ade80'];
   if (puan >= 50) return ['#fb923c', '#f97316'];
   return ['#f87171', '#ef4444'];
+}
+
+function barRenk(puan: number): string {
+  if (puan >= 85) return '#237804';
+  if (puan >= 70) return '#73D13D';
+  if (puan >= 50) return '#FFC53D';
+  return '#FF4D4F';
 }
 
 function _isGunduzRapor(r: GeceRaporu): boolean {
@@ -1102,7 +1109,7 @@ export default function Analiz() {
     Animated.parallel(
       son7Gun.map((g, i) => Animated.timing(barAnimValues[i], {
         toValue: g.puan !== null ? Math.max(4, (g.puan / 100) * BAR_MAX_HEIGHT) : 0,
-        duration: 500,
+        duration: 600,
         useNativeDriver: false,
       }))
     ).start();
@@ -1345,10 +1352,22 @@ export default function Analiz() {
 
           {/* KART 2: 7 Günlük Uyku Skoru */}
           <View
-            style={[styles.tekliKart, { width: screenWidth - 32 }]}
+            style={[styles.tekliKart, { width: screenWidth - 32, padding: 20 }]}
             onLayout={e => { grafikOffsetRef.current = e.nativeEvent.layout.y; }}
           >
-            <Text style={styles.tekliKartBaslik}>{t.yedıGunGrafik}</Text>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>{t.yedıGunGrafik}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ backgroundColor: 'rgba(99,102,241,0.18)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(99,102,241,0.35)' }}>
+                  <Text style={{ color: '#a5b4fc', fontSize: 11, fontWeight: '600' }}>
+                    {lang === 'tr' ? '🎯 Hedef: 70+' : '🎯 Goal: 70+'}
+                  </Text>
+                </View>
+                <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14 }}>ℹ️</Text>
+              </View>
+            </View>
+
             {free ? (
               <TouchableOpacity style={styles.kilitAlani} onPress={() => { router.push('/paywall'); }}>
                 <Text style={{ fontSize: 28 }}>📊</Text>
@@ -1357,94 +1376,167 @@ export default function Analiz() {
               </TouchableOpacity>
             ) : (
               <>
-                {/* ↑ Goal header */}
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 4 }}>
-                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', fontStyle: 'italic' }}>
-                    {lang === 'tr' ? '↑ Hedef: 70+' : '↑ Goal: 70+'}
-                  </Text>
-                </View>
-
-                {/* Bar area with reference line */}
-                <View style={{ position: 'relative', height: BAR_MAX_HEIGHT }}>
-                  {/* Reference line at 70 */}
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      position: 'absolute',
-                      left: 0, right: 0,
-                      bottom: (70 / 100) * BAR_MAX_HEIGHT,
-                      height: 1,
-                      backgroundColor: 'rgba(255,255,255,0.22)',
-                      zIndex: 2,
-                    }}
-                  >
-                    <Text style={{
-                      position: 'absolute',
-                      right: 0,
-                      top: -8,
-                      fontSize: 9,
-                      color: 'rgba(255,255,255,0.38)',
-                    }}>70</Text>
+                {/* Chart: Y-axis + bars */}
+                <View style={{ flexDirection: 'row' }}>
+                  {/* Y-axis labels — marginTop: 20 to align with bars area (skip score label row) */}
+                  <View style={{ width: 26, marginTop: 20 }}>
+                    <View style={{ height: BAR_MAX_HEIGHT, position: 'relative' }}>
+                      {[100, 85, 70, 50, 30, 0].map(v => (
+                        <Text
+                          key={v}
+                          style={{
+                            position: 'absolute',
+                            right: 2,
+                            top: (1 - v / 100) * BAR_MAX_HEIGHT - 5,
+                            fontSize: 9,
+                            color: v === 70 ? 'rgba(99,102,241,0.8)' : 'rgba(255,255,255,0.28)',
+                            fontWeight: v === 70 ? '700' : 'normal',
+                          }}
+                        >{v}</Text>
+                      ))}
+                    </View>
                   </View>
 
-                  {/* Bars */}
-                  <View style={{ flexDirection: 'row', height: BAR_MAX_HEIGHT }}>
-                    {son7Gun.map((g, i) => (
-                      <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: BAR_MAX_HEIGHT }}>
-                        {g.puan !== null ? (
-                          <Animated.View style={{
-                            height: barAnimValues[i],
-                            width: '72%',
-                            borderRadius: 12,
-                            overflow: 'hidden',
-                            opacity: g.bugun ? 1 : 0.72,
-                          }}>
-                            {g.bugun && (
-                              <View style={{
-                                position: 'absolute', zIndex: 1,
-                                top: 0, left: 0, right: 0, bottom: 0,
-                                borderRadius: 12,
-                                borderWidth: 1.5,
-                                borderColor: 'rgba(255,255,255,0.45)',
-                              }} pointerEvents="none" />
-                            )}
-                            <LinearGradient
-                              colors={skorGradient(g.puan)}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 0, y: 1 }}
-                              style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-                            >
-                              {(g.puan / 100) * BAR_MAX_HEIGHT > 30 && (
-                                <Text style={{
-                                  color: 'white',
-                                  fontWeight: 'bold',
-                                  fontSize: 10,
-                                  transform: [{ rotate: '-90deg' }],
-                                }}>{g.puan}</Text>
-                              )}
-                            </LinearGradient>
-                          </Animated.View>
-                        ) : (
-                          <View style={{ height: 4, width: '72%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderStyle: 'dashed', borderRadius: 2 }} />
-                        )}
+                  {/* Right: score labels + bars area */}
+                  <View style={{ flex: 1 }}>
+                    {/* Score labels above bars */}
+                    <View style={{ flexDirection: 'row', height: 20 }}>
+                      {son7Gun.map((g, i) => (
+                        <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
+                          {g.puan !== null && (
+                            <Text style={{ fontSize: 10, fontWeight: 'bold', color: barRenk(g.puan) }}>
+                              {g.puan}
+                            </Text>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+
+                    {/* Bars area */}
+                    <View style={{ height: BAR_MAX_HEIGHT, position: 'relative' }}>
+                      {/* Dashed horizontal grid lines */}
+                      {[100, 85, 50, 30].map(v => (
+                        <View
+                          key={v}
+                          pointerEvents="none"
+                          style={{
+                            position: 'absolute', left: 0, right: 0,
+                            bottom: (v / 100) * BAR_MAX_HEIGHT,
+                            height: 0,
+                            borderTopWidth: 1,
+                            borderTopColor: 'rgba(255,255,255,0.06)',
+                            borderStyle: 'dashed',
+                          }}
+                        />
+                      ))}
+
+                      {/* Target line at 70 — dashed blue */}
+                      <View
+                        pointerEvents="none"
+                        style={{
+                          position: 'absolute', left: 0, right: 0,
+                          bottom: (70 / 100) * BAR_MAX_HEIGHT,
+                          height: 0,
+                          borderTopWidth: 1,
+                          borderTopColor: 'rgba(99,102,241,0.65)',
+                          borderStyle: 'dashed',
+                          zIndex: 2,
+                        }}
+                      />
+
+                      {/* 70+ pill badge */}
+                      <View
+                        pointerEvents="none"
+                        style={{
+                          position: 'absolute',
+                          right: 0,
+                          bottom: (70 / 100) * BAR_MAX_HEIGHT + 3,
+                          backgroundColor: '#4338ca',
+                          borderRadius: 6,
+                          paddingHorizontal: 5,
+                          paddingVertical: 1,
+                          zIndex: 3,
+                        }}
+                      >
+                        <Text style={{ color: 'white', fontSize: 8, fontWeight: '700' }}>70+</Text>
                       </View>
-                    ))}
+
+                      {/* Bars */}
+                      <View style={{ flexDirection: 'row', height: BAR_MAX_HEIGHT }}>
+                        {son7Gun.map((g, i) => (
+                          <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: BAR_MAX_HEIGHT }}>
+                            {g.puan !== null ? (
+                              <Animated.View style={[
+                                {
+                                  height: barAnimValues[i],
+                                  width: '78%',
+                                  borderTopLeftRadius: 8,
+                                  borderTopRightRadius: 8,
+                                  backgroundColor: barRenk(g.puan),
+                                },
+                                g.bugun
+                                  ? { borderWidth: 1.5, borderColor: '#9d8cef' }
+                                  : { opacity: 0.82 },
+                              ]} />
+                            ) : (
+                              <View style={{
+                                width: '78%',
+                                height: 0,
+                                borderTopWidth: 3,
+                                borderTopColor: 'rgba(255,255,255,0.18)',
+                                borderStyle: 'dashed',
+                                marginBottom: 4,
+                              }} />
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    </View>
                   </View>
                 </View>
 
                 {/* X-axis labels */}
-                <View style={{ flexDirection: 'row', marginTop: 6 }}>
+                <View style={{ flexDirection: 'row', marginTop: 6, marginLeft: 26 }}>
                   {son7Gun.map((g, i) => (
                     <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-                      <Text style={{ fontSize: 11, color: g.bugun ? 'white' : 'rgba(255,255,255,0.5)', fontWeight: g.bugun ? 'bold' : 'normal' }}>
-                        {g.gun}
-                      </Text>
-                      <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.32)' }}>
-                        {g.tarih}
-                      </Text>
+                      <Text style={{
+                        fontSize: 11,
+                        color: g.bugun ? 'white' : 'rgba(255,255,255,0.45)',
+                        fontWeight: g.bugun ? '700' : 'normal',
+                      }}>{g.gun}</Text>
+                      {g.bugun && (
+                        <View style={{ height: 2.5, width: '55%', backgroundColor: '#9d8cef', borderRadius: 2, marginTop: 2, marginBottom: 1 }} />
+                      )}
+                      <Text style={{
+                        fontSize: 10,
+                        color: g.bugun ? '#a5b4fc' : 'rgba(255,255,255,0.28)',
+                        fontWeight: g.bugun ? '600' : 'normal',
+                      }}>{g.tarih}</Text>
                     </View>
                   ))}
                 </View>
+
+                {/* Legend */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 }}>
+                  {[
+                    { color: '#237804', label: t.grafikAciklama[0] },
+                    { color: '#73D13D', label: t.grafikAciklama[1] },
+                    { color: '#FFC53D', label: t.grafikAciklama[2] },
+                    { color: '#FF4D4F', label: t.grafikAciklama[3] },
+                  ].map((item, idx) => (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: item.color }} />
+                      <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>{item.label}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Info text */}
+                <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', marginTop: 10, lineHeight: 15 }}>
+                  {lang === 'tr'
+                    ? 'ⓘ Uyku skoru; uyku süresi, düzeni, uyanma sıklığı ve kalite gibi faktörlere göre hesaplanır.'
+                    : 'ⓘ Sleep score is calculated based on duration, consistency, wake frequency, and quality.'}
+                </Text>
               </>
             )}
           </View>
