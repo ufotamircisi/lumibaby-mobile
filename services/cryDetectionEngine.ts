@@ -10,6 +10,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 
+// TFLite modülünü güvenli şekilde yükle — NitroModules mevcut değilse null kalır
+let loadTensorflowModel: any = null;
+try {
+  loadTensorflowModel = require('react-native-fast-tflite').loadTensorflowModel;
+} catch (e) {
+  console.warn('[YAMNet] TFLite mevcut değil:', e);
+}
+
 // ── EXPORTS (analiz.tsx bunları kullanıyor — değiştirme) ──────────────────────
 export const WINDOW_SIZE_MS    = 500;
 export const DETECTION_WINDOWS = 6;
@@ -153,30 +161,23 @@ export class CryDetectionEngine {
   async loadModel(): Promise<void> {
     if (this.modelLoaded) return;
 
-    // NitroModules (react-native-fast-tflite) kurulu değilse sessizce çık
-    let tflite: any;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      tflite = require('react-native-fast-tflite');
-    } catch (e) {
-      console.log('[YAMNet] NitroModules yok, genlik proxy aktif');
+    if (!loadTensorflowModel) {
+      console.warn('[YAMNet] TFLite yüklü değil, cry detection devre dışı');
       this.model       = null;
       this.modelLoaded = false;
       return;
     }
 
     try {
-      const { loadTensorflowModel } = tflite;
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       this.model = await loadTensorflowModel(
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         require('../assets/models/yamnet.tflite'),
-        [],  // boş delegates = CPU çıkarımı
+        [],
       );
       this.modelLoaded = true;
       console.log('[YAMNet] Model başarıyla yüklendi ✅');
     } catch (e) {
       console.error('[YAMNet] Model yüklenemedi:', e);
-      console.log('[YAMNet] model null mu:', this.model === null);
       this.model       = null;
       this.modelLoaded = false;
     }
