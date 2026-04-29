@@ -17,7 +17,11 @@ export const ENTITLEMENT_ID = 'premium';
 const IOS_API_KEY     = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY     ?? 'test_NEQGTCZprAVYcQdZUYZcAHvMdEd';
 const ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? '';
 
+let _rcConfigured = false;
+
 export function configureRevenueCat(): void {
+  if (_rcConfigured) return;
+  _rcConfigured = true;
   if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
   const apiKey = Platform.OS === 'ios' ? IOS_API_KEY : ANDROID_API_KEY;
   if (!apiKey) return;
