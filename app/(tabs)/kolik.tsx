@@ -213,6 +213,7 @@ export default function Kolik() {
         {annePisPisUri ? (
           <TouchableOpacity
             style={[styles.sesCard, styles.sesCardAnne, calananId === 999 && styles.sesCardActive, free && styles.sesCardKilitli]}
+            disabled={free}
             onPress={() => toggleSes({ uri: annePisPisUri }, 999)}
           >
             <View style={[styles.sesIconBox, styles.sesIconBoxAnne]}>

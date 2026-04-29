@@ -1631,16 +1631,17 @@ export default function Analiz() {
             <ScrollView style={{ maxHeight: 400 }} nestedScrollEnabled>
               {sesList.map((ses) => {
                 const secili = modalTip === 'aglama' ? seciliNinni?.id === ses.id : seciliKolik?.id === ses.id;
-                const anneMi = isItemPremium(ses);
+                const kilitli = free && isItemPremium(ses);
                 return (
                   <TouchableOpacity
                     key={ses.id}
-                    style={[styles.sesBtn, secili && styles.sesBtnSecili, anneMi && styles.sesBtnAnne]}
+                    style={[styles.sesBtn, secili && styles.sesBtnSecili, isItemPremium(ses) && styles.sesBtnAnne, kilitli && { opacity: 0.45 }]}
+                    disabled={kilitli}
                     onPress={() => sesSecildi(ses)}
                   >
                     <Text style={styles.sesIkon}>{ses.icon}</Text>
                     <Text style={styles.sesAdi}>{ses.name}</Text>
-                    {secili && <Text style={styles.sesTik}>✓</Text>}
+                    {kilitli ? <Text style={styles.sesTik}>🔒</Text> : secili && <Text style={styles.sesTik}>✓</Text>}
                   </TouchableOpacity>
                 );
               })}
