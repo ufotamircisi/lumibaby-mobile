@@ -25,6 +25,19 @@ const listeners: Set<Listener> = new Set();
 // After each await, the caller checks its token against the current value;
 // if they differ a newer call won the race and the current call bails out.
 let playGeneration = 0;
+let silentSound: Audio.Sound | null = null;
+
+async function ensureSilentLoop(): Promise<void> {
+  if (silentSound) return;
+  try {
+    const s = new Audio.Sound();
+    await s.loadAsync(require('../assets/sounds/silent.mp3'));
+    await s.setVolumeAsync(0);
+    await s.setIsLoopingAsync(true);
+    await s.playAsync();
+    silentSound = s;
+  } catch {}
+}
 
 function notify(): void {
   listeners.forEach((l) => l(activeId, activeTab));
@@ -117,6 +130,7 @@ export async function play(
         trigger: null,
       });
     } catch {}
+    await ensureSilentLoop();
 
     if (!options?.loop) {
       sound.setOnPlaybackStatusUpdate((status) => {
