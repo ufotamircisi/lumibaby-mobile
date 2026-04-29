@@ -115,17 +115,20 @@ export async function canStartDetector(isPremium: boolean): Promise<'allowed' | 
  * Dedektör oturumu başlat — uygun hakkı (önce ücretsiz, sonra reklam)
  * tüketir ve sessionStart timestamp'ini kaydeder.
  * Çağırmadan önce canStartDetector ile kontrol et.
+ * Returns: session start timestamp (Date.now()).
  */
-export async function markDetectorSessionStart(): Promise<void> {
+export async function markDetectorSessionStart(): Promise<number> {
   await resetDetectorIfNewDay();
   const state = await loadDetectorState();
-  const updates: [string, string][] = [[DK.SESSION, String(Date.now())]];
+  const sessionStart = Date.now();
+  const updates: [string, string][] = [[DK.SESSION, String(sessionStart)]];
   if (!state.freeUsed) {
     updates.push([DK.FREE, 'true']);
   } else if (!state.adUsed) {
     updates.push([DK.AD, 'true']);
   }
   await AsyncStorage.multiSet(updates);
+  return sessionStart;
 }
 
 /** Dedektör oturumunu kapat (timestamp sil). Hak tüketilmiş olarak kalır. */
@@ -133,43 +136,6 @@ export async function markDetectorSessionEnd(): Promise<void> {
   await AsyncStorage.removeItem(DK.SESSION);
 }
 
-// ── LEGACY COMPAT (analiz.tsx DL.* pattern'ı kullanıyor) ─────────────────────
-
-/** @deprecated markDetectorSessionStart kullan */
-export async function detectorTryStart(
-  state: DetectorState,
-): Promise<{ result: DetectorStartResult; state: DetectorState }> {
-  await resetDetectorIfNewDay();
-
-  if (isDetectorSessionActive(state)) {
-    return { result: 'ok', state };
-  }
-  if (!state.freeUsed) {
-    const sessionStart = Date.now();
-    await AsyncStorage.multiSet([
-      [DK.FREE,    'true'],
-      [DK.SESSION, String(sessionStart)],
-    ]);
-    return { result: 'ok', state: { ...state, freeUsed: true, sessionStart } };
-  }
-  if (!state.adUsed) return { result: 'need_ad', state };
-  return { result: 'exhausted', state };
-}
-
-/** @deprecated markDetectorSessionStart kullan */
-export async function detectorStartAdSession(state: DetectorState): Promise<DetectorState> {
-  const sessionStart = Date.now();
-  await AsyncStorage.multiSet([
-    [DK.AD,      'true'],
-    [DK.SESSION, String(sessionStart)],
-  ]);
-  return { ...state, adUsed: true, sessionStart };
-}
-
-/** @deprecated markDetectorSessionEnd kullan */
-export async function detectorEndSession(): Promise<void> {
-  await AsyncStorage.removeItem(DK.SESSION);
-}
 
 // ── ANALİZ GÜNLÜK LIMIT ───────────────────────────────────────────────────────
 // "Neden Ağlıyor Olabilir?" ekranı

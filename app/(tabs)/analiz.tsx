@@ -11,12 +11,17 @@ import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Alert, Animated, AppState, Modal, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, Vibration, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendAlertToAll } from './_layout';
 import { hesaplaSleepScore, type PuanDetayItem, type SleepScoreInput } from '@/utils/sleepScore';
-import * as DL from '@/utils/detectorLimit';
-import { isItemPremium, canViewDetailedReport } from '@/utils/permissions';
+import {
+  canStartDetector, markDetectorSessionStart, markDetectorSessionEnd,
+  loadDetectorState, detectorKalanSaniye, isDetectorSessionActive,
+  canUseAnalysis, markAnalysisUsed,
+  isItemPremium, canViewDetailedReport,
+} from '@/utils/permissions';
 
 // ── STORAGE KEYS ─────────────────────────────────────────────────────────────
 const SES_OGRENME_KEY          = 'lumibaby_ses_ogrenme';
@@ -91,6 +96,14 @@ function skorRenk(puan: number): string {
   if (puan >= 50) return '#FFC107';
   if (puan >= 30) return '#FF9800';
   return '#F44336';
+}
+
+function skorGradient(puan: number | null): [string, string] {
+  if (puan === null) return ['#2a2a4a', '#2a2a4a'];
+  if (puan >= 85) return ['#22c55e', '#16a34a'];
+  if (puan >= 70) return ['#86efac', '#4ade80'];
+  if (puan >= 50) return ['#fb923c', '#f97316'];
+  return ['#f87171', '#ef4444'];
 }
 
 function _isGunduzRapor(r: GeceRaporu): boolean {
@@ -213,8 +226,11 @@ export default function Analiz() {
   const [anneNinniUri, setAnneNinniUri]     = useState<string | null>(null);
   const [annePisPisUri, setAnnePisPisUri]   = useState<string | null>(null);
   const [detektorSure, setDetektorSure]     = useState(0);
-  const [detState, setDetState]             = useState<DL.DetectorState | null>(null);
+  const [detAdUsed, setDetAdUsed]           = useState(false);
+  const [detFreeUsed, setDetFreeUsed]       = useState(false);
   const [sureDolduVisible, setSureDolduVisible] = useState(false);
+  const [analizDolduVisible, setAnalizDolduVisible] = useState(false);
+  const [analizAdUsed, setAnalizAdUsed]     = useState(false);
   // Ağlama yardımcısı
   const [cryHelperAdim, setCryHelperAdim]   = useState<'giris' | 'soru' | 'sonuc'>('giris');
   const [cryCevaplar, setCryCevaplar]       = useState<number[]>([]);
@@ -236,6 +252,7 @@ export default function Analiz() {
   const wakeWindowNotifIdRef    = useRef<string | null>(null);
   const gecmisScrollRef     = useRef<ScrollView>(null);
   const gecmisThumbAnim     = useRef(new Animated.Value(0)).current;
+  const barAnimValues       = useRef(Array.from({ length: 7 }, () => new Animated.Value(0))).current;
   const gecmisContentH      = useRef(0);
   const gecmisContainerH    = useRef(0);
   const gecmisPanStartThumb = useRef(0);
@@ -264,7 +281,7 @@ export default function Analiz() {
 
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
   const detektorTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
-  const detStateRef        = useRef<DL.DetectorState | null>(null);
+  const detSessionStartRef = useRef<number | null>(null);
   const detektorKritikRef  = useRef(false);
   const dinlemeRef         = useRef(false);
   const caliyorRef         = useRef(false);
@@ -371,11 +388,11 @@ export default function Analiz() {
     });
 
     // Dedektör günlük limit durumunu yükle; aktif oturum varsa sayacı geri yükle
-    DL.loadDetectorState().then(state => {
-      detStateRef.current = state;
-      setDetState(state);
-      if (DL.isDetectorSessionActive(state)) {
-        setDetektorSure(DL.detectorKalanSaniye(state));
+    loadDetectorState().then(state => {
+      if (state.freeUsed) setDetFreeUsed(true);
+      if (state.adUsed) setDetAdUsed(true);
+      if (isDetectorSessionActive(state)) {
+        setDetektorSure(detectorKalanSaniye(state));
         bashlatDetektorTimer(state.sessionStart!);
       }
     }).catch(() => {});
@@ -388,8 +405,8 @@ export default function Analiz() {
       if (geceBaslangicRef.current > 0) {
         setSure(Math.min(Math.floor((Date.now() - geceBaslangicRef.current) / 1000), 24 * 3600));
       }
-      if (detStateRef.current?.sessionStart) {
-        setDetektorSure(DL.detectorKalanSaniye(detStateRef.current));
+      if (detSessionStartRef.current) {
+        setDetektorSure(detectorKalanSaniye({ sessionStart: detSessionStartRef.current }));
       }
     });
     return () => sub.remove();
@@ -627,9 +644,10 @@ export default function Analiz() {
 
   const bashlatDetektorTimer = (sessionStart: number) => {
     if (detektorTimerRef.current) { clearInterval(detektorTimerRef.current); detektorTimerRef.current = null; }
+    detSessionStartRef.current = sessionStart;
     detektorKritikRef.current = false;
     const tick = () => {
-      const kalan = DL.detectorKalanSaniye(detStateRef.current ?? { freeUsed: true, adUsed: false, sessionStart });
+      const kalan = detectorKalanSaniye({ sessionStart });
       setDetektorSure(kalan);
       if (kalan > 0 && kalan <= 600 && !detektorKritikRef.current) {
         detektorKritikRef.current = true;
@@ -638,12 +656,8 @@ export default function Analiz() {
       if (kalan <= 0) {
         if (detektorTimerRef.current) clearInterval(detektorTimerRef.current);
         detektorTimerRef.current = null;
-        DL.detectorEndSession().catch(() => {});
-        if (detStateRef.current) {
-          const ended = { ...detStateRef.current, sessionStart: null };
-          detStateRef.current = ended;
-          setDetState(ended);
-        }
+        detSessionStartRef.current = null;
+        markDetectorSessionEnd().catch(() => {});
         herSeyiDurdur();
         setSeciliDetektor(null);
         setSureDolduVisible(true);
@@ -660,12 +674,10 @@ export default function Analiz() {
       return;
     }
     if (adResult !== 'earned') return;
-    const current = detStateRef.current ?? await DL.loadDetectorState();
-    const newState = await DL.detectorStartAdSession(current);
-    detStateRef.current = newState;
-    setDetState(newState);
+    const sessionStart = await markDetectorSessionStart();
+    setDetAdUsed(true);
     setSureDolduVisible(false);
-    bashlatDetektorTimer(newState.sessionStart!);
+    bashlatDetektorTimer(sessionStart);
   };
 
   // ── AĞLAMA YARDIMCISI ────────────────────────────────────────────────────────
@@ -687,9 +699,33 @@ export default function Analiz() {
     });
   }, []);
 
-  const cryHelperBaslat = useCallback(() => {
+  const handleAnalizReklam = async () => {
+    const adResult = await showRewarded();
+    if (adResult === 'unavailable') {
+      Alert.alert(lang === 'en' ? 'Ad unavailable, please try again' : 'Reklam şu an yüklenemedi, lütfen tekrar deneyin');
+      return;
+    }
+    if (adResult !== 'earned') return;
+    await markAnalysisUsed();
+    setAnalizDolduVisible(false);
     setCryCevaplar([]); setCrySonuc([]); setCryHelperAdim('soru');
-  }, []);
+  };
+
+  const cryHelperBaslat = useCallback(async () => {
+    const result = await canUseAnalysis(canAccessPremium);
+    if (result === 'need_ad') {
+      setAnalizAdUsed(false);
+      setAnalizDolduVisible(true);
+      return;
+    }
+    if (result === 'denied') {
+      setAnalizAdUsed(true);
+      setAnalizDolduVisible(true);
+      return;
+    }
+    await markAnalysisUsed();
+    setCryCevaplar([]); setCrySonuc([]); setCryHelperAdim('soru');
+  }, [canAccessPremium]);
 
   const cryCevapSec = useCallback(async (secenekIdx: number) => {
     const yeniCevaplar = [...cryCevaplar, secenekIdx];
@@ -758,14 +794,27 @@ export default function Analiz() {
 
   const dedektoraBasildi = async (tip: DedektorTip) => {
     if (free) {
-      const current = detStateRef.current ?? await DL.loadDetectorState();
-      const { result, state: newState } = await DL.detectorTryStart(current);
-      detStateRef.current = newState;
-      setDetState(newState);
-      if (result === 'need_ad' || result === 'exhausted') {
-        setSureDolduVisible(true); return;
+      const canStart = await canStartDetector(false);
+      if (canStart === 'need_ad') {
+        setDetAdUsed(false);
+        setSureDolduVisible(true);
+        return;
       }
-      bashlatDetektorTimer(newState.sessionStart!);
+      if (canStart === 'denied') {
+        setDetAdUsed(true);
+        setSureDolduVisible(true);
+        return;
+      }
+      // 'allowed' — aktif oturum varsa aynı sessionStart'ı kullan, yoksa yeni hak tüket
+      const state = await loadDetectorState();
+      let sessionStart: number;
+      if (isDetectorSessionActive(state)) {
+        sessionStart = state.sessionStart!;
+      } else {
+        sessionStart = await markDetectorSessionStart();
+        setDetFreeUsed(true);
+      }
+      bashlatDetektorTimer(sessionStart);
     }
     const izin = await Audio.requestPermissionsAsync();
     if (!izin.granted) { alert(t.mikrofonIzni); return; }
@@ -775,6 +824,11 @@ export default function Analiz() {
   const sesSecildi = async (ses: SesTip) => {
     const tip = modalTipRef.current;
     if (!tip) { console.warn('sesSecildi: modalTipRef null'); return; }
+    if (free && isItemPremium(ses)) {
+      setSesListeModal(false);
+      router.push('/paywall');
+      return;
+    }
     setSesListeModal(false);
     if (tip === 'aglama') setSeciliNinni(ses); else setSeciliKolik(ses);
     setSeciliDetektor(tip); aktifSesRef.current = ses; aktifDedektorRef.current = tip;
@@ -936,6 +990,8 @@ export default function Analiz() {
       await Notifications.cancelScheduledNotificationAsync(bildirimIdRef.current).catch(() => {});
       bildirimIdRef.current = null;
     }
+    await markDetectorSessionEnd().catch(() => {});
+    detSessionStartRef.current = null;
     await herSeyiDurdur();
     // Wake Window bildirimini OS seviyesinde planla (setTimeout Android'de arka planda çalışmaz)
     try {
@@ -1040,7 +1096,17 @@ export default function Analiz() {
 
   const haftalikGruplar  = haftayaGoreGrupla(geceRaporlari);
   const haftaAnahtarlari = Object.keys(haftalikGruplar);
-  const son7Gun          = son7GunHazirla(geceRaporlari, t.grafikGunler);
+  const son7Gun          = useMemo(() => son7GunHazirla(geceRaporlari, t.grafikGunler), [geceRaporlari, t.grafikGunler]);
+  useEffect(() => {
+    barAnimValues.forEach(v => v.setValue(0));
+    Animated.parallel(
+      son7Gun.map((g, i) => Animated.timing(barAnimValues[i], {
+        toValue: g.puan !== null ? Math.max(4, (g.puan / 100) * BAR_MAX_HEIGHT) : 0,
+        duration: 500,
+        useNativeDriver: false,
+      }))
+    ).start();
+  }, [son7Gun]);
   const son4Hafta        = Array.from({ length: 4 }, (_, i) => haftaKeyGetir(Date.now() - i * 7 * 24 * 3600 * 1000));
   const haftaEtiketleri  = lang === 'en'
     ? ['This Week', 'Last Week', '2 Weeks Ago', '3 Weeks Ago']
@@ -1148,9 +1214,7 @@ export default function Analiz() {
             {free && detektorSure === 0 && (
               <View style={styles.hakBilgi}>
                 <Text style={styles.hakBilgiYazi}>{t.bugunDetektor(
-                  detState
-                    ? (detState.freeUsed ? 0 : 1) + (detState.adUsed ? 0 : 1)
-                    : 1
+                  (detFreeUsed ? 0 : 1) + (detAdUsed ? 0 : 1)
                 )}</Text>
               </View>
             )}
@@ -1293,69 +1357,93 @@ export default function Analiz() {
               </TouchableOpacity>
             ) : (
               <>
-                {/* Bar chart */}
-                <View style={{ flexDirection: 'row' }}>
-                  {son7Gun.map((g, i) => {
-                    const barH = g.puan !== null ? Math.max(4, (g.puan / 100) * BAR_MAX_HEIGHT) : 0;
-                    const renk = g.puan !== null ? skorRenk(g.puan) : '#2a2a4a';
-                    return (
-                      <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-                        {/* Skor barın üstünde */}
-                        <Text style={{ fontSize: 10, color: g.puan !== null ? renk : 'transparent', fontWeight: 'bold', height: 14, marginBottom: 2 }}>
-                          {g.puan !== null ? String(g.puan) : ' '}
-                        </Text>
-                        {/* Bar alanı — sabit yükseklik, bar tabandan büyür */}
-                        <View style={{ height: BAR_MAX_HEIGHT, justifyContent: 'flex-end', alignItems: 'center', width: '100%' }}>
-                          {g.puan !== null ? (
-                            <View style={[
-                              { height: barH, width: '72%', backgroundColor: renk, borderRadius: 4, opacity: g.bugun ? 1 : 0.72 },
-                              g.bugun && { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)' },
-                            ]} />
-                          ) : (
-                            <View style={{ height: 4, width: '72%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderStyle: 'dashed', borderRadius: 2 }} />
-                          )}
-                        </View>
-                        {/* X ekseni: gün adı */}
-                        <Text style={{ fontSize: 11, marginTop: 5, color: g.bugun ? 'white' : 'rgba(255,255,255,0.5)', fontWeight: g.bugun ? 'bold' : 'normal' }}>
-                          {g.gun}
-                        </Text>
-                        {/* X ekseni: tarih */}
-                        <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
-                          {g.tarih}
-                        </Text>
-                        {/* G / N / G+N etiketi */}
-                        {g.etiket !== null && (
-                          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.28)' }}>
-                            {g.etiket}
-                          </Text>
-                        )}
-                      </View>
-                    );
-                  })}
+                {/* ↑ Goal header */}
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', fontStyle: 'italic' }}>
+                    {lang === 'tr' ? '↑ Hedef: 70+' : '↑ Goal: 70+'}
+                  </Text>
                 </View>
 
-                {/* Renk açıklaması (legend) */}
-                <View style={{ marginTop: 12, gap: 5 }}>
-                  <View style={{ flexDirection: 'row', gap: 14 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4CAF50' }} />
-                      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{lang === 'tr' ? 'Mükemmel 85+' : 'Excellent 85+'}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#8BC34A' }} />
-                      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{lang === 'tr' ? 'İyi 70–84' : 'Good 70–84'}</Text>
-                    </View>
+                {/* Bar area with reference line */}
+                <View style={{ position: 'relative', height: BAR_MAX_HEIGHT }}>
+                  {/* Reference line at 70 */}
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      left: 0, right: 0,
+                      bottom: (70 / 100) * BAR_MAX_HEIGHT,
+                      height: 1,
+                      backgroundColor: 'rgba(255,255,255,0.22)',
+                      zIndex: 2,
+                    }}
+                  >
+                    <Text style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: -8,
+                      fontSize: 9,
+                      color: 'rgba(255,255,255,0.38)',
+                    }}>70</Text>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 14 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFC107' }} />
-                      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{lang === 'tr' ? 'Orta 50–69' : 'Fair 50–69'}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#F44336' }} />
-                      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{lang === 'tr' ? 'Zayıf 0–49' : 'Poor 0–49'}</Text>
-                    </View>
+
+                  {/* Bars */}
+                  <View style={{ flexDirection: 'row', height: BAR_MAX_HEIGHT }}>
+                    {son7Gun.map((g, i) => (
+                      <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: BAR_MAX_HEIGHT }}>
+                        {g.puan !== null ? (
+                          <Animated.View style={{
+                            height: barAnimValues[i],
+                            width: '72%',
+                            borderRadius: 12,
+                            overflow: 'hidden',
+                            opacity: g.bugun ? 1 : 0.72,
+                          }}>
+                            {g.bugun && (
+                              <View style={{
+                                position: 'absolute', zIndex: 1,
+                                top: 0, left: 0, right: 0, bottom: 0,
+                                borderRadius: 12,
+                                borderWidth: 1.5,
+                                borderColor: 'rgba(255,255,255,0.45)',
+                              }} pointerEvents="none" />
+                            )}
+                            <LinearGradient
+                              colors={skorGradient(g.puan)}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 0, y: 1 }}
+                              style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+                            >
+                              {(g.puan / 100) * BAR_MAX_HEIGHT > 30 && (
+                                <Text style={{
+                                  color: 'white',
+                                  fontWeight: 'bold',
+                                  fontSize: 10,
+                                  transform: [{ rotate: '-90deg' }],
+                                }}>{g.puan}</Text>
+                              )}
+                            </LinearGradient>
+                          </Animated.View>
+                        ) : (
+                          <View style={{ height: 4, width: '72%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderStyle: 'dashed', borderRadius: 2 }} />
+                        )}
+                      </View>
+                    ))}
                   </View>
+                </View>
+
+                {/* X-axis labels */}
+                <View style={{ flexDirection: 'row', marginTop: 6 }}>
+                  {son7Gun.map((g, i) => (
+                    <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 11, color: g.bugun ? 'white' : 'rgba(255,255,255,0.5)', fontWeight: g.bugun ? 'bold' : 'normal' }}>
+                        {g.gun}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.32)' }}>
+                        {g.tarih}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               </>
             )}
@@ -2076,9 +2164,19 @@ export default function Analiz() {
         visible={sureDolduVisible}
         onClose={() => setSureDolduVisible(false)}
         onPremium={() => { setSureDolduVisible(false); router.push('/paywall'); }}
-        onReklam={!detState?.adUsed ? handleDetektorReklam : undefined}
+        onReklam={!detAdUsed ? handleDetektorReklam : undefined}
         baslik={t.detSureDoldu}
-        aciklama={!detState?.adUsed ? t.detReklamKazan : t.detGunlukBitti}
+        aciklama={!detAdUsed ? t.detReklamKazan : t.detGunlukBitti}
+      />
+
+      {/* ANALİZ LİMİT DOLDU MODAL */}
+      <Paywall
+        visible={analizDolduVisible}
+        onClose={() => setAnalizDolduVisible(false)}
+        onPremium={() => { setAnalizDolduVisible(false); router.push('/paywall'); }}
+        onReklam={!analizAdUsed ? handleAnalizReklam : undefined}
+        baslik={t.analizDolduBaslik}
+        aciklama={!analizAdUsed ? t.analizReklamKazan : t.analizDolduAcik}
       />
     </View>
   );

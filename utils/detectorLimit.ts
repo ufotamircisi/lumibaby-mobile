@@ -7,9 +7,6 @@ export {
   loadDetectorState,
   detectorKalanSaniye,
   isDetectorSessionActive,
-  detectorTryStart,
-  detectorStartAdSession,
-  detectorEndSession,
   markDetectorSessionStart,
   markDetectorSessionEnd,
 } from './permissions';
