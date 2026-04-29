@@ -8,7 +8,7 @@
 //
 // DOĞRU:   audioManager.play(file, id, 'ninniler', { loop: true })
 // YANLIŞ:  const { sound } = await Audio.Sound.createAsync(...)
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 
 export type AudioTab = 'ninniler' | 'kolik' | 'hikayeler' | 'analiz' | 'sesim';
 export type PlayOptions = { loop?: boolean; onFinish?: () => void };
@@ -83,9 +83,12 @@ export async function play(
 
   try {
     await Audio.setAudioModeAsync({
-      allowsRecordingIOS:      false,
-      playsInSilentModeIOS:    true,
-      staysActiveInBackground: true,
+      staysActiveInBackground:  true,
+      playsInSilentModeIOS:     true,
+      interruptionModeIOS:      InterruptionModeIOS.DoNotMix,
+      shouldDuckAndroid:        false,
+      interruptionModeAndroid:  InterruptionModeAndroid.DoNotMix,
+      playThroughEarpieceAndroid: false,
     });
 
     if (generation !== playGeneration) return;
