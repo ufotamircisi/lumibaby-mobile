@@ -407,6 +407,72 @@ const pm = StyleSheet.create({
   productionAlt:  { color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', lineHeight: 20 },
 });
 
+// ─── BİZE ULAŞIN MODAL ───────────────────────────────────────────────────────
+function BizeUlasModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { t, lang } = useLang();
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <View style={{ backgroundColor: '#0f1e33', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: Math.max(insets.bottom + 16, 40) }}>
+          <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
+          <Text style={bu.baslik}>{t.bizeUlasBaslik}</Text>
+
+          <View style={bu.grup}>
+            <TouchableOpacity style={bu.satir} onPress={() => Linking.openURL(lang === 'en' ? 'mailto:lumisoftstudio@gmail.com?subject=Support' : 'mailto:lumisoftstudio@gmail.com?subject=Destek')}>
+              <View style={bu.satirSol}>
+                <Text style={bu.ikon}>📩</Text>
+                <View>
+                  <Text style={bu.satirYazi}>E-posta</Text>
+                  <Text style={bu.satirAlt}>{t.bizeUlasEpostaAlt}</Text>
+                </View>
+              </View>
+              <Text style={bu.ok}>›</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={bu.bolumBaslik}>{t.bizeUlasTopluluk}</Text>
+          <View style={bu.grup}>
+            <TouchableOpacity style={bu.satir} onPress={() => Linking.openURL('https://www.instagram.com/lumisoftstudio')}>
+              <View style={bu.satirSol}><Text style={bu.ikon}>📸</Text><Text style={bu.satirYazi}>Instagram</Text></View>
+              <Text style={bu.ok}>›</Text>
+            </TouchableOpacity>
+            <View style={bu.ayrac} />
+            <TouchableOpacity style={bu.satir} onPress={() => Linking.openURL('https://x.com/lumisoftapp')}>
+              <View style={bu.satirSol}><Text style={bu.ikon}>𝕏</Text><Text style={bu.satirYazi}>X (Twitter)</Text></View>
+              <Text style={bu.ok}>›</Text>
+            </TouchableOpacity>
+            <View style={bu.ayrac} />
+            <TouchableOpacity style={bu.satir} onPress={() => Linking.openURL('https://www.tiktok.com/@lumisoftstudio')}>
+              <View style={bu.satirSol}><Text style={bu.ikon}>🎵</Text><Text style={bu.satirYazi}>TikTok</Text></View>
+              <Text style={bu.ok}>›</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity style={bu.kapatBtn} onPress={onClose}>
+            <Text style={bu.kapatBtnYazi}>{t.kapat}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+const bu = StyleSheet.create({
+  baslik:      { color: 'white', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 16 },
+  bolumBaslik: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 'bold', letterSpacing: 0.8, marginBottom: 8, marginTop: 16, paddingHorizontal: 2 },
+  grup:        { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  satir:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
+  satirSol:    { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  ikon:        { fontSize: 22, width: 28, textAlign: 'center' },
+  satirYazi:   { color: 'white', fontSize: 15 },
+  satirAlt:    { color: 'rgba(255,255,255,0.35)', fontSize: 11, marginTop: 2 },
+  ok:          { color: 'rgba(255,255,255,0.3)', fontSize: 20 },
+  ayrac:       { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 16 },
+  kapatBtn:    { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 16 },
+  kapatBtnYazi:{ color: 'rgba(255,255,255,0.6)', fontSize: 15 },
+});
+
 // ─── ANA LAYOUT ──────────────────────────────────────────────────────────────
 export default function TabLayout() {
   const { isTrial, isPremium, trialKalanGun, presentPaywall, restorePurchases, yuklendi } = usePremium();
@@ -419,6 +485,7 @@ export default function TabLayout() {
   const [ayarlarModal, setAyarlarModal]   = useState(false);
   const [bebekModal, setBebekModal]       = useState(false);
   const [partnerModal, setPartnerModal]   = useState(false);
+  const [bizeUlasModal, setBizeUlasModal] = useState(false);
   const [fiyatModu, setFiyatModu]         = useState<'aylik' | 'yillik'>('aylik');
   const [bebekAdi, setBebekAdi]           = useState('');
   const [dogumTarihi, setDogumTarihi]     = useState('');
@@ -641,6 +708,7 @@ export default function TabLayout() {
       </Modal>
 
       <PartnerModal visible={partnerModal} onClose={() => setPartnerModal(false)} />
+      <BizeUlasModal visible={bizeUlasModal} onClose={() => setBizeUlasModal(false)} />
 
       {/* AYARLAR MODAL */}
       <Modal visible={ayarlarModal} transparent animationType="slide" onRequestClose={() => setAyarlarModal(false)} presentationStyle={isTablet ? 'formSheet' : 'overFullScreen'}>
@@ -748,7 +816,7 @@ export default function TabLayout() {
                   <Text style={s.satirYazi}>{t.ayarlarDegerlendir}</Text><Text style={s.ok}>›</Text>
                 </TouchableOpacity>
                 <View style={s.ayrac} />
-                <TouchableOpacity style={s.satir} onPress={() => Linking.openURL(lang === 'en' ? 'mailto:lumisoftstudio@gmail.com?subject=Support' : 'mailto:lumisoftstudio@gmail.com?subject=Destek')}>
+                <TouchableOpacity style={s.satir} onPress={() => { setAyarlarModal(false); setBizeUlasModal(true); }}>
                   <Text style={s.satirYazi}>{t.ayarlarIletisim}</Text><Text style={s.ok}>›</Text>
                 </TouchableOpacity>
               </View>
