@@ -43,7 +43,12 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "versionCode": 5
+      "versionCode": 5,
+      "foregroundService": {
+        "notificationTitle": "Minik Uyku – LumiBaby",
+        "notificationBody": "Arka planda çalışıyor",
+        "notificationColor": "#0f0728"
+      }
     },
     "web": {
       "bundler": "metro",

@@ -9,6 +9,7 @@
 // DOĞRU:   audioManager.play(file, id, 'ninniler', { loop: true })
 // YANLIŞ:  const { sound } = await Audio.Sound.createAsync(...)
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
+import * as Notifications from 'expo-notifications';
 
 export type AudioTab = 'ninniler' | 'kolik' | 'hikayeler' | 'analiz' | 'sesim';
 export type PlayOptions = { loop?: boolean; onFinish?: () => void };
@@ -52,6 +53,7 @@ export async function stop(): Promise<void> {
   activeId    = null;
   activeTab   = null;
   notify();
+  try { await Notifications.dismissAllNotificationsAsync(); } catch {}
   if (sound) {
     try { await sound.stopAsync(); await sound.unloadAsync(); } catch {}
   }
@@ -109,6 +111,12 @@ export async function play(
     activeTab      = tab;
     activeOnFinish = options?.onFinish ?? null;
     notify();
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: { title: '🎵 Minik Uyku – LumiBaby', body: 'Müzik çalıyor', sticky: true },
+        trigger: null,
+      });
+    } catch {}
 
     if (!options?.loop) {
       sound.setOnPlaybackStatusUpdate((status) => {
@@ -119,6 +127,7 @@ export async function play(
           activeId       = null;
           activeTab      = null;
           notify();
+          Notifications.dismissAllNotificationsAsync().catch(() => {});
           if (cb) cb();
         }
       });
