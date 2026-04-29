@@ -4,12 +4,39 @@ import { configureRevenueCat } from '@/services/revenuecat';
 import { PremiumProvider } from '@/contexts/PremiumContext';
 import { router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-export default function RootLayout() {
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    const { error } = this.state;
+    if (error) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#07101e', justifyContent: 'center', padding: 24 }}>
+          <Text style={{ color: '#ff6b6b', fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>
+            Uygulama Hatası
+          </Text>
+          <ScrollView>
+            <Text style={{ color: '#fff', fontSize: 13, fontFamily: 'monospace' }}>
+              {String(error)}
+            </Text>
+          </ScrollView>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function RootLayout() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -24,8 +51,6 @@ export default function RootLayout() {
     });
   }, []);
 
-  // Stack'i sadece doğru route belirlendikten sonra render et.
-  // Böylece (tabs)/index hiç görünmez — splash arkasında kalır.
   if (!ready) return null;
 
   return (
@@ -38,5 +63,13 @@ export default function RootLayout() {
         </Stack>
       </PremiumProvider>
     </SafeAreaProvider>
+  );
+}
+
+export default function RootLayoutWithBoundary() {
+  return (
+    <ErrorBoundary>
+      <RootLayout />
+    </ErrorBoundary>
   );
 }
