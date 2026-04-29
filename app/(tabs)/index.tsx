@@ -4,6 +4,7 @@ import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import * as audioManager from '@/services/audioManager';
 import { isItemPremium } from '@/utils/permissions';
+import { dismissFgNotification, showFgNotification } from '@/services/foregroundService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -84,6 +85,7 @@ export default function Ninniler() {
     setTimerSaniye(null);
     setSecilenDk(null);
     AsyncStorage.removeItem('timer_end_ninniler').catch(() => {});
+    dismissFgNotification().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -116,6 +118,7 @@ export default function Ninniler() {
     const endTime = Date.now() + dk * 60 * 1000;
     timerBitisTarihiRef.current = endTime;
     AsyncStorage.setItem('timer_end_ninniler', String(endTime)).catch(() => {});
+    showFgNotification('audio', lang).catch(() => {});
     const tick = () => {
       const kalan = Math.round((timerBitisTarihiRef.current! - Date.now()) / 1000);
       if (kalan <= 0) {
@@ -125,6 +128,7 @@ export default function Ninniler() {
         setTimerSaniye(null);
         setSecilenDk(null);
         AsyncStorage.removeItem('timer_end_ninniler').catch(() => {});
+        dismissFgNotification().catch(() => {});
         if (audioManager.getState().tab === 'ninniler') stopSes();
       } else setTimerSaniye(kalan);
     };
