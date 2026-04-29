@@ -43,12 +43,18 @@ function RootLayout() {
     try { initAdMob().catch(() => {}); } catch (_) {}
     try { configureRevenueCat(); } catch {}
 
-    AsyncStorage.getItem('lumibaby_onboarding_done').then(v => {
-      if (!v) router.replace('/onboarding');
-      else router.replace('/(tabs)/analiz');
-      setReady(true);
-      SplashScreen.hideAsync().catch(() => {});
-    });
+    AsyncStorage.getItem('lumibaby_onboarding_done')
+      .then(v => {
+        if (!v) router.replace('/onboarding');
+        else router.replace('/(tabs)/analiz');
+      })
+      .catch(() => {
+        router.replace('/(tabs)/analiz');
+      })
+      .finally(() => {
+        setReady(true);
+        SplashScreen.hideAsync().catch(() => {});
+      });
   }, []);
 
   if (!ready) return null;
