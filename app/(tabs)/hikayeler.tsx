@@ -180,17 +180,26 @@ export default function Hikayeler() {
     timerBitisTarihiRef.current = null;
     setTimerSaniye(null);
     setSecilenDk(null);
+    AsyncStorage.removeItem('timer_end_hikayeler').catch(() => {});
   }, []);
 
   useEffect(() => {
-    const appStateSub = AppState.addEventListener('change', (nextState) => {
+    const appStateSub = AppState.addEventListener('change', async (nextState) => {
       if (nextState !== 'active') return;
-      if (timerBitisTarihiRef.current) {
-        const kalan = Math.round((timerBitisTarihiRef.current - Date.now()) / 1000);
+      let endTime = timerBitisTarihiRef.current;
+      if (!endTime) {
+        const stored = await AsyncStorage.getItem('timer_end_hikayeler');
+        if (stored) endTime = Number(stored);
+      }
+      if (endTime) {
+        const kalan = Math.round((endTime - Date.now()) / 1000);
         if (kalan <= 0) {
           timerIptal();
           if (audioManager.getState().tab === 'hikayeler') audioManager.stop();
-        } else setTimerSaniye(kalan);
+        } else {
+          timerBitisTarihiRef.current = endTime;
+          setTimerSaniye(kalan);
+        }
       }
       if (freeRef.current && audioManager.getState().tab === 'hikayeler') {
         sinirTimerTick();
@@ -205,13 +214,16 @@ export default function Hikayeler() {
   const timerBaslat = (dk: number) => {
     if (timerRef.current) clearInterval(timerRef.current);
     setSecilenDk(dk); setTimerAcik(false);
-    timerBitisTarihiRef.current = Date.now() + dk * 60 * 1000;
+    const endTime = Date.now() + dk * 60 * 1000;
+    timerBitisTarihiRef.current = endTime;
+    AsyncStorage.setItem('timer_end_hikayeler', String(endTime)).catch(() => {});
     const tick = () => {
       const kalan = Math.round((timerBitisTarihiRef.current! - Date.now()) / 1000);
       if (kalan <= 0) {
         clearInterval(timerRef.current!);
         timerRef.current = null; timerBitisTarihiRef.current = null;
         setTimerSaniye(null); setSecilenDk(null);
+        AsyncStorage.removeItem('timer_end_hikayeler').catch(() => {});
         if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
         sinirSayacRef.current = 0; setKalanSure(null);
         if (audioManager.getState().tab === 'hikayeler') audioManager.stop();

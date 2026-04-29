@@ -94,16 +94,25 @@ export default function Kolik() {
     timerBitisTarihiRef.current = null;
     setTimerSaniye(null);
     setSecilenDk(null);
+    AsyncStorage.removeItem('timer_end_kolik').catch(() => {});
   }, []);
 
   useEffect(() => {
-    const appStateSub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active' && timerBitisTarihiRef.current) {
-        const kalan = Math.round((timerBitisTarihiRef.current - Date.now()) / 1000);
-        if (kalan <= 0) {
-          timerIptal();
-          if (audioManager.getState().tab === 'kolik') audioManager.stop();
-        } else setTimerSaniye(kalan);
+    const appStateSub = AppState.addEventListener('change', async (nextState) => {
+      if (nextState !== 'active') return;
+      let endTime = timerBitisTarihiRef.current;
+      if (!endTime) {
+        const stored = await AsyncStorage.getItem('timer_end_kolik');
+        if (stored) endTime = Number(stored);
+      }
+      if (!endTime) return;
+      const kalan = Math.round((endTime - Date.now()) / 1000);
+      if (kalan <= 0) {
+        timerIptal();
+        if (audioManager.getState().tab === 'kolik') audioManager.stop();
+      } else {
+        timerBitisTarihiRef.current = endTime;
+        setTimerSaniye(kalan);
       }
     });
     return () => {
@@ -115,7 +124,9 @@ export default function Kolik() {
   const timerBaslat = (dk: number) => {
     if (timerRef.current) clearInterval(timerRef.current);
     setSecilenDk(dk); setTimerAcik(false);
-    timerBitisTarihiRef.current = Date.now() + dk * 60 * 1000;
+    const endTime = Date.now() + dk * 60 * 1000;
+    timerBitisTarihiRef.current = endTime;
+    AsyncStorage.setItem('timer_end_kolik', String(endTime)).catch(() => {});
     const tick = () => {
       const kalan = Math.round((timerBitisTarihiRef.current! - Date.now()) / 1000);
       if (kalan <= 0) {
@@ -124,6 +135,7 @@ export default function Kolik() {
         timerBitisTarihiRef.current = null;
         setTimerSaniye(null);
         setSecilenDk(null);
+        AsyncStorage.removeItem('timer_end_kolik').catch(() => {});
         if (audioManager.getState().tab === 'kolik') audioManager.stop();
       } else setTimerSaniye(kalan);
     };
