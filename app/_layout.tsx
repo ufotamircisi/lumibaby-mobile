@@ -4,7 +4,7 @@ import { configureRevenueCat } from '@/services/revenuecat';
 import { PremiumProvider } from '@/contexts/PremiumContext';
 import { router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -37,12 +37,12 @@ class ErrorBoundary extends React.Component<
 }
 
 function RootLayout() {
-  const [ready, setReady] = useState(false);
-
   useEffect(() => {
     try { initAdMob().catch(() => {}); } catch (_) {}
     try { configureRevenueCat(); } catch {}
+  }, []);
 
+  useEffect(() => {
     AsyncStorage.getItem('lumibaby_onboarding_done')
       .then(v => {
         if (!v) router.replace('/onboarding');
@@ -52,12 +52,9 @@ function RootLayout() {
         router.replace('/(tabs)/analiz');
       })
       .finally(() => {
-        setReady(true);
         SplashScreen.hideAsync().catch(() => {});
       });
   }, []);
-
-  if (!ready) return null;
 
   return (
     <SafeAreaProvider>
