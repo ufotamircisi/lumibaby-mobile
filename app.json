@@ -15,9 +15,7 @@
         "NSMicrophoneUsageDescription": "Bebeğinizin ağlamasını analiz etmek için mikrofon gereklidir.",
         "UIBackgroundModes": [
           "audio",
-          "remote-notification",
-          "fetch",
-          "processing"
+          "remote-notification"
         ],
         "ITSAppUsesNonExemptEncryption": false
       },

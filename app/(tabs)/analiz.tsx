@@ -5,7 +5,6 @@ import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import { showInterstitialIfReady, showRewarded } from '@/services/adMob';
 import * as audioManager from '@/services/audioManager';
-import { dismissFgNotification, showFgNotification } from '@/services/foregroundService';
 import { CONFIDENCE_THRESHOLD, CryDetectionEngine, WAV_RECORDING_OPTIONS, type SensitivityLevel } from '@/services/cryDetectionEngine';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
@@ -648,7 +647,6 @@ export default function Analiz() {
     setConfidenceScore(0);
     setCooldownKalan(0);
     AsyncStorage.removeItem(SLEEP_START_KEY).catch(() => {});
-    dismissFgNotification().catch(() => {});
   };
 
   const bashlatDetektorTimer = (sessionStart: number) => {
@@ -876,7 +874,6 @@ export default function Analiz() {
   const dinlemeBaslat = async (_ses: SesTip) => {
     if (dinlemeRef.current) return;
     dinlemeRef.current = true; setDinleniyor(true);
-    showFgNotification('detector', lang).catch(() => {});
     cryEngineRef.current.reset();
     await kalibrasyonYap();
 

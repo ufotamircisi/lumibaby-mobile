@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initAdMob } from '@/services/adMob';
-import { registerBgAudioTask } from '@/services/backgroundTask';
 import { configureRevenueCat } from '@/services/revenuecat';
 import { PremiumProvider } from '@/contexts/PremiumContext';
 import { router, Stack } from 'expo-router';
@@ -41,7 +40,6 @@ function RootLayout() {
   useEffect(() => {
     try { initAdMob().catch(() => {}); } catch (_) {}
     try { configureRevenueCat(); } catch {}
-    registerBgAudioTask().catch(() => {});
   }, []);
 
   useEffect(() => {

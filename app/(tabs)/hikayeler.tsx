@@ -4,7 +4,6 @@ import { useLang } from '@/hooks/useLang';
 import { usePremium } from '@/hooks/usePremium';
 import * as audioManager from '@/services/audioManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { dismissFgNotification, showFgNotification } from '@/services/foregroundService';
 import { Audio } from 'expo-av';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -182,7 +181,6 @@ export default function Hikayeler() {
     setTimerSaniye(null);
     setSecilenDk(null);
     AsyncStorage.removeItem('timer_end_hikayeler').catch(() => {});
-    dismissFgNotification().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -219,7 +217,6 @@ export default function Hikayeler() {
     const endTime = Date.now() + dk * 60 * 1000;
     timerBitisTarihiRef.current = endTime;
     AsyncStorage.setItem('timer_end_hikayeler', String(endTime)).catch(() => {});
-    showFgNotification('audio', lang).catch(() => {});
     const tick = () => {
       const kalan = Math.round((timerBitisTarihiRef.current! - Date.now()) / 1000);
       if (kalan <= 0) {
@@ -227,7 +224,6 @@ export default function Hikayeler() {
         timerRef.current = null; timerBitisTarihiRef.current = null;
         setTimerSaniye(null); setSecilenDk(null);
         AsyncStorage.removeItem('timer_end_hikayeler').catch(() => {});
-        dismissFgNotification().catch(() => {});
         if (sinirTimerRef.current) { clearInterval(sinirTimerRef.current); sinirTimerRef.current = null; }
         sinirSayacRef.current = 0; setKalanSure(null);
         if (audioManager.getState().tab === 'hikayeler') audioManager.stop();
